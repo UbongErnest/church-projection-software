@@ -366,14 +366,31 @@ System Source: Chaver AI Automatic Pulpit Monitor
 
   return (
     <div className="flex flex-col gap-3 font-sans w-full select-none text-[#E0E0E0] animate-fade-in">
-      
-      {/* Tiny active notification channel */}
-      {isSuccessAction && (
-        <div className="bg-sky-500/10 border border-sky-400/30 text-sky-400 px-2 py-1 text-[9px] font-mono tracking-wider rounded-md text-center flex items-center justify-center gap-1.5 animate-pulse">
-          <Sparkles className="w-3 h-3 text-sky-400" />
-          <span>{isSuccessAction.toUpperCase()}</span>
+      {userPlan !== "yearly" ? (
+        <div className="flex flex-col items-center justify-center text-center p-6 bg-white/5 border border-white/10 rounded-2xl min-h-[380px] gap-4">
+          <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center animate-pulse">
+            <Crown className="w-6 h-6 text-amber-400" />
+          </div>
+          <h3 className="font-sans font-black text-xs uppercase text-white tracking-wider">Notes Journal Locked</h3>
+          <p className="text-white/50 text-[11px] leading-relaxed max-w-[240px]">
+            Upgrade to the <span className="text-amber-400 font-bold">Premium Plan (₦25,000/mo)</span> to unlock the full sermon diary, sermon auto-saves, direct PDF/Markdown exports, and our AI Copilot outline builder.
+          </p>
+          <div className="w-full text-center py-2 px-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 font-sans font-bold text-[10px] uppercase">
+            🔒 PREMIUM EXCLUSIVE FEATURE
+          </div>
+          <p className="text-white/30 text-[9px] leading-tight">
+            Please switch to the 💳 PLANS & BILLING tab in the Control Panel to upgrade!
+          </p>
         </div>
-      )}
+      ) : (
+        <>
+          {/* Tiny active notification channel */}
+          {isSuccessAction && (
+            <div className="bg-sky-500/10 border border-sky-400/30 text-sky-400 px-2 py-1 text-[9px] font-mono tracking-wider rounded-md text-center flex items-center justify-center gap-1.5 animate-pulse">
+              <Sparkles className="w-3 h-3 text-sky-400" />
+              <span>{isSuccessAction.toUpperCase()}</span>
+            </div>
+          )}
 
       {/* Editor Frame */}
       <form onSubmit={handleSaveNote} className="flex flex-col gap-2.5 bg-white/5 border border-white/8 rounded-xl p-3.5 relative shadow-xl">
@@ -580,10 +597,10 @@ System Source: Chaver AI Automatic Pulpit Monitor
                           e.stopPropagation();
                           handleDownloadNote(note);
                         }}
-                        title={userPlan === "free" ? "Export Locked (Free Tier)" : "Export as Markdown text file"}
-                        className={`p-1 rounded transition ${userPlan === "free" ? "text-stone-650 hover:text-amber-500 hover:bg-stone-800/40" : "text-stone-400 hover:text-sky-400 hover:bg-stone-800"}`}
+                        title="Export as Markdown text file"
+                        className="p-1 rounded transition text-stone-400 hover:text-sky-400 hover:bg-stone-800"
                       >
-                        {userPlan === "free" ? <Lock className="w-3 h-3 text-amber-500/80" /> : <FileDown className="w-3 h-3" />}
+                        <FileDown className="w-3 h-3" />
                       </button>
                       <button
                         onClick={(e) => handleDeleteNote(note.id, e)}
@@ -663,6 +680,8 @@ System Source: Chaver AI Automatic Pulpit Monitor
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

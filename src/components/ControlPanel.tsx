@@ -56,6 +56,24 @@ interface ControlPanelProps {
     [key: string]: any;
   } | null;
   onUpdateSubscription?: (newPlan: "free" | "monthly" | "yearly") => Promise<void>;
+
+  // Lifted customizer options:
+  bibleVersion: "NIV" | "KJV" | "ESV";
+  onChangeBibleVersion: (version: "NIV" | "KJV" | "ESV") => void;
+  layoutMode: "fullscreen" | "lower-third" | "split-screen";
+  onChangeLayoutMode: (mode: "fullscreen" | "lower-third" | "split-screen") => void;
+  activeThemeId: string;
+  onChangeActiveThemeId: (themeId: string) => void;
+  fontSize: number;
+  onChangeFontSize: (size: number) => void;
+  showLogo: boolean;
+  onChangeShowLogo: (show: boolean) => void;
+  isParallelEnabled: boolean;
+  onChangeIsParallelEnabled: (enabled: boolean) => void;
+  parallelVersion: "NIV" | "KJV" | "ESV";
+  onChangeParallelVersion: (version: "NIV" | "KJV" | "ESV") => void;
+  customBrandingText: string;
+  onChangeCustomBrandingText: (text: string) => void;
 }
 
 export default function ControlPanel({
@@ -70,13 +88,30 @@ export default function ControlPanel({
   sermonNotes,
   onClearNotes,
   userProfile,
-  onUpdateSubscription
+  onUpdateSubscription,
+
+  bibleVersion,
+  onChangeBibleVersion,
+  layoutMode,
+  onChangeLayoutMode,
+  activeThemeId,
+  onChangeActiveThemeId,
+  fontSize,
+  onChangeFontSize,
+  showLogo,
+  onChangeShowLogo,
+  isParallelEnabled,
+  onChangeIsParallelEnabled,
+  parallelVersion,
+  onChangeParallelVersion,
+  customBrandingText,
+  onChangeCustomBrandingText
 }: ControlPanelProps) {
   // User level plan and restrictions state mapping
   const userPlan = userProfile?.subscriptionPlan || "free";
 
   // Navigation sub-tabs (adding plans tab)
-  const [activeTab, setActiveTab] = useState<"ai-feed" | "manual-bible" | "songs" | "announcements" | "plans">("ai-feed");
+  const [activeTab, setActiveTab] = useState<"ai-feed" | "manual-bible" | "songs" | "announcements" | "plans">("plans");
 
   // Upgrade prompt modal states
   const [showUpgradePromptModal, setShowUpgradePromptModal] = useState(false);
@@ -93,35 +128,20 @@ export default function ControlPanel({
   const [cardExpiry, setCardExpiry] = useState("");
   const [cardCvc, setCardCvc] = useState("");
 
-  // Yearly Premium Exclusive features state mapping
-  const [isParallelEnabled, setIsParallelEnabled] = useState(false);
-  const [parallelVersion, setParallelVersion] = useState<"NIV" | "KJV" | "ESV">("KJV");
-  const [customBrandingText, setCustomBrandingText] = useState("");
-
   // Selection states for Bible Search
   const [selectedBook, setSelectedBook] = useState<string>("John");
   const [selectedChapter, setSelectedChapter] = useState<number>(3);
   const [selectedVerse, setSelectedVerse] = useState<number>(16);
-  const [bibleVersion, setBibleVersion] = useState<"NIV" | "KJV" | "ESV">("NIV");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
   // Search results for manual lookup
   const [lookupText, setLookupText] = useState<{ KJV: string; NIV: string; ESV: string } | null>(null);
   const [isLoadingLookup, setIsLoadingLookup] = useState<boolean>(false);
 
-  // Active Presentation Customizer options
-  const [activeThemeId, setActiveThemeId] = useState<string>("nebula-dark");
-  const [layoutMode, setLayoutMode] = useState<"fullscreen" | "lower-third" | "split-screen">("fullscreen");
-  const [fontSize, setFontSize] = useState<number>(44);
-  const [showLogo, setShowLogo] = useState<boolean>(true);
-
   // Theme lock helper
   const isThemeLocked = (themeId: string) => {
-    if (themeId === "sanctuary-aurora") {
-      return userPlan !== "yearly";
-    }
-    if (["nebula-dark", "emerald-sanctuary", "crimson-grace", "royal-gold"].includes(themeId)) {
-      return userPlan === "free";
+    if (["nebula-dark", "emerald-sanctuary", "crimson-grace", "royal-gold", "sanctuary-aurora"].includes(themeId)) {
+      return userPlan !== "yearly"; // Premium (yearly) only
     }
     return false;
   };
@@ -148,23 +168,7 @@ export default function ControlPanel({
   const [timerLabel, setTimerLabel] = useState<string>("Service Begins");
   const [timerMinutes, setTimerMinutes] = useState<number>(5);
 
-  // Synchronize local customizer controls with active projected slide
-  useEffect(() => {
-    if (activeProjectedSlide) {
-      if (activeProjectedSlide.themeId) {
-        setActiveThemeId(activeProjectedSlide.themeId);
-      }
-      if (activeProjectedSlide.layout) {
-        setLayoutMode(activeProjectedSlide.layout);
-      }
-      if (activeProjectedSlide.fontSize) {
-        setFontSize(activeProjectedSlide.fontSize);
-      }
-      if (activeProjectedSlide.showLogo !== undefined) {
-        setShowLogo(activeProjectedSlide.showLogo);
-      }
-    }
-  }, [activeProjectedSlide]);
+
 
   // Load selected Bible verse text on change
   const isFirstMount = useRef(true);
@@ -386,6 +390,37 @@ export default function ControlPanel({
     }
   };
 
+  const handleTabClick = (tab: "ai-feed" | "manual-bible" | "songs" | "announcements" | "plans") => {
+    if (tab === "plans" || tab === "manual-bible") {
+      setActiveTab(tab);
+      return;
+    }
+    
+    if (userPlan === "free") {
+      setUpgradeTriggerSource(
+        tab === "ai-feed" 
+          ? "AI Live Session Listener" 
+          : tab === "songs" 
+            ? "Hymnals Library" 
+            : "Church Announcements"
+      );
+      setShowUpgradePromptModal(true);
+      return;
+    }
+    
+    if (userPlan === "monthly" && (tab === "songs" || tab === "announcements")) {
+      setUpgradeTriggerSource(
+        tab === "songs" 
+          ? "Hymnals (Premium Feature)" 
+          : "Church Announcements (Premium Feature)"
+      );
+      setShowUpgradePromptModal(true);
+      return;
+    }
+    
+    setActiveTab(tab);
+  };
+
   const activeSong = DEFAULT_SONGS.find((s) => s.id === selectedSongId) || DEFAULT_SONGS[0];
 
   const activeProjTheme = THEME_PRESETS.find((t) => t.id === activeProjectedSlide.themeId) || THEME_PRESETS[0];
@@ -424,7 +459,7 @@ export default function ControlPanel({
           </div>
           <nav className="flex gap-4 text-xs font-semibold text-white/50">
             <button
-              onClick={() => setActiveTab("ai-feed")}
+              onClick={() => handleTabClick("ai-feed")}
               className={`pb-1 uppercase transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === "ai-feed"
                   ? "text-white border-b-2 border-blue-500 font-bold"
@@ -434,7 +469,7 @@ export default function ControlPanel({
               LIVE SESSION
             </button>
             <button
-              onClick={() => setActiveTab("manual-bible")}
+              onClick={() => handleTabClick("manual-bible")}
               className={`pb-1 uppercase transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === "manual-bible"
                   ? "text-white border-b-2 border-blue-500 font-bold"
@@ -444,7 +479,7 @@ export default function ControlPanel({
               BIBLE
             </button>
             <button
-              onClick={() => setActiveTab("songs")}
+              onClick={() => handleTabClick("songs")}
               className={`pb-1 uppercase transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === "songs"
                   ? "text-white border-b-2 border-blue-500 font-bold"
@@ -454,7 +489,7 @@ export default function ControlPanel({
               SONGS
             </button>
             <button
-              onClick={() => setActiveTab("announcements")}
+              onClick={() => handleTabClick("announcements")}
               className={`pb-1 uppercase transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === "announcements"
                   ? "text-white border-b-2 border-blue-500 font-bold"
@@ -464,7 +499,7 @@ export default function ControlPanel({
               ANNOUNCEMENTS
             </button>
             <button
-              onClick={() => setActiveTab("plans")}
+              onClick={() => handleTabClick("plans")}
               className={`pb-1 uppercase transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === "plans"
                   ? "text-white border-b-2 border-blue-500 font-bold text-amber-400 font-extrabold flex items-center gap-1"
@@ -629,7 +664,7 @@ export default function ControlPanel({
             {/* Nav Workspace Tabs selector */}
             <div className="flex border-b border-white/10 pb-2 mb-3.5 gap-1 select-none overflow-x-auto scrollbar">
               <button
-                onClick={() => setActiveTab("ai-feed")}
+                onClick={() => handleTabClick("ai-feed")}
                 className={`px-3 py-1 font-sans text-[11px] font-bold tracking-tight rounded cursor-pointer transition-all duration-150 whitespace-nowrap ${
                   activeTab === "ai-feed"
                     ? "bg-blue-600/15 text-blue-400 border border-blue-500/30"
@@ -639,7 +674,7 @@ export default function ControlPanel({
                 📊 AI FEED ({detectedVerses.length})
               </button>
               <button
-                onClick={() => setActiveTab("manual-bible")}
+                onClick={() => handleTabClick("manual-bible")}
                 className={`px-3 py-1 font-sans text-[11px] font-bold tracking-tight rounded cursor-pointer transition-all duration-150 whitespace-nowrap ${
                   activeTab === "manual-bible"
                     ? "bg-blue-600/15 text-blue-400 border border-blue-500/30"
@@ -649,7 +684,7 @@ export default function ControlPanel({
                 📖 BIBLE EXPLORER
               </button>
               <button
-                onClick={() => setActiveTab("songs")}
+                onClick={() => handleTabClick("songs")}
                 className={`px-3 py-1 font-sans text-[11px] font-bold tracking-tight rounded cursor-pointer transition-all duration-150 whitespace-nowrap ${
                   activeTab === "songs"
                     ? "bg-blue-600/15 text-blue-400 border border-blue-500/30"
@@ -659,7 +694,7 @@ export default function ControlPanel({
                 🎵 HYMNALS
               </button>
               <button
-                onClick={() => setActiveTab("announcements")}
+                onClick={() => handleTabClick("announcements")}
                 className={`px-3 py-1 font-sans text-[11px] font-bold tracking-tight rounded cursor-pointer transition-all duration-150 whitespace-nowrap ${
                   activeTab === "announcements"
                     ? "bg-blue-600/15 text-blue-400 border border-blue-500/30"
@@ -669,7 +704,7 @@ export default function ControlPanel({
                 📢 MEDIA & TIMERS
               </button>
               <button
-                onClick={() => setActiveTab("plans")}
+                onClick={() => handleTabClick("plans")}
                 className={`px-3 py-1 font-sans text-[11px] font-bold tracking-tight rounded cursor-pointer transition-all duration-150 whitespace-nowrap ${
                   activeTab === "plans"
                     ? "bg-blue-600/15 text-blue-400 border border-blue-500/30"
@@ -838,7 +873,7 @@ export default function ControlPanel({
                             setShowUpgradePromptModal(true);
                             return;
                           }
-                          setBibleVersion(val as any);
+                          onChangeBibleVersion(val as any);
                         }}
                         className="w-full bg-black/40 p-1 text-[11px] rounded border border-white/10 text-white focus:border-blue-500 focus:outline-none"
                       >
@@ -1084,7 +1119,9 @@ export default function ControlPanel({
                     <Crown className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
                     <div className="text-[10.5px] leading-relaxed text-[#b1c3de]">
                       <span className="font-bold text-white block">Active Subscription Management</span>
-                      Your current active plan is: <span className="text-amber-400 font-extrabold uppercase font-mono">{userPlan.toUpperCase()} PLAN</span>.
+                      Your current active plan is: <span className="text-amber-400 font-extrabold uppercase font-mono">
+                        {userPlan === "free" ? "FREE PLAN" : userPlan === "monthly" ? "PRO MONTHLY PLAN" : "PREMIUM PLAN"}
+                      </span>.
                       Upgrade or switch plans below. Updates are immediately saved and synced across screens in real-time.
                     </div>
                   </div>
@@ -1101,13 +1138,13 @@ export default function ControlPanel({
                       )}
                       <div>
                         <h4 className="font-sans font-bold text-xs text-white uppercase tracking-wider">Free Plan</h4>
-                        <div className="text-lg font-bold text-white font-mono mt-1">$0<span className="text-xs text-white/55">/mo</span></div>
-                        <p className="text-[10px] text-white/50 mt-1 leading-normal">Basic media tools for single-monitor preaching overlays.</p>
+                        <div className="text-lg font-bold text-white font-mono mt-1">₦0<span className="text-xs text-white/55">/mo</span></div>
+                        <p className="text-[10px] text-white/50 mt-1 leading-normal">Manual Bible Explorer &amp; Casting only. (AI sermon listener, Hymnals, and Announcements locked).</p>
                       </div>
                       {userPlan !== "free" && (
                         <button
                           onClick={async () => {
-                            if (confirm("Are you sure you want to downgrade to the Free Plan? Some custom branding, premium themes, and Bible translations will be locked.")) {
+                            if (confirm("Are you sure you want to downgrade to the Free Plan? AI-powered auto-projection, Hymnals, Announcements, and Note Journaling will be locked.")) {
                               if (onUpdateSubscription) await onUpdateSubscription("free");
                             }
                           }}
@@ -1118,7 +1155,7 @@ export default function ControlPanel({
                       )}
                     </div>
 
-                    {/* Monthly Card */}
+                    {/* Pro Monthly Card */}
                     <div className={`p-4 rounded-xl border flex flex-col justify-between transition-all relative ${
                       userPlan === "monthly" ? "bg-white/5 border-blue-500/40" : "bg-[#121417]/50 border-white/5"
                     }`}>
@@ -1128,21 +1165,21 @@ export default function ControlPanel({
                         </span>
                       )}
                       <div>
-                        <h4 className="font-sans font-bold text-xs text-white uppercase tracking-wider">Monthly Plan</h4>
-                        <div className="text-lg font-bold text-white font-mono mt-1">$19<span className="text-xs text-white/55">/mo</span></div>
-                        <p className="text-[10px] text-white/50 mt-1 leading-normal">Full feature access, custom branding toggles, KJV & ESV translations, and unrestricted note downloads.</p>
+                        <h4 className="font-sans font-bold text-xs text-white uppercase tracking-wider">Pro Monthly</h4>
+                        <div className="text-lg font-bold text-white font-mono mt-1">₦10,000<span className="text-xs text-white/55">/mo</span></div>
+                        <p className="text-[10px] text-white/50 mt-1 leading-normal">Unlocks the AI-powered sermon feature alone: automatic speech recognition and instant scripture projection.</p>
                       </div>
                       {userPlan !== "monthly" && (
                         <button
                           onClick={() => setCheckoutPlan("monthly")}
                           className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs py-1.5 rounded-lg mt-3 transition cursor-pointer"
                         >
-                          {userPlan === "yearly" ? "Switch to Monthly" : "Upgrade to Monthly ($19)"}
+                          {userPlan === "yearly" ? "Switch to Pro Monthly" : "Upgrade to Pro Monthly (₦10,000)"}
                         </button>
                       )}
                     </div>
 
-                    {/* Yearly Card */}
+                    {/* Premium Card */}
                     <div className={`p-4 rounded-xl border flex flex-col justify-between transition-all relative ${
                       userPlan === "yearly" ? "bg-white/5 border-amber-500/40" : "bg-gradient-to-tr from-amber-500/5 to-transparent border-white/5"
                     }`}>
@@ -1152,16 +1189,16 @@ export default function ControlPanel({
                         </span>
                       )}
                       <div>
-                        <h4 className="font-sans font-bold text-xs text-amber-250 uppercase tracking-wider">Yearly Premium</h4>
-                        <div className="text-lg font-bold text-white font-mono mt-1">$149<span className="text-xs text-white/55">/yr</span></div>
-                        <p className="text-[10px] text-white/50 mt-1 leading-normal">All Monthly features plus Parallel side-by-side translation, Custom church logo branding, and AI Sermon Outline generator.</p>
+                        <h4 className="font-sans font-bold text-xs text-amber-250 uppercase tracking-wider">Premium Plan</h4>
+                        <div className="text-lg font-bold text-white font-mono mt-1">₦25,000<span className="text-xs text-white/55">/mo</span></div>
+                        <p className="text-[10px] text-white/50 mt-1 leading-normal">Unlocks the ENTIRE application: Hymnals, Announcements, Note cloud journal with Markdown exports, AI outline helper, custom church branding name, parallel dual translations, and advanced themes.</p>
                       </div>
                       {userPlan !== "yearly" && (
                         <button
                           onClick={() => setCheckoutPlan("yearly")}
                           className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-450 hover:to-amber-550 text-slate-950 font-extrabold text-xs py-1.5 rounded-lg mt-3 transition cursor-pointer"
                         >
-                          Upgrade to Yearly ($149)
+                          Upgrade to Premium (₦25,000)
                         </button>
                       )}
                     </div>
@@ -1276,7 +1313,6 @@ export default function ControlPanel({
             <h3 className="text-[10px] font-bold text-white/40 uppercase tracking-wider flex items-center gap-1.5 border-b border-white/5 pb-2">
               <Sliders className="w-3.5 h-3.5 text-blue-400" /> STREAM STYLING MATRIX
             </h3>
-
             {/* Preset themes selection */}
             <div>
               <span className="text-[8px] font-mono text-white/40 uppercase tracking-widest block mb-2">
@@ -1288,11 +1324,11 @@ export default function ControlPanel({
                     key={theme.id}
                     onClick={() => {
                       if (isThemeLocked(theme.id)) {
-                        setUpgradeTriggerSource(theme.id === "sanctuary-aurora" ? "Yearly Premium Aurora Theme" : "Premium Theme Presets");
+                        setUpgradeTriggerSource(theme.id === "sanctuary-aurora" ? "Premium Sanctuary Aurora Theme" : "Premium Theme Presets");
                         setShowUpgradePromptModal(true);
                         return;
                       }
-                      setActiveThemeId(theme.id);
+                      onChangeActiveThemeId(theme.id);
                       onCastSlide({ ...activeProjectedSlide, themeId: theme.id as any });
                     }}
                     className={`p-1.5 flex items-center justify-between bg-black/40 border rounded text-[10px] transition-all cursor-pointer ${
@@ -1321,7 +1357,7 @@ export default function ControlPanel({
                   <button
                     key={mode}
                     onClick={() => {
-                      setLayoutMode(mode);
+                      onChangeLayoutMode(mode);
                       onCastSlide({ ...activeProjectedSlide, layout: mode });
                     }}
                     className={`py-1 px-1 text-center font-sans text-[10px] font-bold rounded border cursor-pointer select-none uppercase tracking-wider transition-all ${
@@ -1350,7 +1386,7 @@ export default function ControlPanel({
                   value={fontSize}
                   onChange={(e) => {
                     const size = parseInt(e.target.value, 10);
-                    setFontSize(size);
+                    onChangeFontSize(size);
                     onCastSlide({ ...activeProjectedSlide, fontSize: size });
                   }}
                   className="w-full accent-blue-500 h-1 bg-black rounded appearance-none cursor-pointer"
@@ -1368,7 +1404,7 @@ export default function ControlPanel({
                       setShowUpgradePromptModal(true);
                       return;
                     }
-                    setShowLogo(!showLogo);
+                    onChangeShowLogo(!showLogo);
                     onCastSlide({ ...activeProjectedSlide, showLogo: !showLogo });
                   }}
                   className={`w-9 h-4.5 rounded-full p-0.5 transition-colors cursor-pointer ${
@@ -1389,7 +1425,7 @@ export default function ControlPanel({
               <div className="border-t border-blue-500/20 pt-3.5 mt-2.5 space-y-3.5 text-left">
                 <div className="flex items-center gap-1.5 text-blue-400 font-bold uppercase text-[10px] tracking-wide">
                   <Crown className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Yearly Premium Controls</span>
+                  <span>Premium Plan Controls</span>
                 </div>
 
                 {/* Custom Brand text */}
@@ -1403,7 +1439,7 @@ export default function ControlPanel({
                     value={customBrandingText}
                     onChange={(e) => {
                       const text = e.target.value;
-                      setCustomBrandingText(text);
+                      onChangeCustomBrandingText(text);
                       // Cast immediately to update current display!
                       onCastSlide({ ...activeProjectedSlide, customBrandingText: text });
                     }}
@@ -1420,7 +1456,7 @@ export default function ControlPanel({
                     <button
                       onClick={() => {
                         const nextVal = !isParallelEnabled;
-                        setIsParallelEnabled(nextVal);
+                        onChangeIsParallelEnabled(nextVal);
                         // Trigger immediate slide update to reflect parallel changes
                         if (activeProjectedSlide.type === "verse") {
                           onCastSlide({
@@ -1449,7 +1485,7 @@ export default function ControlPanel({
                         value={parallelVersion}
                         onChange={(e) => {
                           const ver = e.target.value as any;
-                          setParallelVersion(ver);
+                          onChangeParallelVersion(ver);
                           if (activeProjectedSlide.type === "verse" && lookupText) {
                             onCastSlide({
                               ...activeProjectedSlide,
@@ -1474,7 +1510,7 @@ export default function ControlPanel({
                   <Crown className="w-3.5 h-3.5 text-amber-500" /> Unlock Advanced Controls
                 </span>
                 <p className="text-[9px] text-white/50 leading-normal">
-                  Upgrade to **Yearly Premium** to project dual parallel scriptures side-by-side and set your custom church logo text on screens!
+                  Upgrade to the **Premium Plan** to project dual parallel scriptures side-by-side and set your custom church logo text on screens!
                 </p>
                 <button
                   onClick={() => {
@@ -1543,15 +1579,15 @@ export default function ControlPanel({
               <div className="bg-white/5 border border-white/5 rounded-xl p-4 flex flex-col justify-between hover:border-blue-500/35 transition-all">
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-sans font-bold text-xs text-white uppercase tracking-wider">Monthly Plan</span>
+                    <span className="font-sans font-bold text-xs text-white uppercase tracking-wider">Pro Monthly</span>
                     <Zap className="w-3.5 h-3.5 text-blue-400" />
                   </div>
-                  <div className="text-xl font-bold text-white font-mono mt-1">$19<span className="text-xs text-white/50">/mo</span></div>
+                  <div className="text-xl font-bold text-white font-mono mt-1">₦10,000<span className="text-xs text-white/50">/mo</span></div>
                   <ul className="text-[10px] text-white/55 space-y-1 mt-3">
+                    <li>✓ AI Sermon Live Listening</li>
+                    <li>✓ Automatic verse detection</li>
+                    <li>✓ Instant projector casting</li>
                     <li>✓ Unlock KJV &amp; ESV translations</li>
-                    <li>✓ Unlock all gradient layouts</li>
-                    <li>✓ Export notes to Markdown (.md)</li>
-                    <li>✓ Custom announcements &amp; songs</li>
                   </ul>
                 </div>
                 <button
@@ -1561,7 +1597,7 @@ export default function ControlPanel({
                   }}
                   className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs py-2 rounded-lg mt-5 transition cursor-pointer"
                 >
-                  Select Monthly
+                  Select Pro Monthly
                 </button>
               </div>
 
@@ -1572,16 +1608,17 @@ export default function ControlPanel({
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-sans font-bold text-xs text-amber-250 uppercase tracking-wider">Yearly Premium</span>
+                    <span className="font-sans font-bold text-xs text-amber-250 uppercase tracking-wider">Premium Plan</span>
                     <Crown className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
                   </div>
-                  <div className="text-xl font-bold text-white font-mono mt-1">$149<span className="text-xs text-white/50">/yr</span></div>
+                  <div className="text-xl font-bold text-white font-mono mt-1">₦25,000<span className="text-xs text-white/50">/mo</span></div>
                   <ul className="text-[10px] text-white/55 space-y-1 mt-3">
-                    <li className="text-amber-200/90 font-semibold">★ Parallel Scripture Projections</li>
-                    <li className="text-amber-200/90 font-semibold">★ Custom Branding Logo Text</li>
-                    <li className="text-amber-200/90 font-semibold">★ AI Sermon outline generator</li>
+                    <li className="text-amber-200/90 font-semibold">★ Sanctuary Notes Cloud Journal</li>
+                    <li className="text-amber-200/90 font-semibold">★ Praise Hymnals &amp; Media</li>
+                    <li className="text-amber-200/90 font-semibold">★ Parallel scripture projections</li>
+                    <li className="text-amber-200/90 font-semibold">★ Custom logo branding text</li>
                     <li>✓ Premium Aurora theme overlay</li>
-                    <li>✓ All Monthly tier features</li>
+                    <li>✓ All Pro Monthly features</li>
                   </ul>
                 </div>
                 <button
@@ -1591,7 +1628,7 @@ export default function ControlPanel({
                   }}
                   className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-450 hover:to-amber-550 text-slate-950 font-extrabold text-xs py-2 rounded-lg mt-5 transition cursor-pointer"
                 >
-                  Select Yearly
+                  Select Premium
                 </button>
               </div>
             </div>
@@ -1612,7 +1649,7 @@ export default function ControlPanel({
                 <div>
                   <h3 className="font-sans font-black text-lg text-white uppercase tracking-wider">Payment Authorized!</h3>
                   <span className="text-[10px] font-mono text-green-400 uppercase tracking-widest block font-bold mt-0.5">
-                    Welcome to {checkoutPlan === "yearly" ? "Yearly Premium" : "Monthly Plan"} Tier
+                    Welcome to {checkoutPlan === "yearly" ? "Premium Plan" : "Pro Monthly"}
                   </span>
                 </div>
                 <p className="text-xs text-white/60 max-w-xs leading-relaxed font-sans">
@@ -1674,7 +1711,7 @@ export default function ControlPanel({
                 <div className="bg-black/30 p-3 rounded-lg border border-white/5 flex justify-between items-center">
                   <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Upgrade Selection:</span>
                   <span className="text-xs font-bold text-white uppercase tracking-wider">
-                    {checkoutPlan === "yearly" ? "★ Yearly Premium ($149/yr)" : "✓ Monthly Plan ($19/mo)"}
+                    {checkoutPlan === "yearly" ? "★ Premium Plan (₦25,000/mo)" : "✓ Pro Monthly (₦10,000/mo)"}
                   </span>
                 </div>
 

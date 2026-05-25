@@ -169,6 +169,63 @@ export default function App() {
     showLogo: true,
   });
 
+  // Lifted presentation customizer states
+  const [bibleVersion, setBibleVersion] = useState<"NIV" | "KJV" | "ESV">("NIV");
+  const [layoutMode, setLayoutMode] = useState<"fullscreen" | "lower-third" | "split-screen">("fullscreen");
+  const [activeThemeId, setActiveThemeId] = useState<string>("nebula-dark");
+  const [fontSize, setFontSize] = useState<number>(44);
+  const [showLogo, setShowLogo] = useState<boolean>(true);
+  const [isParallelEnabled, setIsParallelEnabled] = useState<boolean>(false);
+  const [parallelVersion, setParallelVersion] = useState<"NIV" | "KJV" | "ESV">("KJV");
+  const [customBrandingText, setCustomBrandingText] = useState<string>("");
+
+  const bibleVersionRef = useRef(bibleVersion);
+  const layoutModeRef = useRef(layoutMode);
+  const activeThemeIdRef = useRef(activeThemeId);
+  const fontSizeRef = useRef(fontSize);
+  const showLogoRef = useRef(showLogo);
+  const isParallelEnabledRef = useRef(isParallelEnabled);
+  const parallelVersionRef = useRef(parallelVersion);
+  const customBrandingTextRef = useRef(customBrandingText);
+
+  useEffect(() => { bibleVersionRef.current = bibleVersion; }, [bibleVersion]);
+  useEffect(() => { layoutModeRef.current = layoutMode; }, [layoutMode]);
+  useEffect(() => { activeThemeIdRef.current = activeThemeId; }, [activeThemeId]);
+  useEffect(() => { fontSizeRef.current = fontSize; }, [fontSize]);
+  useEffect(() => { showLogoRef.current = showLogo; }, [showLogo]);
+  useEffect(() => { isParallelEnabledRef.current = isParallelEnabled; }, [isParallelEnabled]);
+  useEffect(() => { parallelVersionRef.current = parallelVersion; }, [parallelVersion]);
+  useEffect(() => { customBrandingTextRef.current = customBrandingText; }, [customBrandingText]);
+
+  // Synchronize customizer states with the active projected slide
+  useEffect(() => {
+    if (activeSlide) {
+      if (activeSlide.themeId) {
+        setActiveThemeId(activeSlide.themeId);
+      }
+      if (activeSlide.layout) {
+        setLayoutMode(activeSlide.layout);
+      }
+      if (activeSlide.fontSize) {
+        setFontSize(activeSlide.fontSize);
+      }
+      if (activeSlide.showLogo !== undefined) {
+        setShowLogo(activeSlide.showLogo);
+      }
+      if (activeSlide.parallelBody) {
+        setIsParallelEnabled(true);
+        if (activeSlide.parallelTranslation) {
+          setParallelVersion(activeSlide.parallelTranslation as any);
+        }
+      } else {
+        setIsParallelEnabled(false);
+      }
+      if (activeSlide.customBrandingText !== undefined) {
+        setCustomBrandingText(activeSlide.customBrandingText);
+      }
+    }
+  }, [activeSlide]);
+
   // Transcription & AI outputs state
   const [isListening, setIsListening] = useState<boolean>(false);
   const [transcript, setTranscript] = useState<string>("");
@@ -423,11 +480,18 @@ export default function App() {
 
   // Launch AI speech detection endpoint with dual hybrid execution pipelines (micro-latency local regex + fallback deep Gemini NLP)
   const triggerAiDetection = async (transcriptText: string) => {
+    const userPlan = userProfile?.subscriptionPlan || "free";
+    if (userPlan === "free") return;
+
     if (!transcriptText || transcriptText.trim().length < 8) return;
 
     // 1. DUAL PIPELINE: HIGH-SPEED MICRO-LATENCY CLIENT REGEX INTERCEPTOR
     const localMatch = scanForVerseLocally(transcriptText);
     if (localMatch) {
+      // Clear the buffer unconditionally because a verse was matched!
+      transcriptionBufferRef.current = "";
+      setTranscript("");
+
       const verseId = `${localMatch.book}-${localMatch.chapter}-${localMatch.verse}-local-${Date.now()}`;
       const isConsecutiveDuplicate = detectedVersesRef.current.length > 0 &&
         detectedVersesRef.current[0].book === localMatch.book &&
@@ -454,29 +518,29 @@ export default function App() {
           const lookup = await fetch(`/api/bible/lookup?book=${localMatch.book}&chapter=${localMatch.chapter}&verse=${localMatch.verse}`);
           const details = await lookup.json();
           if (details && details.text) {
+            const hasParallel = isParallelEnabledRef.current && userPlan === "yearly";
             castSlide({
               type: "verse",
               title: newDetected.displayName,
-              body: details.text.NIV, // defaults to NIV
+              body: details.text[bibleVersionRef.current],
+              parallelBody: hasParallel ? details.text[parallelVersionRef.current] : undefined,
+              parallelTranslation: hasParallel ? parallelVersionRef.current : undefined,
+              customBrandingText: userPlan === "yearly" && customBrandingTextRef.current ? customBrandingTextRef.current : undefined,
               book: localMatch.book,
               chapter: localMatch.chapter,
               verse: localMatch.verse,
-              translation: "NIV",
-              layout: activeSlideRef.current.layout || "fullscreen",
-              themeId: activeSlideRef.current.themeId,
-              fontSize: activeSlideRef.current.fontSize,
-              showLogo: activeSlideRef.current.showLogo,
+              translation: bibleVersionRef.current,
+              layout: layoutModeRef.current,
+              themeId: activeThemeIdRef.current as any,
+              fontSize: fontSizeRef.current,
+              showLogo: showLogoRef.current,
             });
-
-            // Instant reset of active speech buffers to capture next spoken scriptures without overlap!
-            transcriptionBufferRef.current = "";
-            setTranscript("");
           }
         } catch (e) {
           console.error("Local micro-latency match lookup error:", e);
         }
-        return; // Halt further pipeline actions on successful local capture
       }
+      return; // Halt further pipeline actions on successful local capture
     }
 
     // 2. BACKGROUND CONTEXT ANALYZER (Gemini NLP Topics, Bulletpoints, and complex scripture extraction)
@@ -499,6 +563,10 @@ export default function App() {
 
         // Assess bible verse reference matching
         if (data.detected && data.reference && data.reference.book) {
+          // Clear the buffer unconditionally because a verse was matched!
+          transcriptionBufferRef.current = "";
+          setTranscript("");
+
           const matched = data.reference;
           const verseId = `${matched.book}-${matched.chapter}-${matched.verse}-${Date.now()}`;
 
@@ -535,23 +603,23 @@ export default function App() {
             const lookup = await fetch(`/api/bible/lookup?book=${matched.book}&chapter=${matched.chapter}&verse=${matched.verse}`);
             const details = await lookup.json();
             if (details && details.text) {
+              const hasParallel = isParallelEnabledRef.current && userPlan === "yearly";
               castSlide({
                 type: "verse",
                 title: matched.displayName || `${matched.book} ${matched.chapter}:${matched.verse}`,
-                body: details.text.NIV, // defaults to NIV
+                body: details.text[bibleVersionRef.current],
+                parallelBody: hasParallel ? details.text[parallelVersionRef.current] : undefined,
+                parallelTranslation: hasParallel ? parallelVersionRef.current : undefined,
+                customBrandingText: userPlan === "yearly" && customBrandingTextRef.current ? customBrandingTextRef.current : undefined,
                 book: matched.book,
                 chapter: matched.chapter,
                 verse: matched.verse,
-                translation: "NIV",
-                layout: activeSlideRef.current.layout || "fullscreen",
-                themeId: activeSlideRef.current.themeId,
-                fontSize: activeSlideRef.current.fontSize,
-                showLogo: activeSlideRef.current.showLogo,
+                translation: bibleVersionRef.current,
+                layout: layoutModeRef.current,
+                themeId: activeThemeIdRef.current as any,
+                fontSize: fontSizeRef.current,
+                showLogo: showLogoRef.current,
               });
-
-              // Instant reset of active speech buffers to capture next spoken scriptures without overlap!
-              transcriptionBufferRef.current = "";
-              setTranscript("");
             }
           }
         }
@@ -562,6 +630,11 @@ export default function App() {
   };
 
   const toggleListening = () => {
+    const userPlan = userProfile?.subscriptionPlan || "free";
+    if (userPlan === "free") {
+      alert("⚠️ Live AI Sermon Listening requires a Pro Monthly or Premium subscription!");
+      return;
+    }
     const nextState = !isListening;
     setIsListening(nextState);
 
@@ -582,6 +655,11 @@ export default function App() {
 
   // Preaching simulation injection trigger
   const triggerPreachSimulator = (phrase: string) => {
+    const userPlan = userProfile?.subscriptionPlan || "free";
+    if (userPlan === "free") {
+      alert("⚠️ AI Sermon features require a Pro Monthly or Premium subscription!");
+      return;
+    }
     // Append phrase to simulated input
     transcriptionBufferRef.current += " " + phrase;
     const finalPhrase = transcriptionBufferRef.current.trim();
@@ -651,6 +729,22 @@ export default function App() {
           onClearNotes={handleClearNotes}
           userProfile={userProfile}
           onUpdateSubscription={handleUpdateSubscription}
+          bibleVersion={bibleVersion}
+          onChangeBibleVersion={setBibleVersion}
+          layoutMode={layoutMode}
+          onChangeLayoutMode={setLayoutMode}
+          activeThemeId={activeThemeId}
+          onChangeActiveThemeId={setActiveThemeId}
+          fontSize={fontSize}
+          onChangeFontSize={setFontSize}
+          showLogo={showLogo}
+          onChangeShowLogo={setShowLogo}
+          isParallelEnabled={isParallelEnabled}
+          onChangeIsParallelEnabled={setIsParallelEnabled}
+          parallelVersion={parallelVersion}
+          onChangeParallelVersion={setParallelVersion}
+          customBrandingText={customBrandingText}
+          onChangeCustomBrandingText={setCustomBrandingText}
         />
       </div>
 
