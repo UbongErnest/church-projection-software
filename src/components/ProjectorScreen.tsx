@@ -6,9 +6,10 @@ import { Sparkles, Clock } from "lucide-react";
 
 interface ProjectorScreenProps {
   syncedSlide?: ActiveSlide;
+  subscriptionPlan?: string;
 }
 
-export default function ProjectorScreen({ syncedSlide }: ProjectorScreenProps) {
+export default function ProjectorScreen({ syncedSlide, subscriptionPlan = "free" }: ProjectorScreenProps) {
   const [slide, setSlide] = useState<ActiveSlide>({
     type: "announcement",
     title: "Service Starting Soon",
@@ -68,8 +69,40 @@ export default function ProjectorScreen({ syncedSlide }: ProjectorScreenProps) {
       id="projector-immersive-viewport"
       className={`relative w-full h-screen flex flex-col justify-between p-12 overflow-hidden transition-all duration-700 select-none ${
         slide.layout === "lower-third" ? "bg-stone-950/85" : activeTheme.bgClass
-      }`}
+      } ${slide.themeId === "sanctuary-aurora" ? "animate-aurora-bg" : ""}`}
     >
+      <style>{`
+        @keyframes aurora-bg {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        .animate-aurora-bg {
+          background-size: 200% 200%;
+          animation: aurora-bg 18s ease infinite;
+        }
+        @keyframes drift-blob {
+          0% { transform: translate(0px, 0px) scale(1); }
+          33% { transform: translate(40px, -60px) scale(1.1); }
+          66% { transform: translate(-30px, 30px) scale(0.95); }
+          100% { transform: translate(0px, 0px) scale(1); }
+        }
+        .animate-drift-1 {
+          animation: drift-blob 22s infinite alternate ease-in-out;
+        }
+        .animate-drift-2 {
+          animation: drift-blob 26s infinite alternate-reverse ease-in-out;
+        }
+      `}</style>
+
+      {/* Floating Aurora Blobs */}
+      {slide.themeId === "sanctuary-aurora" && slide.layout !== "lower-third" && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+          <div className="absolute top-[10%] left-[20%] w-[40vw] h-[40vw] bg-teal-500/10 rounded-full blur-[100px] animate-drift-1" />
+          <div className="absolute bottom-[15%] right-[20%] w-[35vw] h-[35vw] bg-emerald-500/10 rounded-full blur-[110px] animate-drift-2" />
+        </div>
+      )}
+
       {/* Background Ambience Aura */}
       {slide.layout !== "lower-third" && (
         <div className="absolute inset-0 pointer-events-none opacity-40 bg-[radial-gradient(circle_at_50%_30%,rgba(255,255,255,0.06),transparent_60%)]" />
@@ -83,8 +116,8 @@ export default function ProjectorScreen({ syncedSlide }: ProjectorScreenProps) {
             <span>{slide.type === "verse" ? "Holy Scripture" : slide.type === "lyrics" ? "Worship Lyric" : "Church Announcement"}</span>
           </div>
           {slide.showLogo && (
-            <div className={`text-xs font-semibold tracking-widest uppercase font-display border px-2 py-0.5 rounded ${isLightTheme ? "border-stone-400 text-stone-800" : "border-white/20 text-white/80"}`}>
-              † SANCTUARY
+            <div className={`text-xs font-semibold tracking-widest uppercase font-display border px-2.5 py-0.5 rounded ${isLightTheme ? "border-stone-400 text-stone-800" : "border-white/20 text-white/80"}`}>
+              {slide.customBrandingText ? slide.customBrandingText : "† SANCTUARY"}
             </div>
           )}
         </div>
@@ -102,7 +135,33 @@ export default function ProjectorScreen({ syncedSlide }: ProjectorScreenProps) {
               transition={{ duration: 0.6, ease: "easeOut" }}
               className="max-w-5xl w-full flex flex-col justify-center"
             >
-              {slide.layout === "lower-third" ? (
+              {slide.parallelBody && slide.parallelTranslation ? (
+                // Parallel translation side-by-side layout
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-12 text-left items-center justify-center w-full my-auto animate-fade-in relative z-10 px-6">
+                  <div className={`border-r pr-8 ${isLightTheme ? "border-black/10 text-stone-900" : "border-white/10 text-white"}`}>
+                    <blockquote 
+                      style={{ fontSize: `${(slide.fontSize || 48) * 0.7}px` }}
+                      className="font-sans italic leading-relaxed font-medium tracking-wide mb-6"
+                    >
+                      “{slide.body}”
+                    </blockquote>
+                    <h4 className="font-display font-semibold tracking-wider text-amber-500 text-lg uppercase">
+                      {slide.book} {slide.chapter}:{slide.verse} ({slide.translation || "NIV"})
+                    </h4>
+                  </div>
+                  <div className={`${isLightTheme ? "text-stone-850" : "text-white/95"}`}>
+                    <blockquote 
+                      style={{ fontSize: `${(slide.fontSize || 48) * 0.7}px` }}
+                      className="font-sans italic leading-relaxed font-medium tracking-wide mb-6"
+                    >
+                      “{slide.parallelBody}”
+                    </blockquote>
+                    <h4 className="font-display font-semibold tracking-wider text-amber-500 text-lg uppercase">
+                      {slide.book} {slide.chapter}:{slide.verse} ({slide.parallelTranslation})
+                    </h4>
+                  </div>
+                </div>
+              ) : slide.layout === "lower-third" ? (
                 // Lower Third layout for OBS overlay - stays dark and immersive for transparent capture
                 <div className="fixed bottom-12 left-12 right-12 text-left bg-slate-950/90 backdrop-blur-md rounded-xl p-8 border border-white/10 shadow-2xl">
                   <p
@@ -224,6 +283,13 @@ export default function ProjectorScreen({ syncedSlide }: ProjectorScreenProps) {
         <div className={`z-10 flex justify-between items-center text-[10px] font-mono opacity-50 border-t pt-4 ${isLightTheme ? "border-black/10 text-stone-600" : "border-white/5 text-white/50"}`}>
           <span>Active Projection Live Feed</span>
           <span>LAYOUT: {(slide.layout || "fullscreen").toUpperCase()} • THEME: {(slide.themeId || "nebula-dark").toUpperCase()}</span>
+        </div>
+      )}
+
+      {/* Forced Free Watermark */}
+      {subscriptionPlan === "free" && (
+        <div className={`absolute bottom-3 right-5 z-20 text-[9px] font-mono tracking-widest uppercase px-2.5 py-0.5 rounded bg-black/50 border border-white/10 ${isLightTheme ? "text-stone-750 border-stone-300 bg-stone-100/90" : "text-white/45"}`}>
+          ⚡ Powered by Chaver AI
         </div>
       )}
     </div>

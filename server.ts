@@ -259,6 +259,34 @@ function mockRegexDetect(text: string) {
   return null;
 }
 
+// AI Copilot Sermon Outline Generator (Yearly Premium exclusive)
+app.post("/api/ai/copilot", async (req, res) => {
+  const { notesContent, topic } = req.body;
+  if (!notesContent || notesContent.trim() === "") {
+    return res.json({ outline: "No notes provided to generate outline." });
+  }
+
+  try {
+    const ai = getAiClient();
+    const systemPrompt = "You are an expert theologian and sermon outline editor. Create a beautifully structured sermon outline with clear headings, scriptural suggestions, and real-life application points from the rough pastor notes.";
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: `Sermon Topic: ${topic || "Untold Sunday Study"}\nRough Notes:\n"${notesContent}"`,
+      config: {
+        systemInstruction: systemPrompt,
+      }
+    });
+
+    return res.json({ outline: response.text || "Could not generate outline." });
+  } catch (error: any) {
+    console.error("AI Copilot error:", error);
+    // Graceful fallback with premium placeholder
+    return res.json({
+      outline: `### 📖 AI Copilot Structured Outline: ${topic || "Sunday Service"}\n\n* **I. Introduction & Central Focus**\n  * Hook: Connecting modern life challenges to divine truths.\n  * Central Scripture Recommendation: Focus on a key anchoring passage.\n\n* **II. Core Exegesis (Based on Sermon Notes)**\n  * Analysis of themes found in notes: *"${notesContent.substring(0, 150)}..."*\n  * Contextualizing historical and cultural elements of the references.\n\n* **III. Practical Spiritual Applications**\n  * How the congregation can apply this revelation during the week.\n  * Overcoming common barriers to living out these biblical principles.\n\n* **IV. Conclusion & Key Takeaway**\n  * Summarizing the sermon topic: *${topic}*.\n  * Final closing call to prayer and dedication.\n\n*(Note: Graceful local outline generator fallback triggered because Gemini API Key is offline or quota-limited)*`
+    });
+  }
+});
+
 // 3. Mount Vite or serve static production folder
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {

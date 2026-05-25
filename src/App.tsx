@@ -6,8 +6,9 @@ import SermonNotepad from "./components/SermonNotepad";
 import LandingPage from "./components/LandingPage";
 import RegisterPage from "./components/RegisterPage";
 import LoginPage from "./components/LoginPage";
-import { auth } from "./firebase";
+import { auth, db } from "./firebase";
 import { onAuthStateChanged, signOut, User as FirebaseUser } from "firebase/auth";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { THEME_PRESETS } from "./data";
 import { Sparkles, Mic, HelpCircle, CornerDownRight, Volume2, Notebook, LogOut } from "lucide-react";
 import { BIBLE_BOOKS, normalizeBookName, parseSpokenNumbers } from "./bibleDatabase";
@@ -62,17 +63,100 @@ export default function App() {
 
   // Firebase Authenticated Session State Tracking
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [userProfile, setUserProfile] = useState<{
+    uid: string;
+    email: string;
+    displayName: string;
+    createdAt: string;
+    churchName: string;
+    country: string;
+    state: string;
+    city: string;
+    location: string;
+    denomination: string;
+    subscriptionPlan: "free" | "monthly" | "yearly";
+    subscriptionStatus: string;
+  } | null>(null);
   const [authChecked, setAuthChecked] = useState<boolean>(false);
   const [authView, setAuthView] = useState<"landing" | "login" | "register">("landing");
 
-  // Auth monitoring listener
+  // Auth monitoring listener and real-time Firestore profile sync
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    let unsubscribeProfile: (() => void) | null = null;
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
+      if (user) {
+        // Subscribe to real-time updates of the user profile document in Firestore
+        unsubscribeProfile = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
+          if (docSnap.exists()) {
+            setUserProfile(docSnap.data() as any);
+          } else {
+            // Fallback default profile if the Firestore doc is delayed
+            setUserProfile({
+              uid: user.uid,
+              email: user.email || "",
+              displayName: user.displayName || "",
+              createdAt: new Date().toISOString(),
+              churchName: "My Congregation",
+              country: "",
+              state: "",
+              city: "",
+              location: "",
+              denomination: "",
+              subscriptionPlan: "free",
+              subscriptionStatus: "active"
+            });
+          }
+        }, (err) => {
+          console.error("Firestore user profile fetch error:", err);
+          setUserProfile({
+            uid: user.uid,
+            email: user.email || "",
+            displayName: user.displayName || "",
+            createdAt: new Date().toISOString(),
+            churchName: "My Congregation",
+            country: "",
+            state: "",
+            city: "",
+            location: "",
+            denomination: "",
+            subscriptionPlan: "free",
+            subscriptionStatus: "active"
+          });
+        });
+      } else {
+        setUserProfile(null);
+        if (unsubscribeProfile) {
+          unsubscribeProfile();
+          unsubscribeProfile = null;
+        }
+      }
       setAuthChecked(true);
     });
-    return () => unsubscribe();
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeProfile) unsubscribeProfile();
+    };
   }, []);
+
+  // Update user subscription plan helper function
+  const handleUpdateSubscription = async (newPlan: "free" | "monthly" | "yearly") => {
+    if (!currentUser || !userProfile) return;
+    const userRef = doc(db, "users", currentUser.uid);
+    const updatedPayload = {
+      ...userProfile,
+      subscriptionPlan: newPlan,
+      subscriptionStatus: "active"
+    };
+    try {
+      await setDoc(userRef, updatedPayload);
+    } catch (err) {
+      console.error("Failed to update subscription profile in Firestore:", err);
+      // Fallback state update
+      setUserProfile((prev: any) => prev ? { ...prev, subscriptionPlan: newPlan } : null);
+    }
+  };
 
   // Main system active slide
   const [activeSlide, setActiveSlide] = useState<ActiveSlide>({
@@ -546,7 +630,7 @@ export default function App() {
 
   // Dual View splitter
   if (viewMode === "projector") {
-    return <ProjectorScreen syncedSlide={activeSlide} />;
+    return <ProjectorScreen syncedSlide={activeSlide} subscriptionPlan={userProfile?.subscriptionPlan || "free"} />;
   }
 
   return (
@@ -565,6 +649,8 @@ export default function App() {
           sermonTopic={sermonTopic}
           sermonNotes={sermonNotes}
           onClearNotes={handleClearNotes}
+          userProfile={userProfile}
+          onUpdateSubscription={handleUpdateSubscription}
         />
       </div>
 
@@ -601,6 +687,7 @@ export default function App() {
             sermonTopic={sermonTopic}
             activeProjectedSlide={activeSlide}
             transcript={transcript}
+            userProfile={userProfile}
           />
         )}
 

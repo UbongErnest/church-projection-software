@@ -4,7 +4,7 @@ export type PresentationType = "verse" | "lyrics" | "announcement" | "timer" | "
 
 export type LayoutMode = "fullscreen" | "lower-third" | "split-screen";
 
-export type BackgroundThemeId = "warm-charcoal" | "nebula-dark" | "emerald-sanctuary" | "crimson-grace" | "royal-gold" | "clean-light" | "pure-white";
+export type BackgroundThemeId = "warm-charcoal" | "nebula-dark" | "emerald-sanctuary" | "crimson-grace" | "royal-gold" | "clean-light" | "pure-white" | "sanctuary-aurora";
 
 export interface ActiveSlide {
   type: PresentationType;
@@ -14,6 +14,9 @@ export interface ActiveSlide {
   chapter?: number;
   verse?: number;
   translation?: string;
+  parallelBody?: string;
+  parallelTranslation?: string;
+  customBrandingText?: string;
   layout: LayoutMode;
   themeId: BackgroundThemeId;
   fontSize: number; // in pixels or percentage ratio

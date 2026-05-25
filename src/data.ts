@@ -73,6 +73,15 @@ export const THEME_PRESETS: ThemeConfig[] = [
     accentClass: "border-black hover:bg-black/5 text-black",
     badgeClass: "bg-stone-100 text-black border-stone-200",
     previewGradient: "from-white to-stone-50 border border-stone-200",
+  },
+  {
+    id: "sanctuary-aurora",
+    name: "★ Sanctuary Aurora (Premium)",
+    bgClass: "bg-gradient-to-tr from-slate-950 via-teal-950 to-emerald-950 text-teal-50 border-teal-900/40 relative overflow-hidden",
+    textClass: "text-white drop-shadow-[0_2px_12px_rgba(45,212,191,0.5)] font-sans",
+    accentClass: "border-teal-400 hover:bg-teal-400/10 text-teal-300",
+    badgeClass: "bg-teal-500/20 text-teal-100 border-teal-500/30",
+    previewGradient: "from-slate-950 via-teal-950 to-emerald-950",
   }
 ];
 

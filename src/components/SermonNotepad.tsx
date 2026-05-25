@@ -18,7 +18,10 @@ import {
   FileUp, 
   ChevronDown, 
   ChevronUp, 
-  RotateCcw
+  RotateCcw,
+  Crown,
+  Lock,
+  X
 } from "lucide-react";
 
 interface SavedSermonNote {
@@ -35,13 +38,22 @@ interface SermonNotepadProps {
   sermonTopic: string;
   activeProjectedSlide: ActiveSlide;
   transcript: string;
+  userProfile?: {
+    subscriptionPlan: "free" | "monthly" | "yearly";
+    subscriptionStatus: string;
+    [key: string]: any;
+  } | null;
 }
 
 export default function SermonNotepad({
   sermonTopic,
   activeProjectedSlide,
-  transcript
+  transcript,
+  userProfile
 }: SermonNotepadProps) {
+  // User level plan state mapping
+  const userPlan = userProfile?.subscriptionPlan || "free";
+
   // Notepad form state
   const [noteTitle, setNoteTitle] = useState("");
   const [noteContent, setNoteContent] = useState("");
@@ -57,7 +69,49 @@ export default function SermonNotepad({
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
 
+  // AI Copilot state
+  const [isGeneratingOutline, setIsGeneratingOutline] = useState(false);
+  const [generatedOutline, setGeneratedOutline] = useState("");
+  const [showOutlineModal, setShowOutlineModal] = useState(false);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // AI Outline generator handler
+  const handleTriggerAiOutline = async () => {
+    if (userPlan !== "yearly") {
+      triggerSuccessFeedback("⚠️ AI Copilot Outline requires Yearly Premium!");
+      return;
+    }
+    if (!noteContent.trim()) {
+      triggerSuccessFeedback("⚠️ Journal canvas empty! Add notes first.");
+      return;
+    }
+
+    setIsGeneratingOutline(true);
+    try {
+      const res = await fetch("/api/ai/copilot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          notesContent: noteContent,
+          topic: noteTitle || sermonTopic
+        })
+      });
+      const data = await res.json();
+      if (data && data.outline) {
+        setGeneratedOutline(data.outline);
+        setShowOutlineModal(true);
+        triggerSuccessFeedback("AI outline generated!");
+      } else {
+        triggerSuccessFeedback("⚠️ Failed to generate sermon outline.");
+      }
+    } catch (err) {
+      console.error("AI Copilot outline fetch error:", err);
+      triggerSuccessFeedback("⚠️ Outline request failed.");
+    } finally {
+      setIsGeneratingOutline(false);
+    }
+  };
 
   // Load saved notes once on load via Cloud Firestore
   useEffect(() => {
@@ -275,6 +329,11 @@ export default function SermonNotepad({
   const handleDownloadNote = (note: SavedSermonNote, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
 
+    if (userPlan === "free") {
+      triggerSuccessFeedback("⚠️ Notes Export is locked for Free users!");
+      return;
+    }
+
     const timestampHeader = `---
 Sermon Title : ${note.title}
 Date Taken   : ${note.createdAt} at ${note.timestamp}
@@ -415,6 +474,28 @@ System Source: Chaver AI Automatic Pulpit Monitor
             <span>Reset</span>
           </button>
         </div>
+
+        {/* AI Copilot Outline builder (unlocked only for Yearly Premium) */}
+        <div className="pt-1 text-left">
+          <button
+            type="button"
+            onClick={handleTriggerAiOutline}
+            disabled={isGeneratingOutline}
+            className={`w-full font-sans font-bold text-xs py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-md ${
+              userPlan === "yearly"
+                ? "bg-gradient-to-r from-amber-500/15 to-teal-500/15 hover:from-amber-500/25 hover:to-teal-500/25 border border-teal-500/35 text-teal-300 cursor-pointer"
+                : "bg-stone-900/60 border border-white/5 text-stone-500 cursor-pointer hover:border-amber-500/20"
+            }`}
+          >
+            {isGeneratingOutline ? (
+              <div className="w-3.5 h-3.5 border-2 border-teal-400/30 border-t-teal-400 rounded-full animate-spin" />
+            ) : (
+              <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            )}
+            <span>AI Sermon Copilot Outline</span>
+            {userPlan !== "yearly" && <Lock className="w-2.5 h-2.5 text-amber-500 shrink-0" />}
+          </button>
+        </div>
       </form>
 
       {/* Library of Preserved Sermon Notes */}
@@ -499,10 +580,10 @@ System Source: Chaver AI Automatic Pulpit Monitor
                           e.stopPropagation();
                           handleDownloadNote(note);
                         }}
-                        title="Export as Markdown text file"
-                        className="p-1 text-stone-400 hover:text-sky-400 hover:bg-stone-800 rounded transition"
+                        title={userPlan === "free" ? "Export Locked (Free Tier)" : "Export as Markdown text file"}
+                        className={`p-1 rounded transition ${userPlan === "free" ? "text-stone-650 hover:text-amber-500 hover:bg-stone-800/40" : "text-stone-400 hover:text-sky-400 hover:bg-stone-800"}`}
                       >
-                        <FileDown className="w-3 h-3" />
+                        {userPlan === "free" ? <Lock className="w-3 h-3 text-amber-500/80" /> : <FileDown className="w-3 h-3" />}
                       </button>
                       <button
                         onClick={(e) => handleDeleteNote(note.id, e)}
@@ -536,6 +617,53 @@ System Source: Chaver AI Automatic Pulpit Monitor
         )}
       </div>
 
+      {/* AI OUTLINE DISPLAY MODAL */}
+      {showOutlineModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 select-none">
+          <div className="w-full max-w-2xl bg-[#111317] border border-white/10 rounded-2xl p-6 md:p-8 flex flex-col max-h-[85vh] shadow-2xl relative text-left">
+            <button
+              onClick={() => setShowOutlineModal(false)}
+              className="absolute top-5 right-5 p-1 rounded-lg text-stone-400 hover:text-white hover:bg-white/5 transition cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-2 border-b border-white/5 pb-4 mb-4">
+              <Crown className="w-5 h-5 text-amber-400" />
+              <div>
+                <h3 className="font-sans font-black text-sm uppercase text-white tracking-tight">AI Copilot Sermon Outline</h3>
+                <span className="text-[9px] font-mono text-teal-400 uppercase tracking-widest font-bold">Generated based on rough journal notes</span>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto text-xs text-stone-300 space-y-4 pr-1 leading-relaxed font-sans scrollbar-thin scrollbar-thumb-white/10 whitespace-pre-wrap select-text">
+              {generatedOutline}
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-white/5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  // Append outline directly to notes!
+                  setNoteContent((prev) => prev + "\n\n---\n\n" + generatedOutline);
+                  setShowOutlineModal(false);
+                  triggerSuccessFeedback("Appended outline to note editor!");
+                }}
+                className="bg-teal-600 hover:bg-teal-500 text-white font-sans font-bold text-xs px-5 py-2.5 rounded-lg cursor-pointer transition"
+              >
+                Append to Editor
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowOutlineModal(false)}
+                className="bg-stone-850 hover:bg-stone-750 text-stone-300 font-sans font-bold text-xs px-5 py-2.5 rounded-lg cursor-pointer transition border border-white/5"
+              >
+                Dismiss Outline
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
