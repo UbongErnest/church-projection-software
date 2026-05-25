@@ -137,6 +137,7 @@ export default function ControlPanel({
   // Search results for manual lookup
   const [lookupText, setLookupText] = useState<{ KJV: string; NIV: string; ESV: string } | null>(null);
   const [isLoadingLookup, setIsLoadingLookup] = useState<boolean>(false);
+  const [lookupError, setLookupError] = useState<string | null>(null);
 
   // Theme lock helper
   const isThemeLocked = (themeId: string) => {
@@ -184,8 +185,12 @@ export default function ControlPanel({
 
   const fetchManualVerse = async (b: string, c: number, v: number, autoProject: boolean = false) => {
     setIsLoadingLookup(true);
+    setLookupError(null);
     try {
       const res = await fetch(`/api/bible/lookup?book=${encodeURIComponent(b)}&chapter=${c}&verse=${v}`);
+      if (!res.ok) {
+        throw new Error(`Server returned status ${res.status}: ${res.statusText}`);
+      }
       const data = await res.json();
       if (data && data.text) {
         setLookupText(data.text);
@@ -208,9 +213,13 @@ export default function ControlPanel({
             showLogo: showLogo,
           });
         }
+      } else {
+        throw new Error(data.error || "Response format invalid: 'text' field missing.");
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error("fetchManualVerse error:", err);
+      setLookupError(err.message || "Unknown error occurred.");
+      setLookupText(null);
     } finally {
       setIsLoadingLookup(false);
     }
@@ -900,6 +909,10 @@ export default function ControlPanel({
                     <div className="text-white/80 italic text-xs leading-normal mb-3 font-sans">
                       {lookupText ? (
                         `"${lookupText[bibleVersion]}"`
+                      ) : lookupError ? (
+                        <span className="text-red-400 italic text-[11px] font-mono leading-relaxed block bg-red-950/20 border border-red-500/10 p-2 rounded">
+                          ⚠️ API Error: {lookupError}
+                        </span>
                       ) : (
                         <span className="text-white/30 italic">No text fetched. Adjust selector values to load scripture.</span>
                       )}
