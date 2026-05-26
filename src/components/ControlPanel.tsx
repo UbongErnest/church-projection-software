@@ -234,9 +234,9 @@ export default function ControlPanel({
           onCastSlide({
             type: "verse",
             title: `${b} ${c}:${v}`,
-            body: data.text[bibleVersion],
-            parallelBody: hasParallel ? data.text[parallelVersion] : undefined,
-            parallelTranslation: hasParallel ? parallelVersion : undefined,
+body: data.text[bibleVersion],
+              parallelBody: hasParallel ? data.text[parallelVersion] : undefined,
+              parallelTranslation: hasParallel ? parallelVersion : undefined,
             customBrandingText: userPlan === "yearly" && customBrandingText ? customBrandingText : undefined,
             book: b,
             chapter: c,
@@ -344,14 +344,14 @@ export default function ControlPanel({
           throw new Error(`Server returned status ${res.status}: ${res.statusText}`);
         }
         const data = await res.json();
-        if (data && data.text) {
-          setLookupText(data.text);
-          const hasParallel = isParallelEnabled && userPlan === "yearly";
-          onCastSlide({
-            type: "verse",
-            title: `${bookName} ${chapterVal}:${verseVal}`,
-            body: data.text[bibleVersion],
-parallelBody: hasParallel ? data.text[parallelVersion] : undefined,
+if (data && data.text) {
+           setLookupText(data.text);
+           const hasParallel = isParallelEnabled && userPlan === "yearly";
+           onCastSlide({
+             type: "verse",
+             title: `${bookName} ${chapterVal}:${verseVal}`,
+             body: data.text[bibleVersion],
+             parallelBody: hasParallel ? data.text[parallelVersion] : undefined,
              parallelTranslation: hasParallel ? parallelVersion : undefined,
              customBrandingText: userPlan === "yearly" && customBrandingText ? customBrandingText : undefined,
              book: bookName,
@@ -897,10 +897,14 @@ parallelBody: hasParallel ? data.text[parallelVersion] : undefined,
                                    const lookup = await fetch(`/api/bible/lookup?book=${item.book}&chapter=${item.chapter}&verse=${item.verse}`);
                                    const details = await lookup.json();
                                    if (details && details.text) {
+                                     const hasParallel = isParallelEnabled && userPlan === "yearly";
                                      onCastSlide({
                                        type: "verse",
                                        title: item.displayName,
                                        body: details.text[bibleVersion],
+                                       parallelBody: hasParallel ? details.text[parallelVersion] : undefined,
+                                       parallelTranslation: hasParallel ? parallelVersion : undefined,
+                                       customBrandingText: userPlan === "yearly" && customBrandingText ? customBrandingText : undefined,
                                        book: item.book,
                                        chapter: item.chapter,
                                        verse: item.verse,
@@ -912,10 +916,14 @@ parallelBody: hasParallel ? data.text[parallelVersion] : undefined,
                                      });
                                    } else {
                                      const fallbackText = generateFallbackVerseText(item.book, item.chapter, item.verse);
+                                     const hasParallel = isParallelEnabled && userPlan === "yearly";
                                      onCastSlide({
                                        type: "verse",
                                        title: item.displayName,
                                        body: fallbackText[bibleVersion],
+                                       parallelBody: hasParallel ? fallbackText[parallelVersion] : undefined,
+                                       parallelTranslation: hasParallel ? parallelVersion : undefined,
+                                       customBrandingText: userPlan === "yearly" && customBrandingText ? customBrandingText : undefined,
                                        book: item.book,
                                        chapter: item.chapter,
                                        verse: item.verse,
@@ -928,10 +936,14 @@ parallelBody: hasParallel ? data.text[parallelVersion] : undefined,
                                    }
                                  } catch (err) {
                                    const fallbackText = generateFallbackVerseText(item.book, item.chapter, item.verse);
+                                   const hasParallel = isParallelEnabled && userPlan === "yearly";
                                    onCastSlide({
                                      type: "verse",
                                      title: item.displayName,
                                      body: fallbackText[bibleVersion],
+                                     parallelBody: hasParallel ? fallbackText[parallelVersion] : undefined,
+                                     parallelTranslation: hasParallel ? parallelVersion : undefined,
+                                     customBrandingText: userPlan === "yearly" && customBrandingText ? customBrandingText : undefined,
                                      book: item.book,
                                      chapter: item.chapter,
                                      verse: item.verse,
@@ -946,16 +958,16 @@ parallelBody: hasParallel ? data.text[parallelVersion] : undefined,
                                className="flex-1 flex justify-center items-center gap-1 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold py-1 px-2.5 rounded cursor-pointer transition-all"
                              >
                                <Play className="w-3 h-3" /> Broadcast Now
-                             </button>
-                           </div>
+</button>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
-              {/* TAB 2: MANUAL BIBLE EXPLORER */}
+            {/* TAB 2: MANUAL BIBLE EXPLORER */}
               {activeTab === "manual-bible" && (
                 <div className="flex flex-col gap-3">
                   {/* Manual Quick Search bar */}

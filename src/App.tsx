@@ -491,7 +491,7 @@ export default function App() {
 
     if (!transcriptText || transcriptText.trim().length < 8) return;
 
-    // 1. DUAL PIPELINE: HIGH-SPEED MICRO-LATENCY CLIENT REGEX INTERCEPTOR
+// 1. DUAL PIPELINE: HIGH-SPEED MICRO-LATENCY CLIENT REGEX INTERCEPTOR
     const localMatch = scanForVerseLocally(transcriptText);
     if (localMatch) {
       // Clear the buffer unconditionally because a verse was matched!
@@ -499,89 +499,84 @@ export default function App() {
       setTranscript("");
 
       const verseId = `${localMatch.book}-${localMatch.chapter}-${localMatch.verse}-local-${Date.now()}`;
-      const isConsecutiveDuplicate = detectedVersesRef.current.length > 0 &&
-        detectedVersesRef.current[0].book === localMatch.book &&
-        detectedVersesRef.current[0].chapter === localMatch.chapter &&
-        detectedVersesRef.current[0].verse === localMatch.verse;
+      const verseDisplayName = localMatch.displayName;
 
-      if (!isConsecutiveDuplicate) {
-        const newDetected: DetectedVerse = {
-          id: verseId,
+      // Add to detected verses (always add, with timestamp to make unique)
+      const newDetected: DetectedVerse = {
+        id: verseId,
+        book: localMatch.book,
+        chapter: localMatch.chapter,
+        verse: localMatch.verse,
+        displayName: verseDisplayName,
+        confidence: 100, // Client-side hard regex match is 100% confidence
+        transcriptSegment: transcriptText.slice(-180),
+        status: "pending",
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+      };
+      setDetectedVerses((prev) => [newDetected, ...prev]);
+
+      // Auto-Project instantly in real-time!
+      try {
+        const lookup = await fetch(`/api/bible/lookup?book=${localMatch.book}&chapter=${localMatch.chapter}&verse=${localMatch.verse}`);
+        const details = await lookup.json();
+        if (details && details.text) {
+          const hasParallel = isParallelEnabledRef.current && userPlan === "yearly";
+          castSlide({
+            type: "verse",
+            title: verseDisplayName,
+            body: details.text[bibleVersionRef.current],
+            parallelBody: hasParallel ? details.text[parallelVersionRef.current] : undefined,
+            parallelTranslation: hasParallel ? parallelVersionRef.current : undefined,
+            customBrandingText: userPlan === "yearly" && customBrandingTextRef.current ? customBrandingTextRef.current : undefined,
+            book: localMatch.book,
+            chapter: localMatch.chapter,
+            verse: localMatch.verse,
+            translation: bibleVersionRef.current,
+            layout: layoutModeRef.current,
+            themeId: activeThemeIdRef.current as any,
+            fontSize: fontSizeRef.current,
+            showLogo: showLogoRef.current,
+          });
+        } else {
+          const fallbackText = getFallbackVerseText(localMatch.book, localMatch.chapter, localMatch.verse);
+          const hasParallel = isParallelEnabledRef.current && userPlan === "yearly";
+          castSlide({
+            type: "verse",
+            title: verseDisplayName,
+            body: fallbackText[bibleVersionRef.current],
+            parallelBody: hasParallel ? fallbackText[parallelVersionRef.current] : undefined,
+            parallelTranslation: hasParallel ? parallelVersionRef.current : undefined,
+            customBrandingText: userPlan === "yearly" && customBrandingTextRef.current ? customBrandingTextRef.current : undefined,
+            book: localMatch.book,
+            chapter: localMatch.chapter,
+            verse: localMatch.verse,
+            translation: bibleVersionRef.current,
+            layout: layoutModeRef.current,
+            themeId: activeThemeIdRef.current as any,
+            fontSize: fontSizeRef.current,
+            showLogo: showLogoRef.current,
+          });
+        }
+      } catch (e) {
+        console.warn("Local lookup failed, using fallback:", e);
+        const fallbackText = getFallbackVerseText(localMatch.book, localMatch.chapter, localMatch.verse);
+        const hasParallel = isParallelEnabledRef.current && userPlan === "yearly";
+        castSlide({
+          type: "verse",
+          title: verseDisplayName,
+          body: fallbackText[bibleVersionRef.current],
+          parallelBody: hasParallel ? fallbackText[parallelVersionRef.current] : undefined,
+          parallelTranslation: hasParallel ? parallelVersionRef.current : undefined,
+          customBrandingText: userPlan === "yearly" && customBrandingTextRef.current ? customBrandingTextRef.current : undefined,
           book: localMatch.book,
           chapter: localMatch.chapter,
           verse: localMatch.verse,
-          displayName: localMatch.displayName,
-          confidence: 100, // Client-side hard regex match is 100% confidence
-          transcriptSegment: transcriptText.slice(-180),
-          status: "pending",
-          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-        };
-
-        setDetectedVerses((prev) => [newDetected, ...prev]);
-
-// Auto-Project instantly in real-time!
-         try {
-           const lookup = await fetch(`/api/bible/lookup?book=${localMatch.book}&chapter=${localMatch.chapter}&verse=${localMatch.verse}`);
-           const details = await lookup.json();
-           if (details && details.text) {
-             const hasParallel = isParallelEnabledRef.current && userPlan === "yearly";
-             castSlide({
-               type: "verse",
-               title: newDetected.displayName,
-               body: details.text[bibleVersionRef.current],
-               parallelBody: hasParallel ? details.text[parallelVersionRef.current] : undefined,
-               parallelTranslation: hasParallel ? parallelVersionRef.current : undefined,
-               customBrandingText: userPlan === "yearly" && customBrandingTextRef.current ? customBrandingTextRef.current : undefined,
-               book: localMatch.book,
-               chapter: localMatch.chapter,
-               verse: localMatch.verse,
-               translation: bibleVersionRef.current,
-               layout: layoutModeRef.current,
-               themeId: activeThemeIdRef.current as any,
-               fontSize: fontSizeRef.current,
-               showLogo: showLogoRef.current,
-             });
-           } else {
-             const fallbackText = getFallbackVerseText(localMatch.book, localMatch.chapter, localMatch.verse);
-             const hasParallel = isParallelEnabledRef.current && userPlan === "yearly";
-             castSlide({
-               type: "verse",
-               title: newDetected.displayName,
-               body: fallbackText[bibleVersionRef.current],
-               parallelBody: hasParallel ? fallbackText[parallelVersionRef.current] : undefined,
-               parallelTranslation: hasParallel ? parallelVersionRef.current : undefined,
-               customBrandingText: userPlan === "yearly" && customBrandingTextRef.current ? customBrandingTextRef.current : undefined,
-               book: localMatch.book,
-               chapter: localMatch.chapter,
-               verse: localMatch.verse,
-               translation: bibleVersionRef.current,
-               layout: layoutModeRef.current,
-               themeId: activeThemeIdRef.current as any,
-               fontSize: fontSizeRef.current,
-               showLogo: showLogoRef.current,
-             });
-           }
-         } catch (e) {
-           console.warn("Local lookup failed, using fallback:", e);
-           const fallbackText = getFallbackVerseText(localMatch.book, localMatch.chapter, localMatch.verse);
-           const hasParallel = isParallelEnabledRef.current && userPlan === "yearly";
-           castSlide({
-             type: "verse",
-             title: newDetected.displayName,
-             body: fallbackText[bibleVersionRef.current],
-             parallelBody: hasParallel ? fallbackText[parallelVersionRef.current] : undefined,
-             parallelTranslation: hasParallel ? parallelVersionRef.current : undefined,
-             customBrandingText: userPlan === "yearly" && customBrandingTextRef.current ? customBrandingTextRef.current : undefined,
-             book: localMatch.book,
-             chapter: localMatch.chapter,
-             verse: localMatch.verse,
-             translation: bibleVersionRef.current,
-             layout: layoutModeRef.current,
-             themeId: activeThemeIdRef.current as any,
-             fontSize: fontSizeRef.current,
-             showLogo: showLogoRef.current,
-           });
-         }
+          translation: bibleVersionRef.current,
+          layout: layoutModeRef.current,
+          themeId: activeThemeIdRef.current as any,
+          fontSize: fontSizeRef.current,
+          showLogo: showLogoRef.current,
+        });
       }
       return; // Halt further pipeline actions on successful local capture
     }
@@ -604,7 +599,7 @@ export default function App() {
           setSermonNotes(data.summaryNotes);
         }
 
-        // Assess bible verse reference matching
+// Assess bible verse reference matching
         if (data.detected && data.reference && data.reference.book) {
           // Clear the buffer unconditionally because a verse was matched!
           transcriptionBufferRef.current = "";
@@ -613,79 +608,43 @@ export default function App() {
           const matched = data.reference;
           const verseId = `${matched.book}-${matched.chapter}-${matched.verse}-${Date.now()}`;
 
-          // Avoid duplicating identical scripture triggers consecutively
-          const isConsecutiveDuplicate = detectedVersesRef.current.length > 0 &&
-            detectedVersesRef.current[0].book === matched.book &&
-            detectedVersesRef.current[0].chapter === matched.chapter &&
-            detectedVersesRef.current[0].verse === matched.verse;
+          const newDetected: DetectedVerse = {
+            id: verseId,
+            book: matched.book,
+            chapter: matched.chapter,
+            verse: matched.verse,
+            displayName: matched.displayName || `${matched.book} ${matched.chapter}:${matched.verse}`,
+            confidence: matched.confidence || 85,
+            transcriptSegment: transcriptText.slice(-180),
+            status: "pending",
+            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+          };
 
-          if (!isConsecutiveDuplicate) {
-            const newDetected: DetectedVerse = {
-              id: verseId,
-              book: matched.book,
-              chapter: matched.chapter,
-              verse: matched.verse,
-              displayName: matched.displayName || `${matched.book} ${matched.chapter}:${matched.verse}`,
-              confidence: matched.confidence || 85,
-              transcriptSegment: transcriptText.slice(-180), // take last sentence segment
-              status: "pending",
-              timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-            };
+          setDetectedVerses((prev) => [newDetected, ...prev]);
 
-            setDetectedVerses((prev) => [newDetected, ...prev]);
-          }
-
-          // Check if this verse is already actively projected to prevent redundant updates or flickering
-const isAlreadyProjected = activeSlideRef.current.type === "verse" &&
-             activeSlideRef.current.book === matched.book &&
-             activeSlideRef.current.chapter === matched.chapter &&
-             activeSlideRef.current.verse === matched.verse;
-
-          if (!isAlreadyProjected) {
-            // Lazy load scripture text and project instantly!
-            try {
-              const lookup = await fetch(`/api/bible/lookup?book=${matched.book}&chapter=${matched.chapter}&verse=${matched.verse}`);
-              const details = await lookup.json();
-              if (details && details.text) {
-                const hasParallel = isParallelEnabledRef.current && userPlan === "yearly";
-                castSlide({
-                  type: "verse",
-                  title: matched.displayName || `${matched.book} ${matched.chapter}:${matched.verse}`,
-                  body: details.text[bibleVersionRef.current],
-                  parallelBody: hasParallel ? details.text[parallelVersionRef.current] : undefined,
-                  parallelTranslation: hasParallel ? parallelVersionRef.current : undefined,
-                  customBrandingText: userPlan === "yearly" && customBrandingTextRef.current ? customBrandingTextRef.current : undefined,
-                  book: matched.book,
-                  chapter: matched.chapter,
-                  verse: matched.verse,
-                  translation: bibleVersionRef.current,
-                  layout: layoutModeRef.current,
-                  themeId: activeThemeIdRef.current as any,
-                  fontSize: fontSizeRef.current,
-                  showLogo: showLogoRef.current,
-                });
-              } else {
-                const fallbackText = getFallbackVerseText(matched.book, matched.chapter, matched.verse);
-                const hasParallel = isParallelEnabledRef.current && userPlan === "yearly";
-                castSlide({
-                  type: "verse",
-                  title: matched.displayName || `${matched.book} ${matched.chapter}:${matched.verse}`,
-                  body: fallbackText[bibleVersionRef.current],
-                  parallelBody: hasParallel ? fallbackText[parallelVersionRef.current] : undefined,
-                  parallelTranslation: hasParallel ? parallelVersionRef.current : undefined,
-                  customBrandingText: userPlan === "yearly" && customBrandingTextRef.current ? customBrandingTextRef.current : undefined,
-                  book: matched.book,
-                  chapter: matched.chapter,
-                  verse: matched.verse,
-                  translation: bibleVersionRef.current,
-                  layout: layoutModeRef.current,
-                  themeId: activeThemeIdRef.current as any,
-                  fontSize: fontSizeRef.current,
-                  showLogo: showLogoRef.current,
-                });
-              }
-            } catch (lookupErr) {
-              console.warn("API lookup failed, using fallback:", lookupErr);
+          // Project verse (always project for continuous projection during live transcription)
+          try {
+            const lookup = await fetch(`/api/bible/lookup?book=${matched.book}&chapter=${matched.chapter}&verse=${matched.verse}`);
+            const details = await lookup.json();
+            if (details && details.text) {
+              const hasParallel = isParallelEnabledRef.current && userPlan === "yearly";
+              castSlide({
+                type: "verse",
+                title: matched.displayName || `${matched.book} ${matched.chapter}:${matched.verse}`,
+                body: details.text[bibleVersionRef.current],
+                parallelBody: hasParallel ? details.text[parallelVersionRef.current] : undefined,
+                parallelTranslation: hasParallel ? parallelVersionRef.current : undefined,
+                customBrandingText: userPlan === "yearly" && customBrandingTextRef.current ? customBrandingTextRef.current : undefined,
+                book: matched.book,
+                chapter: matched.chapter,
+                verse: matched.verse,
+                translation: bibleVersionRef.current,
+                layout: layoutModeRef.current,
+                themeId: activeThemeIdRef.current as any,
+                fontSize: fontSizeRef.current,
+                showLogo: showLogoRef.current,
+              });
+            } else {
               const fallbackText = getFallbackVerseText(matched.book, matched.chapter, matched.verse);
               const hasParallel = isParallelEnabledRef.current && userPlan === "yearly";
               castSlide({
@@ -705,6 +664,26 @@ const isAlreadyProjected = activeSlideRef.current.type === "verse" &&
                 showLogo: showLogoRef.current,
               });
             }
+          } catch (lookupErr) {
+            console.warn("API lookup failed, using fallback:", lookupErr);
+            const fallbackText = getFallbackVerseText(matched.book, matched.chapter, matched.verse);
+            const hasParallel = isParallelEnabledRef.current && userPlan === "yearly";
+            castSlide({
+              type: "verse",
+              title: matched.displayName || `${matched.book} ${matched.chapter}:${matched.verse}`,
+              body: fallbackText[bibleVersionRef.current],
+              parallelBody: hasParallel ? fallbackText[parallelVersionRef.current] : undefined,
+              parallelTranslation: hasParallel ? parallelVersionRef.current : undefined,
+              customBrandingText: userPlan === "yearly" && customBrandingTextRef.current ? customBrandingTextRef.current : undefined,
+              book: matched.book,
+              chapter: matched.chapter,
+              verse: matched.verse,
+              translation: bibleVersionRef.current,
+              layout: layoutModeRef.current,
+              themeId: activeThemeIdRef.current as any,
+              fontSize: fontSizeRef.current,
+              showLogo: showLogoRef.current,
+            });
           }
         }
       }
