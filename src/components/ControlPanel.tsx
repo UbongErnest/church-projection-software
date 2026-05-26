@@ -112,20 +112,6 @@ export default function ControlPanel({
   // User level plan and restrictions state mapping
   const userPlan = userProfile?.subscriptionPlan || "free";
 
-  // Auto-search when a verse is detected in live transcription
-  const prevDetectedCountRef = useRef(detectedVerses.length);
-  useEffect(() => {
-    if (detectedVerses.length > prevDetectedCountRef.current) {
-      const latest = detectedVerses[0];
-      if (latest) {
-        const query = `${latest.book} ${latest.chapter}:${latest.verse}`;
-        setSearchQuery(query);
-        handleKeywordSearch();
-      }
-    }
-    prevDetectedCountRef.current = detectedVerses.length;
-  }, [detectedVerses]);
-
   // Navigation sub-tabs (adding plans tab)
   const [activeTab, setActiveTab] = useState<"ai-feed" | "manual-bible" | "songs" | "announcements" | "plans">("plans");
 
