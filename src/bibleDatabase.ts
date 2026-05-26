@@ -9,8 +9,6 @@ export interface BibleVerse {
   verse: number;
   text: {
     KJV: string;
-    NIV: string;
-    ESV: string;
   };
 }
 
@@ -85,167 +83,135 @@ export const BIBLE_BOOKS = [
 
 // Seed standard references for 100% offline accuracy on popular search terms
 export const OFFLINE_BIBLE_DB: BibleVerse[] = [
-  {
-    book: "John",
-    chapter: 3,
-    verse: 16,
-    text: {
-      KJV: "For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life.",
-      NIV: "For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life.",
-      ESV: "For God so loved the world, that he gave his only Son, that whoever believes in him should not perish but have eternal life."
+    {
+      book: "John",
+      chapter: 3,
+      verse: 16,
+      text: {
+        KJV: "For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life."
+      }
+    },
+    {
+      book: "Romans",
+      chapter: 8,
+      verse: 28,
+      text: {
+        KJV: "And we know that all things work together for good to them that love God, to them who are the called according to his purpose."
+      }
+    },
+    {
+      book: "Genesis",
+      chapter: 1,
+      verse: 1,
+      text: {
+        KJV: "In the beginning God created the heaven and the earth."
+      }
+    },
+    {
+      book: "Psalms",
+      chapter: 23,
+      verse: 1,
+      text: {
+        KJV: "The LORD is my shepherd; I shall not want."
+      }
+    },
+    {
+      book: "Psalms",
+      chapter: 23,
+      verse: 2,
+      text: {
+        KJV: "He maketh me to lie down in green pastures: he leadeth me beside the still waters."
+      }
+    },
+    {
+      book: "Psalms",
+      chapter: 23,
+      verse: 3,
+      text: {
+        KJV: "He restoreth my soul: he leadeth me in the paths of righteousness for his name's sake."
+      }
+    },
+    {
+      book: "Psalms",
+      chapter: 23,
+      verse: 4,
+      text: {
+        KJV: "Yea, though I walk through the valley of the shadow of death, I will fear no evil: for thou art with me; thy rod and thy staff they comfort me."
+      }
+    },
+    {
+      book: "Psalms",
+      chapter: 23,
+      verse: 5,
+      text: {
+        KJV: "Thou preparest a table before me in the presence of mine enemies: thou anointest my head with oil; my cup runneth over."
+      }
+    },
+    {
+      book: "Psalms",
+      chapter: 23,
+      verse: 6,
+      text: {
+        KJV: "Surely goodness and mercy shall follow me all the days of my life: and I will dwell in the house of the LORD for ever."
+      }
+    },
+    {
+      book: "Proverbs",
+      chapter: 3,
+      verse: 5,
+      text: {
+        KJV: "Trust in the LORD with all thine heart; and lean not unto thine own understanding."
+      }
+    },
+    {
+      book: "Proverbs",
+      chapter: 3,
+      verse: 6,
+      text: {
+        KJV: "In all thy ways acknowledge him, and he shall direct thy paths."
+      }
+    },
+    {
+      book: "Philippians",
+      chapter: 4,
+      verse: 13,
+      text: {
+        KJV: "I can do all things through Christ which strengtheneth me."
+      }
+    },
+    {
+      book: "1 Corinthians",
+      chapter: 13,
+      verse: 4,
+      text: {
+        KJV: "Charity suffereth long, and is kind; charity envieth not; charity vaunteth not itself, is not puffed up,"
+      }
+    },
+    {
+      book: "Isaiah",
+      chapter: 40,
+      verse: 31,
+      text: {
+        KJV: "But they that wait upon the LORD shall renew their strength; they shall mount up with wings as eagles; they shall run, and not be weary; and they shall walk, and not faint."
+      }
+    },
+    {
+      book: "Ephesians",
+      chapter: 6,
+      verse: 10,
+      text: {
+        KJV: "Finally, my brethren, be strong in the Lord, and in the power of his might."
+      }
+    },
+    {
+      book: "Hebrews",
+      chapter: 11,
+      verse: 1,
+      text: {
+        KJV: "Now faith is the substance of things hoped for, the evidence of things not seen."
+      }
     }
-  },
-  {
-    book: "Romans",
-    chapter: 8,
-    verse: 28,
-    text: {
-      KJV: "And we know that all things work together for good to them that love God, to them who are the called according to his purpose.",
-      NIV: "And we know that in all things God works for the good of those who love him, who have been called according to his purpose.",
-      ESV: "And we know that for those who love God all things work together for good, for those who are called according to his purpose."
-    }
-  },
-  {
-    book: "Genesis",
-    chapter: 1,
-    verse: 1,
-    text: {
-      KJV: "In the beginning God created the heaven and the earth.",
-      NIV: "In the beginning God created the heavens and the earth.",
-      ESV: "In the beginning, God created the heavens and the earth."
-    }
-  },
-  {
-    book: "Psalms",
-    chapter: 23,
-    verse: 1,
-    text: {
-      KJV: "The LORD is my shepherd; I shall not want.",
-      NIV: "The LORD is my shepherd, I lack nothing.",
-      ESV: "The LORD is my shepherd; I shall not want."
-    }
-  },
-  {
-    book: "Psalms",
-    chapter: 23,
-    verse: 2,
-    text: {
-      KJV: "He maketh me to lie down in green pastures: he leadeth me beside the still waters.",
-      NIV: "He makes me lie down in green pastures, he leads me beside quiet waters,",
-      ESV: "He makes me lie down in green pastures. He leads me beside still waters."
-    }
-  },
-  {
-    book: "Psalms",
-    chapter: 23,
-    verse: 3,
-    text: {
-      KJV: "He restoreth my soul: he leadeth me in the paths of righteousness for his name's sake.",
-      NIV: "he refreshes my soul. He guides me along the right paths for his name’s sake.",
-      ESV: "He restores my soul. He leads me in paths of righteousness for his name's sake."
-    }
-  },
-  {
-    book: "Psalms",
-    chapter: 23,
-    verse: 4,
-    text: {
-      KJV: "Yea, though I walk through the valley of the shadow of death, I will fear no evil: for thou art with me; thy rod and thy staff they comfort me.",
-      NIV: "Even though I walk through the darkest valley, I will fear no evil, for you are with me; your rod and your staff, they comfort me.",
-      ESV: "Even though I walk through the valley of the shadow of death, I will fear no evil, for you are with me; your rod and your staff, they comfort me."
-    }
-  },
-  {
-    book: "Psalms",
-    chapter: 23,
-    verse: 5,
-    text: {
-      KJV: "Thou preparest a table before me in the presence of mine enemies: thou anointest my head with oil; my cup runneth over.",
-      NIV: "You prepare a table before me in the presence of my enemies. You anoint my head with oil; my cup overflows.",
-      ESV: "You prepare a table before me in the presence of my enemies; you anoint my head with oil; my cup overflows."
-    }
-  },
-  {
-    book: "Psalms",
-    chapter: 23,
-    verse: 6,
-    text: {
-      KJV: "Surely goodness and mercy shall follow me all the days of my life: and I will dwell in the house of the LORD for ever.",
-      NIV: "Surely your goodness and love will follow me all the days of my life, and I will dwell in the house of the LORD forever.",
-      ESV: "Surely goodness and mercy shall follow me all the days of my life, and I shall dwell in the house of the LORD forever."
-    }
-  },
-  {
-    book: "Proverbs",
-    chapter: 3,
-    verse: 5,
-    text: {
-      KJV: "Trust in the LORD with all thine heart; and lean not unto thine own understanding.",
-      NIV: "Trust in the LORD with all your heart and lean not on your own understanding;",
-      ESV: "Trust in the LORD with all your heart, and do not lean on your own understanding."
-    }
-  },
-  {
-    book: "Proverbs",
-    chapter: 3,
-    verse: 6,
-    text: {
-      KJV: "In all thy ways acknowledge him, and he shall direct thy paths.",
-      NIV: "in all your ways submit to him, and he will make your paths straight.",
-      ESV: "In all your ways acknowledge him, and he will make straight your paths."
-    }
-  },
-  {
-    book: "Philippians",
-    chapter: 4,
-    verse: 13,
-    text: {
-      KJV: "I can do all things through Christ which strengtheneth me.",
-      NIV: "I can do all this through him who gives me strength.",
-      ESV: "I can do all things through him who strengthens me."
-    }
-  },
-  {
-    book: "1 Corinthians",
-    chapter: 13,
-    verse: 4,
-    text: {
-      KJV: "Charity suffereth long, and is kind; charity envieth not; charity vaunteth not itself, is not puffed up,",
-      NIV: "Love is patient, love is kind. It does not envy, it does not boast, it is not proud.",
-      ESV: "Love is patient and kind; love does not envy or boast; it is not arrogant"
-    }
-  },
-  {
-    book: "Isaiah",
-    chapter: 40,
-    verse: 31,
-    text: {
-      KJV: "But they that wait upon the LORD shall renew their strength; they shall mount up with wings as eagles; they shall run, and not be weary; and they shall walk, and not faint.",
-      NIV: "but those who hope in the LORD will renew their strength. They will soar on wings like eagles; they will run and not grow weary, they will walk and not be faint.",
-      ESV: "but they who wait for the LORD shall renew their strength; they shall mount up with wings like eagles; they shall run and not be weary; they shall walk and not faint."
-    }
-  },
-  {
-    book: "Ephesians",
-    chapter: 6,
-    verse: 10,
-    text: {
-      KJV: "Finally, my brethren, be strong in the Lord, and in the power of his might.",
-      NIV: "Finally, be strong in the Lord and in his mighty power.",
-      ESV: "Finally, be strong in the Lord and in the strength of his might."
-    }
-  },
-  {
-    book: "Hebrews",
-    chapter: 11,
-    verse: 1,
-    text: {
-      KJV: "Now faith is the substance of things hoped for, the evidence of things not seen.",
-      NIV: "Now faith is confidence in what we hope for and assurance about what we do not see.",
-      ESV: "Now faith is the assurance of things hoped for, the conviction of things not seen."
-    }
-  }
-];
+  ];
 
 // Robust normalizer for spoken church numbers and aliases
 export function normalizeBookName(input: string): string | null {

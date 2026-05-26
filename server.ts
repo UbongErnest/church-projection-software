@@ -41,8 +41,8 @@ function getAiClient(): GoogleGenAI {
   return aiClient;
 }
 
-// 1. Bible Verse Lookup Endpoint with Offline Dictionary + Real-Time Gemini Fallback
-app.get("/api/bible/lookup", async (req, res) => {
+// 1. Bible Verse Lookup Endpoint - KJV Only
+app.get("/api/bible/lookup", (req, res) => {
   const { book, chapter, verse } = req.query;
 
   if (!book || !chapter || !verse) {
@@ -55,7 +55,7 @@ app.get("/api/bible/lookup", async (req, res) => {
   const vNum = parseInt(verse as string, 10);
   const normalizedBook = normalizeBookName(book as string) || (book as string);
 
-  // Attempt local KJV JSON database lookup first (comprehensive offline coverage)
+  // Attempt local KJV JSON database lookup
   const kjvLookupKey = `${normalizedBook.toLowerCase()} ${chNum}:${vNum}`;
   const kjvText = KJV_VERSE_INDEX[kjvLookupKey];
 
@@ -67,122 +67,24 @@ app.get("/api/bible/lookup", async (req, res) => {
       verse: vNum,
       text: {
         KJV: cleanKjvText,
-        NIV: cleanKjvText,
-        ESV: cleanKjvText,
       },
       source: "kjv_json_database",
     });
   }
 
-  // Attempt small offline database match for multi-translation fallback
-  const offlineMatch = OFFLINE_BIBLE_DB.find(
-    (v) =>
-      v.book.toLowerCase() === normalizedBook.toLowerCase() &&
-      v.chapter === chNum &&
-      v.verse === vNum
-  );
-
-  if (offlineMatch) {
-    return res.json({
-      book: offlineMatch.book,
-      chapter: offlineMatch.chapter,
-      verse: offlineMatch.verse,
-      text: offlineMatch.text,
-      source: "offline_database",
-    });
-  }
-
-  // 2. High-Efficiency Free Public Bible API lookup (eliminates 429 quota blockages and guarantees real lyrics/verses!)
-  try {
-    const url = `https://bible-api.com/${encodeURIComponent(normalizedBook)}+${chNum}:${vNum}`;
-    const webRes = await fetch(url);
-    if (webRes.ok) {
-      const parsed = await webRes.json();
-      if (parsed && parsed.text) {
-        const cleanText = parsed.text.trim().replace(/\s+/g, " ");
-        
-        // Fetch KJV specifically to fulfill KJV requests beautifully
-        let kjvText = cleanText;
-        try {
-          const kjvRes = await fetch(`${url}?translation=kjv`);
-          if (kjvRes.ok) {
-            const parsedKjv = await kjvRes.json();
-            if (parsedKjv && parsedKjv.text) {
-              kjvText = parsedKjv.text.trim().replace(/\s+/g, " ");
-            }
-          }
-        } catch (_) {}
-
-        return res.json({
-          book: normalizedBook,
-          chapter: chNum,
-          verse: vNum,
-          text: {
-            KJV: kjvText,
-            NIV: cleanText,
-            ESV: cleanText,
-          },
-          source: "public_bible_api",
-        });
-      }
-    }
-  } catch (err) {
-    console.warn("Public Bible API lookup bypassed, utilizing intelligent Gemini pipeline fallback:", err);
-  }
-
-  // Fallback: Real-time generation of authentic scripture translations from Gemini
-  try {
-    const ai = getAiClient();
-    const prompt = `Retrieve the exact Bible scripture text for the reference: ${normalizedBook} Chapter ${chNum} Verse ${vNum}.
-Generate this for three translations: KJV, NIV, and ESV.
-Return a valid JSON object matching this schema:
-{
-  "KJV": "text of KJV",
-  "NIV": "text of NIV",
-  "ESV": "text of ESV"
-}
-Ensure the scripture is authentic and verbatim. Do not write anything outside the JSON structure. No code blocks or wrapping.`;
-
-const response = await ai.models.generateContent({
-       model: "gemini-1.5-flash",
-       contents: prompt,
-       config: {
-         responseMimeType: "application/json",
-       }
-     });
-
-    const parsedText = JSON.parse(response.text || "{}");
-    return res.json({
-      book: normalizedBook,
-      chapter: chNum,
-      verse: vNum,
-      text: {
-        KJV: parsedText.KJV || `[No KJV text generated for ${normalizedBook} ${chNum}:${vNum}]`,
-        NIV: parsedText.NIV || `[No NIV text generated for ${normalizedBook} ${chNum}:${vNum}]`,
-        ESV: parsedText.ESV || `[No ESV text generated for ${normalizedBook} ${chNum}:${vNum}]`,
-      },
-      source: "gemini_lookup",
-    });
-  } catch (error: any) {
-    console.error("Gemini Bible lookup error:", error);
-    const bookTitle = normalizedBook;
-    const fallbackMessage = `For the LORD is good and His mercy is everlasting; He guides the humble in what is right and teaches them His way. (${bookTitle} ${chNum}:${vNum})`;
-    return res.json({
-      book: normalizedBook,
-      chapter: chNum,
-      verse: vNum,
-      text: {
-        KJV: `Keep thy heart with all diligence; for out of it are the issues of life. (${bookTitle} ${chNum}:${vNum} KJV)`,
-        NIV: `${fallbackMessage} (NIV Translation)`,
-        ESV: `${fallbackMessage} (ESV Translation)`,
-      },
-      source: "fallback_generator",
-      warning: error.message || "Gemini lookup failed, returned local proxy text.",
-    });
-  }
+  // Invalid reference - no verse found
+  return res.json({
+    book: normalizedBook,
+    chapter: chNum,
+    verse: vNum,
+    text: {
+      KJV: "No Verse",
+    },
+    source: "invalid_reference",
+  });
 });
 
-// 2. AI Real-Time Verse Detection & Sermon Context Annotation Endpoint
+// 2. AI Real-Time Verse Detection & Sermon Context Annotation Endpoint (Pro/Premium)
 app.post("/api/ai/detect", async (req, res) => {
   const { transcript } = req.body;
 
@@ -246,7 +148,7 @@ Schema:
     return res.json(result);
   } catch (error: any) {
     console.error("AI Detect endpoint error:", error);
-    // Safe heuristic local regex backup in case client key isn't active/paid yet
+    // Safe heuristic local regex backup
     const localMatch = mockRegexDetect(processedTranscript);
     return res.json({
       detected: localMatch !== null,
@@ -289,7 +191,7 @@ function mockRegexDetect(text: string) {
   return null;
 }
 
-// AI Copilot Sermon Outline Generator (Yearly Premium exclusive)
+// AI Copilot Sermon Outline Generator (Premium exclusive)
 app.post("/api/ai/copilot", async (req, res) => {
   const { notesContent, topic } = req.body;
   if (!notesContent || notesContent.trim() === "") {

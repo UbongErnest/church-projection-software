@@ -302,7 +302,7 @@ export default function SermonNotepad({
 
     let clipText = "";
     if (activeProjectedSlide.type === "verse") {
-      clipText = `\n\n[Scripture Context — ${activeProjectedSlide.title} (${activeProjectedSlide.translation || "NIV"})]\n"${activeProjectedSlide.body.trim()}"\n`;
+      clipText = `\n\n[Scripture Context — ${activeProjectedSlide.title} (${activeProjectedSlide.translation || "KJV"})]\n"${activeProjectedSlide.body.trim()}"\n`;
     } else if (activeProjectedSlide.type === "lyrics") {
       clipText = `\n\n[Worship Lyric — ${activeProjectedSlide.title}]\n"${activeProjectedSlide.body.trim()}"\n`;
     } else {

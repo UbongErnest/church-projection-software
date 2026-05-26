@@ -47,20 +47,16 @@ function scanForVerseLocally(text: string): { book: string; chapter: number; ver
   return null;
 }
 
-function getFallbackVerseText(book: string, chapter: number, verse: number): { KJV: string; NIV: string; ESV: string } {
+function getFallbackVerseText(book: string, chapter: number, verse: number): { KJV: string } {
   const kjvText = getKjvVerseText(book, chapter, verse);
   if (kjvText) {
     const cleanText = kjvText.trim().replace(/^¶\s*/, "");
     return {
       KJV: cleanText,
-      NIV: cleanText,
-      ESV: cleanText,
     };
   }
   return {
-    KJV: `[Scripture placeholder for ${book} ${chapter}:${verse} - API unavailable. Enable server for actual verse content.]`,
-    NIV: `[Scripture placeholder for ${book} ${chapter}:${verse} - API unavailable. Enable server for actual verse content.]`,
-    ESV: `[Scripture placeholder for ${book} ${chapter}:${verse} - API unavailable. Enable server for actual verse content.]`
+    KJV: "No Verse",
   };
 }
 
@@ -184,15 +180,15 @@ export default function App() {
     showLogo: true,
   });
 
-  // Lifted presentation customizer states
-  const [bibleVersion, setBibleVersion] = useState<"NIV" | "KJV" | "ESV">("NIV");
-  const [layoutMode, setLayoutMode] = useState<"fullscreen" | "lower-third" | "split-screen">("fullscreen");
-  const [activeThemeId, setActiveThemeId] = useState<string>("nebula-dark");
-  const [fontSize, setFontSize] = useState<number>(44);
-  const [showLogo, setShowLogo] = useState<boolean>(true);
-  const [isParallelEnabled, setIsParallelEnabled] = useState<boolean>(false);
-  const [parallelVersion, setParallelVersion] = useState<"NIV" | "KJV" | "ESV">("KJV");
-  const [customBrandingText, setCustomBrandingText] = useState<string>("");
+// Lifted presentation customizer states
+   const [bibleVersion, setBibleVersion] = useState<"KJV">("KJV");
+   const [layoutMode, setLayoutMode] = useState<"fullscreen" | "lower-third" | "split-screen">("fullscreen");
+   const [activeThemeId, setActiveThemeId] = useState<string>("nebula-dark");
+   const [fontSize, setFontSize] = useState<number>(44);
+   const [showLogo, setShowLogo] = useState<boolean>(true);
+   const [isParallelEnabled, setIsParallelEnabled] = useState<boolean>(false);
+   const [parallelVersion, setParallelVersion] = useState<"KJV">("KJV");
+   const [customBrandingText, setCustomBrandingText] = useState<string>("");
 
   const bibleVersionRef = useRef(bibleVersion);
   const layoutModeRef = useRef(layoutMode);
@@ -801,9 +797,9 @@ export default function App() {
           onClearNotes={handleClearNotes}
           userProfile={userProfile}
           onUpdateSubscription={handleUpdateSubscription}
-          bibleVersion={bibleVersion}
-          onChangeBibleVersion={setBibleVersion}
-          layoutMode={layoutMode}
+bibleVersion={bibleVersion}
+           onChangeBibleVersion={() => {}}
+           layoutMode={layoutMode}
           onChangeLayoutMode={setLayoutMode}
           activeThemeId={activeThemeId}
           onChangeActiveThemeId={setActiveThemeId}

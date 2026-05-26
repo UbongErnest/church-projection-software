@@ -146,7 +146,7 @@ export default function ProjectorScreen({ syncedSlide, subscriptionPlan = "free"
                       “{slide.body}”
                     </blockquote>
                     <h4 className="font-display font-semibold tracking-wider text-amber-500 text-lg uppercase">
-                      {slide.book} {slide.chapter}:{slide.verse} ({slide.translation || "NIV"})
+                      {slide.book} {slide.chapter}:{slide.verse} ({slide.translation || "KJV"})
                     </h4>
                   </div>
                   <div className={`${isLightTheme ? "text-stone-850" : "text-white/95"}`}>
@@ -171,7 +171,7 @@ export default function ProjectorScreen({ syncedSlide, subscriptionPlan = "free"
                     "{slide.body}"
                   </p>
                   <p className="font-display font-medium text-sky-400 text-lg uppercase tracking-wide">
-                    — {slide.book} {slide.chapter}:{slide.verse} <span className="text-white/40 text-sm font-mono ml-2 font-normal">{slide.translation || "NIV"}</span>
+                    — {slide.book} {slide.chapter}:{slide.verse} <span className="text-white/40 text-sm font-mono ml-2 font-normal">{slide.translation || "KJV"}</span>
                   </p>
                 </div>
               ) : slide.layout === "split-screen" ? (
@@ -184,9 +184,9 @@ export default function ProjectorScreen({ syncedSlide, subscriptionPlan = "free"
                     <p className={`font-mono text-xl mt-2 ${isLightTheme ? "text-blue-800" : "text-sky-450"}`}>
                       Chapter {slide.chapter} : Verse {slide.verse}
                     </p>
-                    <div className={`mt-4 inline-block font-mono text-xs px-2.5 py-1 rounded ${isLightTheme ? "bg-stone-200 text-stone-800" : "bg-white/10 text-white"}`}>
-                      {slide.translation || "NIV"}
-                    </div>
+<div className={`mt-4 inline-block font-mono text-xs px-2.5 py-1 rounded ${isLightTheme ? "bg-stone-200 text-stone-800" : "bg-white/10 text-white"}`}>
+                       {slide.translation || "KJV"}
+                     </div>
                   </div>
                   <div className="md:col-span-8">
                     <blockquote
@@ -208,7 +208,7 @@ export default function ProjectorScreen({ syncedSlide, subscriptionPlan = "free"
                   </blockquote>
                   <h3 className={`font-display font-medium mt-8 tracking-wider text-xl lg:text-2xl uppercase border-t pt-4 px-6 ${isLightTheme ? "text-amber-800 border-black/10" : "text-amber-400 border-white/10"}`}>
                     {slide.book} {slide.chapter}:{slide.verse}
-                    <span className={`text-sm font-mono ml-3 uppercase font-normal ${isLightTheme ? "text-stone-500" : "text-white/40"}`}>{slide.translation || "NIV"}</span>
+                    <span className={`text-sm font-mono ml-3 uppercase font-normal ${isLightTheme ? "text-stone-500" : "text-white/40"}`}>{slide.translation || "KJV"}</span>
                   </h3>
                 </div>
               )}

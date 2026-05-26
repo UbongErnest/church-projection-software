@@ -57,21 +57,21 @@ interface ControlPanelProps {
   } | null;
   onUpdateSubscription?: (newPlan: "free" | "monthly" | "yearly") => Promise<void>;
 
-  // Lifted customizer options:
-  bibleVersion: "NIV" | "KJV" | "ESV";
-  onChangeBibleVersion: (version: "NIV" | "KJV" | "ESV") => void;
-  layoutMode: "fullscreen" | "lower-third" | "split-screen";
-  onChangeLayoutMode: (mode: "fullscreen" | "lower-third" | "split-screen") => void;
-  activeThemeId: string;
-  onChangeActiveThemeId: (themeId: string) => void;
-  fontSize: number;
-  onChangeFontSize: (size: number) => void;
-  showLogo: boolean;
-  onChangeShowLogo: (show: boolean) => void;
-  isParallelEnabled: boolean;
-  onChangeIsParallelEnabled: (enabled: boolean) => void;
-  parallelVersion: "NIV" | "KJV" | "ESV";
-  onChangeParallelVersion: (version: "NIV" | "KJV" | "ESV") => void;
+// Lifted customizer options:
+   bibleVersion: "KJV";
+    onChangeBibleVersion: (version: "KJV") => void;
+   layoutMode: "fullscreen" | "lower-third" | "split-screen";
+   onChangeLayoutMode: (mode: "fullscreen" | "lower-third" | "split-screen") => void;
+   activeThemeId: string;
+   onChangeActiveThemeId: (themeId: string) => void;
+   fontSize: number;
+   onChangeFontSize: (size: number) => void;
+   showLogo: boolean;
+   onChangeShowLogo: (show: boolean) => void;
+   isParallelEnabled: boolean;
+   onChangeIsParallelEnabled: (enabled: boolean) => void;
+   parallelVersion: "KJV";
+   onChangeParallelVersion: (version: "KJV") => void;
   customBrandingText: string;
   onChangeCustomBrandingText: (text: string) => void;
 }
@@ -135,7 +135,7 @@ export default function ControlPanel({
   const [searchQuery, setSearchQuery] = useState<string>("");
 
   // Search results for manual lookup
-  const [lookupText, setLookupText] = useState<{ KJV: string; NIV: string; ESV: string } | null>(null);
+  const [lookupText, setLookupText] = useState<{ KJV: string } | null>(null);
   const [isLoadingLookup, setIsLoadingLookup] = useState<boolean>(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
 
@@ -191,7 +191,7 @@ export default function ControlPanel({
     const kjvText = getKjvVerseText(b, c, v);
     if (kjvText) {
       const cleanKjvText = kjvText.trim().replace(/^¶\s*/, "");
-      setLookupText({ KJV: cleanKjvText, NIV: cleanKjvText, ESV: cleanKjvText });
+      setLookupText({ KJV: cleanKjvText });
       setIsLoadingLookup(false);
       if (autoProject) {
         const hasParallel = isParallelEnabled && userPlan === "yearly";
@@ -308,20 +308,16 @@ body: data.text[bibleVersion],
     }
   };
 
-function generateFallbackVerseText(book: string, chapter: number, verse: number): { KJV: string; NIV: string; ESV: string } {
+function generateFallbackVerseText(book: string, chapter: number, verse: number): { KJV: string } {
   const kjvText = getKjvVerseText(book, chapter, verse);
   if (kjvText) {
     const cleanText = kjvText.trim().replace(/^¶\s*/, "");
     return {
       KJV: cleanText,
-      NIV: cleanText,
-      ESV: cleanText,
     };
   }
   return {
-    KJV: `[Scripture placeholder for ${book} ${chapter}:${verse} - API unavailable. Enable server for actual verse content.]`,
-    NIV: `[Scripture placeholder for ${book} ${chapter}:${verse} - API unavailable. Enable server for actual verse content.]`,
-    ESV: `[Scripture placeholder for ${book} ${chapter}:${verse} - API unavailable. Enable server for actual verse content.]`
+    KJV: "No Verse",
   };
 }
 
@@ -344,7 +340,7 @@ function generateFallbackVerseText(book: string, chapter: number, verse: number)
       const kjvText = getKjvVerseText(bookName, chapterVal, verseVal);
       if (kjvText) {
         const cleanKjvText = kjvText.trim().replace(/^¶\s*/, "");
-        setLookupText({ KJV: cleanKjvText, NIV: cleanKjvText, ESV: cleanKjvText });
+        setLookupText({ KJV: cleanKjvText });
         setLookupError(null);
         const hasParallel = isParallelEnabled && userPlan === "yearly";
         onCastSlide({
@@ -606,7 +602,8 @@ function generateFallbackVerseText(book: string, chapter: number, verse: number)
       setActiveTab(tab);
       return;
     }
-    
+
+    // Free plan: only bible explorer
     if (userPlan === "free") {
       setUpgradeTriggerSource(
         tab === "ai-feed" 
@@ -618,17 +615,23 @@ function generateFallbackVerseText(book: string, chapter: number, verse: number)
       setShowUpgradePromptModal(true);
       return;
     }
-    
-    if (userPlan === "monthly" && (tab === "songs" || tab === "announcements")) {
-      setUpgradeTriggerSource(
-        tab === "songs" 
-          ? "Hymnals (Premium Feature)" 
-          : "Church Announcements (Premium Feature)"
-      );
-      setShowUpgradePromptModal(true);
+
+    // Monthly/Pro plan: bible explorer + AI listener
+    if (userPlan === "monthly") {
+      if (tab === "songs" || tab === "announcements") {
+        setUpgradeTriggerSource(
+          tab === "songs" 
+            ? "Hymnals Library" 
+            : "Church Announcements"
+        );
+        setShowUpgradePromptModal(true);
+        return;
+      }
+      setActiveTab(tab);
       return;
     }
-    
+
+    // Yearly/Premium plan: all features
     setActiveTab(tab);
   };
 
@@ -1118,28 +1121,14 @@ function generateFallbackVerseText(book: string, chapter: number, verse: number)
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-1.5">
-                    <div>
-                      <span className="text-[8px] font-mono uppercase tracking-widest text-white/40 block mb-1">Translation Version</span>
-                      <select
-                        value={bibleVersion}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val !== "NIV" && userPlan === "free") {
-                            setUpgradeTriggerSource(`${val} Translation`);
-                            setShowUpgradePromptModal(true);
-                            return;
-                          }
-                          onChangeBibleVersion(val as any);
-                        }}
-                        className="w-full bg-black/40 p-1 text-[11px] rounded border border-white/10 text-white focus:border-blue-500 focus:outline-none"
-                      >
-                        <option value="NIV" className="bg-[#121417]">NIV — New International Version</option>
-                        <option value="KJV" className="bg-[#121417]">{userPlan === "free" ? "🔒 " : ""}KJV — Authorized King James Version</option>
-                        <option value="ESV" className="bg-[#121417]">{userPlan === "free" ? "🔒 " : ""}ESV — English Standard Version</option>
-                      </select>
-                    </div>
-                  </div>
+<div className="grid grid-cols-1 gap-1.5">
+                     <div>
+                       <span className="text-[8px] font-mono uppercase tracking-widest text-white/40 block mb-1">Translation Version</span>
+                       <div className="w-full bg-black/40 p-1 text-[11px] rounded border border-white/10 text-white font-mono text-center">
+                         KJV — Authorized King James Version
+                       </div>
+                     </div>
+                   </div>
 
                   {/* Manual Scripture Preview Body */}
                   <div className="bg-black/30 border border-white/5 rounded p-3 flex flex-col justify-between min-h-[110px]">
@@ -1739,30 +1728,14 @@ function generateFallbackVerseText(book: string, chapter: number, verse: number)
                     </button>
                   </div>
 
-                  {isParallelEnabled && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-[8px] font-mono text-white/40 uppercase tracking-widest">Parallel:</span>
-                      <select
-                        value={parallelVersion}
-                            onChange={(e) => {
-                           const ver = e.target.value as "KJV" | "NIV" | "ESV";
-                           onChangeParallelVersion(ver);
-                           if (activeProjectedSlide.type === "verse" && lookupText) {
-                             onCastSlide({
-                               ...activeProjectedSlide,
-                               parallelBody: lookupText[ver],
-                               parallelTranslation: ver,
-                             });
-                           }
-                         }}
-                        className="bg-black/40 p-1 text-[10px] rounded border border-white/10 text-white focus:outline-none flex-1"
-                      >
-                        <option value="KJV" className="bg-[#121417]">KJV — King James</option>
-                        <option value="NIV" className="bg-[#121417]">NIV — New International</option>
-                        <option value="ESV" className="bg-[#121417]">ESV — English Standard</option>
-                      </select>
-                    </div>
-                  )}
+{isParallelEnabled && (
+                     <div className="flex items-center gap-2">
+                       <span className="text-[8px] font-mono text-white/40 uppercase tracking-widest">Parallel:</span>
+                       <div className="bg-black/40 p-1 text-[10px] rounded border border-white/10 text-white font-mono text-center flex-1">
+                         KJV — Authorized King James Version
+                       </div>
+                     </div>
+                   )}
                 </div>
               </div>
             ) : (
@@ -1848,7 +1821,7 @@ function generateFallbackVerseText(book: string, chapter: number, verse: number)
                     <li>✓ AI Sermon Live Listening</li>
                     <li>✓ Automatic verse detection</li>
                     <li>✓ Instant projector casting</li>
-                    <li>✓ Unlock KJV &amp; ESV translations</li>
+                    <li>✓ Unlock KJV translation</li>
                   </ul>
                 </div>
                 <button
