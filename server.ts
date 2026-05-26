@@ -4,6 +4,15 @@ import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import { OFFLINE_BIBLE_DB, normalizeBookName, parseSpokenNumbers, BIBLE_BOOKS } from "./src/bibleDatabase";
+import KJV_DATA from "./src/BibleData/kjv.json";
+
+// Build optimized lookup index from KJV JSON data
+const KJV_VERSE_INDEX: Record<string, string> = {};
+for (const key of Object.keys(KJV_DATA.verses)) {
+  const verse = KJV_DATA.verses[key];
+  const lookupKey = `${verse.book_name.toLowerCase()} ${verse.chapter}:${verse.verse}`;
+  KJV_VERSE_INDEX[lookupKey] = verse.text;
+}
 
 dotenv.config();
 
@@ -46,7 +55,26 @@ app.get("/api/bible/lookup", async (req, res) => {
   const vNum = parseInt(verse as string, 10);
   const normalizedBook = normalizeBookName(book as string) || (book as string);
 
-  // Attempt local offline database match first
+  // Attempt local KJV JSON database lookup first (comprehensive offline coverage)
+  const kjvLookupKey = `${normalizedBook.toLowerCase()} ${chNum}:${vNum}`;
+  const kjvText = KJV_VERSE_INDEX[kjvLookupKey];
+
+  if (kjvText) {
+    const cleanKjvText = kjvText.trim().replace(/^¶\s*/, "");
+    return res.json({
+      book: normalizedBook,
+      chapter: chNum,
+      verse: vNum,
+      text: {
+        KJV: cleanKjvText,
+        NIV: cleanKjvText,
+        ESV: cleanKjvText,
+      },
+      source: "kjv_json_database",
+    });
+  }
+
+  // Attempt small offline database match for multi-translation fallback
   const offlineMatch = OFFLINE_BIBLE_DB.find(
     (v) =>
       v.book.toLowerCase() === normalizedBook.toLowerCase() &&

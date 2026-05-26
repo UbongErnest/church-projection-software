@@ -1,6 +1,8 @@
 // Bible Books Alias & Regex Parsing Engine
 // Pre-populated popular church scriptures for instant local offline lookup.
 
+import KJV_JSON from "./BibleData/kjv.json";
+
 export interface BibleVerse {
   book: string;
   chapter: number;
@@ -299,4 +301,18 @@ export function parseSpokenNumbers(input: string): string {
     .replace(/1st\s+john/gi, "1 John")
     .replace(/2nd\s+john/gi, "2 John")
     .replace(/3rd\s+john/gi, "3 John");
+}
+
+// Build KJV verse lookup index at module load time
+const KJV_VERSE_INDEX: Record<string, string> = {};
+for (const key of Object.keys((KJV_JSON as any).verses)) {
+  const verse = (KJV_JSON as any).verses[key];
+  const lookupKey = `${verse.book_name.toLowerCase()} ${verse.chapter}:${verse.verse}`;
+  KJV_VERSE_INDEX[lookupKey] = verse.text;
+}
+
+// Comprehensive offline KJV verse lookup using JSON data
+export function getKjvVerseText(book: string, chapter: number, verse: number): string | null {
+  const key = `${normalizeBookName(book) || book.toLowerCase()} ${chapter}:${verse}`;
+  return KJV_VERSE_INDEX[key] || null;
 }

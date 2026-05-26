@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 import { ActiveSlide, DetectedVerse, Song, AnnouncementSlide } from "../types";
 import { DEFAULT_SONGS, DEFAULT_ANNOUNCEMENTS, THEME_PRESETS } from "../data";
-import { BIBLE_BOOKS, normalizeBookName, OFFLINE_BIBLE_DB } from "../bibleDatabase";
+import { BIBLE_BOOKS, normalizeBookName, OFFLINE_BIBLE_DB, getKjvVerseText } from "../bibleDatabase";
 
 interface ControlPanelProps {
   onCastSlide: (slide: ActiveSlide) => void;
@@ -187,7 +187,35 @@ export default function ControlPanel({
     setIsLoadingLookup(true);
     setLookupError(null);
 
-    // 1. Attempt client-side offline database lookup first
+    // 1. Attempt client-side KJV JSON database lookup first (comprehensive offline coverage)
+    const kjvText = getKjvVerseText(b, c, v);
+    if (kjvText) {
+      const cleanKjvText = kjvText.trim().replace(/^¶\s*/, "");
+      setLookupText({ KJV: cleanKjvText, NIV: cleanKjvText, ESV: cleanKjvText });
+      setIsLoadingLookup(false);
+      if (autoProject) {
+        const hasParallel = isParallelEnabled && userPlan === "yearly";
+        onCastSlide({
+          type: "verse",
+          title: `${b} ${c}:${v}`,
+          body: cleanKjvText,
+          parallelBody: hasParallel ? cleanKjvText : undefined,
+          parallelTranslation: hasParallel ? parallelVersion : undefined,
+          customBrandingText: userPlan === "yearly" && customBrandingText ? customBrandingText : undefined,
+          book: b,
+          chapter: c,
+          verse: v,
+          translation: bibleVersion,
+          layout: layoutMode,
+          themeId: activeThemeId as any,
+          fontSize: fontSize,
+          showLogo: showLogo,
+        });
+      }
+      return;
+    }
+
+    // 2. Attempt small offline database match for multi-translation fallback
     const normalized = normalizeBookName(b) || b;
     const offlineMatch = OFFLINE_BIBLE_DB.find(
       (verse) =>
@@ -280,15 +308,24 @@ body: data.text[bibleVersion],
     }
   };
 
-  function generateFallbackVerseText(book: string, chapter: number, verse: number): { KJV: string; NIV: string; ESV: string } {
+function generateFallbackVerseText(book: string, chapter: number, verse: number): { KJV: string; NIV: string; ESV: string } {
+  const kjvText = getKjvVerseText(book, chapter, verse);
+  if (kjvText) {
+    const cleanText = kjvText.trim().replace(/^¶\s*/, "");
     return {
-      KJV: `[Scripture placeholder for ${book} ${chapter}:${verse} - API unavailable. Enable server for actual verse content.]`,
-      NIV: `[Scripture placeholder for ${book} ${chapter}:${verse} - API unavailable. Enable server for actual verse content.]`,
-      ESV: `[Scripture placeholder for ${book} ${chapter}:${verse} - API unavailable. Enable server for actual verse content.]`
+      KJV: cleanText,
+      NIV: cleanText,
+      ESV: cleanText,
     };
   }
+  return {
+    KJV: `[Scripture placeholder for ${book} ${chapter}:${verse} - API unavailable. Enable server for actual verse content.]`,
+    NIV: `[Scripture placeholder for ${book} ${chapter}:${verse} - API unavailable. Enable server for actual verse content.]`,
+    ESV: `[Scripture placeholder for ${book} ${chapter}:${verse} - API unavailable. Enable server for actual verse content.]`
+  };
+}
 
-  // Convert custom manual search bar queries (e.g. "Romans 12 1") and automatically cast
+// Convert custom manual search bar queries (e.g. "Romans 12 1") and automatically cast
   const handleKeywordSearch = async (e?: FormEvent) => {
     if (e) e.preventDefault();
     if (!searchQuery.trim()) return;
@@ -303,7 +340,33 @@ body: data.text[bibleVersion],
       setSelectedChapter(chapterVal);
       setSelectedVerse(verseVal);
 
-      // 1. Attempt client-side offline database lookup first
+      // 1. Attempt client-side KJV JSON database lookup first (comprehensive offline coverage)
+      const kjvText = getKjvVerseText(bookName, chapterVal, verseVal);
+      if (kjvText) {
+        const cleanKjvText = kjvText.trim().replace(/^¶\s*/, "");
+        setLookupText({ KJV: cleanKjvText, NIV: cleanKjvText, ESV: cleanKjvText });
+        setLookupError(null);
+        const hasParallel = isParallelEnabled && userPlan === "yearly";
+        onCastSlide({
+          type: "verse",
+          title: `${bookName} ${chapterVal}:${verseVal}`,
+          body: cleanKjvText,
+          parallelBody: hasParallel ? cleanKjvText : undefined,
+          parallelTranslation: hasParallel ? parallelVersion : undefined,
+          customBrandingText: userPlan === "yearly" && customBrandingText ? customBrandingText : undefined,
+          book: bookName,
+          chapter: chapterVal,
+          verse: verseVal,
+          translation: bibleVersion,
+          layout: layoutMode,
+          themeId: activeThemeId as any,
+          fontSize: fontSize,
+          showLogo: showLogo,
+        });
+        return;
+      }
+
+      // 2. Attempt small offline database match for multi-translation fallback
       const normalized = normalizeBookName(bookName) || bookName;
       const offlineMatch = OFFLINE_BIBLE_DB.find(
         (verse) =>
@@ -335,7 +398,7 @@ body: data.text[bibleVersion],
         return;
       }
 
-      // Fetch immediately and project automatically without requiring manual "Project Selector Verse" click
+      // 3. Fetch immediately and project automatically without requiring manual "Project Selector Verse" click
       setIsLoadingLookup(true);
       setLookupError(null);
       try {
@@ -363,37 +426,37 @@ body: data.text[bibleVersion],
              fontSize: fontSize,
              showLogo: showLogo,
            });
-         } else {
-           throw new Error(data.error || "Response format invalid: 'text' field missing.");
-         }
-       } catch (err: any) {
-         console.warn("API lookup failed, using offline fallback:", err.message);
-         const fallbackText = generateFallbackVerseText(bookName, chapterVal, verseVal);
-         setLookupText(fallbackText);
-         setLookupError(null);
-         const hasParallel = isParallelEnabled && userPlan === "yearly";
-         onCastSlide({
-           type: "verse",
-           title: `${bookName} ${chapterVal}:${verseVal}`,
-           body: fallbackText[bibleVersion],
-           parallelBody: hasParallel ? fallbackText[parallelVersion] : undefined,
-           parallelTranslation: hasParallel ? parallelVersion : undefined,
-           customBrandingText: userPlan === "yearly" && customBrandingText ? customBrandingText : undefined,
-           book: bookName,
-           chapter: chapterVal,
-           verse: verseVal,
-           translation: bibleVersion,
-           layout: layoutMode,
-           themeId: activeThemeId as any,
-           fontSize: fontSize,
-           showLogo: showLogo,
-         });
-       } finally {
-         setIsLoadingLookup(false);
-       }
-     } else {
-       alert("Please match standard references: 'Book Chapter:Verse' (e.g., Romans 8:28)");
-}
+          } else {
+            throw new Error(data.error || "Response format invalid: 'text' field missing.");
+          }
+        } catch (err: any) {
+          console.warn("API lookup failed, using offline fallback:", err.message);
+          const fallbackText = generateFallbackVerseText(bookName, chapterVal, verseVal);
+          setLookupText(fallbackText);
+          setLookupError(null);
+          const hasParallel = isParallelEnabled && userPlan === "yearly";
+          onCastSlide({
+            type: "verse",
+            title: `${bookName} ${chapterVal}:${verseVal}`,
+            body: fallbackText[bibleVersion],
+            parallelBody: hasParallel ? fallbackText[parallelVersion] : undefined,
+            parallelTranslation: hasParallel ? parallelVersion : undefined,
+            customBrandingText: userPlan === "yearly" && customBrandingText ? customBrandingText : undefined,
+            book: bookName,
+            chapter: chapterVal,
+            verse: verseVal,
+            translation: bibleVersion,
+            layout: layoutMode,
+            themeId: activeThemeId as any,
+            fontSize: fontSize,
+            showLogo: showLogo,
+          });
+        } finally {
+          setIsLoadingLookup(false);
+        }
+      } else {
+        alert("Please match standard references: 'Book Chapter:Verse' (e.g., Romans 8:28)");
+      }
     };
 
   // Auto-search when a verse is detected in live transcription

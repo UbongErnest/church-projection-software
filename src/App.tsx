@@ -10,7 +10,7 @@ import { auth, db } from "./firebase";
 import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { Sparkles, CornerDownRight, Volume2, Notebook } from "lucide-react";
-import { BIBLE_BOOKS, parseSpokenNumbers } from "./bibleDatabase";
+import { BIBLE_BOOKS, parseSpokenNumbers, getKjvVerseText } from "./bibleDatabase";
 // High-speed, high-density client-side regex matching to intercept spoken scriptures locally
 function scanForVerseLocally(text: string): { book: string; chapter: number; verse: number; displayName: string; } | null {
   if (!text) return null;
@@ -48,6 +48,15 @@ function scanForVerseLocally(text: string): { book: string; chapter: number; ver
 }
 
 function getFallbackVerseText(book: string, chapter: number, verse: number): { KJV: string; NIV: string; ESV: string } {
+  const kjvText = getKjvVerseText(book, chapter, verse);
+  if (kjvText) {
+    const cleanText = kjvText.trim().replace(/^¶\s*/, "");
+    return {
+      KJV: cleanText,
+      NIV: cleanText,
+      ESV: cleanText,
+    };
+  }
   return {
     KJV: `[Scripture placeholder for ${book} ${chapter}:${verse} - API unavailable. Enable server for actual verse content.]`,
     NIV: `[Scripture placeholder for ${book} ${chapter}:${verse} - API unavailable. Enable server for actual verse content.]`,
