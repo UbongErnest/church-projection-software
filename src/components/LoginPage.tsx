@@ -1,6 +1,5 @@
 import React, { useState, FormEvent } from "react";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../firebase";
+import { supabase } from "../supabase";
 import { BookOpen, Mail, Lock, LogIn, Sparkles, UserPlus, ChevronLeft } from "lucide-react";
 
 interface LoginPageProps {
@@ -14,41 +13,48 @@ export default function LoginPage({ onNavigate, onAuthSuccess }: LoginPageProps)
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState("");
 
-  const handleLogin = async (e: FormEvent) => {
-    e.preventDefault();
-    setErrorText("");
+const handleLogin = async (e: FormEvent) => {
+     e.preventDefault();
+     setErrorText("");
 
-    const emailVal = email.trim();
-    const passVal = password;
+     const emailVal = email.trim();
+     const passVal = password;
 
-    if (!emailVal || !passVal) {
-      setErrorText("Please fill out both email and password fields.");
-      return;
-    }
+     if (!emailVal || !passVal) {
+       setErrorText("Please fill out both email and password fields.");
+       return;
+     }
 
-    setLoading(true);
+     setLoading(true);
 
-    try {
-      await signInWithEmailAndPassword(auth, emailVal, passVal);
-      // Success Trigger
-      onAuthSuccess();
-    } catch (err: any) {
-      console.error("Auth login failed", err);
-      let friendlyMessage = "Error signing in. Please verify your credentials and try again.";
-      
-      if (err.code === "auth/invalid-credential" || err.code === "auth/wrong-password" || err.code === "auth/user-not-found") {
-        friendlyMessage = "Incorrect email address or password. Please try again.";
-      } else if (err.code === "auth/invalid-email") {
-        friendlyMessage = "The email address layout entered is invalid.";
-      } else if (err.code === "auth/too-many-requests") {
-        friendlyMessage = "Too many failed attempts. Security lock engaged. Please wait or reset password.";
-      }
-      
-      setErrorText(friendlyMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
+     try {
+       const { data, error } = await supabase.auth.signInWithPassword({
+         email: emailVal,
+         password: passVal,
+       });
+       
+       if (error) {
+         throw error;
+       }
+       // Success Trigger
+       onAuthSuccess();
+     } catch (err: any) {
+       console.error("Auth login failed", err);
+       let friendlyMessage = "Error signing in. Please verify your credentials and try again.";
+       
+       if (err.message?.includes("Invalid login credentials") || err.message?.includes("invalid-credential") || err.message?.includes("wrong-password") || err.message?.includes("user-not-found")) {
+         friendlyMessage = "Incorrect email address or password. Please try again.";
+       } else if (err.message?.includes("Invalid email")) {
+         friendlyMessage = "The email address layout entered is invalid.";
+       } else if (err.message?.includes("too many requests") || err.message?.includes("Too many")) {
+         friendlyMessage = "Too many failed attempts. Security lock engaged. Please wait or reset password.";
+       }
+       
+       setErrorText(friendlyMessage);
+     } finally {
+       setLoading(false);
+     }
+   };
 
   return (
     <div className="min-h-screen bg-[#0A0C10] text-[#E0E0E0] select-none font-sans relative overflow-hidden flex flex-col justify-center items-center px-4">

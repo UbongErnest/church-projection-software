@@ -1,42 +1,41 @@
 import { useState, useEffect, useRef, FormEvent } from "react";
-import { auth } from "../firebase";
-import { signOut } from "firebase/auth";
+import { supabase } from "../supabase";
 import {
-  Mic,
-  MicOff,
-  Tv,
-  Search,
-  Plus,
-  Play,
-  Square,
-  Trash,
-  Settings,
-  BookOpen,
-  Sparkles,
-  ExternalLink,
-  ChevronRight,
-  Music,
-  Clock,
-  Check,
-  Eye,
-  RefreshCw,
-  Sliders,
-  EyeOff,
-  PlusCircle,
-  FileText,
-  User,
-  LogOut,
-  Lock,
-  Crown,
-  CreditCard,
-  X,
-  AlertTriangle,
-  Award,
-  Zap,
-  Globe,
-  Image,
-  Video
-} from "lucide-react";
+   Mic,
+   MicOff,
+   Tv,
+   Search,
+   Plus,
+   Play,
+   Square,
+   Trash,
+   Settings,
+   BookOpen,
+   Sparkles,
+   ExternalLink,
+   ChevronRight,
+   Music,
+   Clock,
+   Check,
+   Eye,
+   RefreshCw,
+   Sliders,
+   EyeOff,
+   PlusCircle,
+   FileText,
+   User,
+   LogOut,
+   Lock,
+   Crown,
+   CreditCard,
+   X,
+   AlertTriangle,
+   Award,
+   Zap,
+   Globe,
+   Image,
+   Video
+ } from "lucide-react";
 import { ActiveSlide, DetectedVerse, Song, AnnouncementSlide, MediaSlide } from "../types";
 import { DEFAULT_SONGS, DEFAULT_ANNOUNCEMENTS, THEME_PRESETS } from "../data";
 import { BIBLE_BOOKS, normalizeBookName, OFFLINE_BIBLE_DB, getKjvVerseText } from "../bibleDatabase";
@@ -687,31 +686,31 @@ function generateFallbackVerseText(book: string, chapter: number, verse: number)
       
       {/* 1. TOP NAVIGATION BAR */}
       <header className="min-h-12 border-b border-white/10 flex flex-wrap items-center justify-between px-4 py-2 bg-[#121417] gap-3 shadow-md">
-        <div className="flex items-center gap-6 flex-wrap">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center font-bold text-xs italic text-white shadow-md">C</div>
-            <span className="font-bold tracking-tight text-sm uppercase text-white">Chaver</span>
-            {auth.currentUser && (
-              <div className="hidden sm:flex items-center gap-2 border-l border-white/10 pl-4">
-                <div className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center">
-                  <User className="w-3" />
-                </div>
-                <span className="text-xs text-white/70 font-medium">
-                  {auth.currentUser.displayName || auth.currentUser.email?.split("@")[0]}
-                </span>
-                <button
-                  onClick={async () => {
-                    if (confirm("Are you sure you want to sign out?")) {
-                      await signOut(auth);
-                    }
-                  }}
-                  title="Sign Out"
-                  className="p-1 text-white/40 hover:text-red-400 transition-colors ml-1 cursor-pointer"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
+<div className="flex items-center gap-6 flex-wrap">
+           <div className="flex items-center gap-2">
+             <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center font-bold text-xs italic text-white shadow-md">C</div>
+             <span className="font-bold tracking-tight text-sm uppercase text-white">Chaver</span>
+             {userProfile && (
+               <div className="hidden sm:flex items-center gap-2 border-l border-white/10 pl-4">
+                 <div className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center">
+                   <User className="w-3" />
+                 </div>
+                 <span className="text-xs text-white/70 font-medium">
+                   {userProfile.displayName || userProfile.email?.split("@")[0]}
+                 </span>
+                 <button
+                   onClick={async () => {
+                     if (confirm("Are you sure you want to sign out?")) {
+                       await supabase.auth.signOut();
+                     }
+                   }}
+                   title="Sign Out"
+                   className="p-1 text-white/40 hover:text-red-400 transition-colors ml-1 cursor-pointer"
+                 >
+                   <LogOut className="w-3.5 h-3.5" />
+                 </button>
+               </div>
+             )}
           </div>
           <nav className="flex gap-4 text-xs font-semibold text-white/50">
             <button

@@ -1,7 +1,5 @@
 import React, { useState, FormEvent } from "react";
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
-import { auth, db, handleFirestoreError, OperationType } from "../firebase";
+import { supabase } from "../supabase";
 import { 
   BookOpen, 
   User, 
@@ -44,106 +42,119 @@ export default function RegisterPage({ onNavigate, onAuthSuccess }: RegisterPage
   const [errorText, setErrorText] = useState("");
 
   const handleRegister = async (e: FormEvent) => {
-    e.preventDefault();
-    setErrorText("");
+     e.preventDefault();
+     setErrorText("");
 
-    const nameVal = fullName.trim();
-    const emailVal = email.trim();
-    const churchVal = churchName.trim();
-    const countryVal = country.trim();
-    const stateVal = state.trim();
-    const cityVal = city.trim();
-    const locationVal = location.trim();
-    const denomVal = denomination.trim();
-    const passVal = password;
+     const nameVal = fullName.trim();
+     const emailVal = email.trim();
+     const churchVal = churchName.trim();
+     const countryVal = country.trim();
+     const stateVal = state.trim();
+     const cityVal = city.trim();
+     const locationVal = location.trim();
+     const denomVal = denomination.trim();
+     const passVal = password;
 
-    if (
-      !nameVal || 
-      !emailVal || 
-      !churchVal || 
-      !countryVal || 
-      !stateVal || 
-      !cityVal || 
-      !locationVal || 
-      !denomVal || 
-      !passVal
-    ) {
-      setErrorText("Please fill out all required fields.");
-      return;
-    }
+     if (
+       !nameVal || 
+       !emailVal || 
+       !churchVal || 
+       !countryVal || 
+       !stateVal || 
+       !cityVal || 
+       !locationVal || 
+       !denomVal || 
+       !passVal
+     ) {
+       setErrorText("Please fill out all required fields.");
+       return;
+     }
 
-    if (!agreeLegal) {
-      setErrorText("You must accept the Privacy Policy and Terms & Conditions before creating an account.");
-      return;
-    }
+     if (!agreeLegal) {
+       setErrorText("You must accept the Privacy Policy and Terms & Conditions before creating an account.");
+       return;
+     }
 
-    if (passVal.length < 6) {
-      setErrorText("Password must be at least 6 characters long.");
-      return;
-    }
+     if (passVal.length < 6) {
+       setErrorText("Password must be at least 6 characters long.");
+       return;
+     }
 
-    if (passVal !== confirmPassword) {
-      setErrorText("Passwords do not match.");
-      return;
-    }
+     if (passVal !== confirmPassword) {
+       setErrorText("Passwords do not match.");
+       return;
+     }
 
-    setLoading(true);
+     setLoading(true);
 
-    try {
-      // 1. Create client credential inside Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, emailVal, passVal);
-      const user = userCredential.user;
+     try {
+       // 1. Create user with Supabase Auth
+       const { data, error: signUpError } = await supabase.auth.signUp({
+         email: emailVal,
+         password: passVal,
+         options: {
+           data: {
+             display_name: nameVal,
+           }
+         }
+       });
+       
+       if (signUpError) {
+         throw signUpError;
+       }
+       
+       const user = data.user;
+       if (!user) {
+         throw new Error("User creation failed - no user returned");
+       }
 
-      // 2. Attach human name to Firebase Authentication Profile
-      await updateProfile(user, {
-        displayName: nameVal
-      });
+       // 2. Insert user profile into Supabase users table
+       const now = new Date().toISOString();
+       const userPayload = {
+         user_id: user.id,
+         email: emailVal,
+         display_name: nameVal,
+         created_at: now,
+         church_name: churchVal,
+         country: countryVal,
+         state: stateVal,
+         city: cityVal,
+         location: locationVal,
+         denomination: denomVal,
+         subscription_plan: "free" as const,
+         subscription_status: "active"
+       };
 
-      // 3. Document the profile representation inside Firestore database
-      const userRef = doc(db, "users", user.uid);
-      const userPayload = {
-        uid: user.uid,
-        email: emailVal,
-        displayName: nameVal,
-        createdAt: new Date().toISOString(),
-        churchName: churchVal,
-        country: countryVal,
-        state: stateVal,
-        city: cityVal,
-        location: locationVal,
-        denomination: denomVal,
-        subscriptionPlan: "free",
-        subscriptionStatus: "active"
-      };
+       const { error: profileError } = await supabase
+         .from('users')
+         .insert(userPayload);
+       
+       if (profileError) {
+         console.error("Profile creation error:", profileError);
+         setErrorText("Authentication succeeded, but profile creation was blocked by security rules.");
+       } else {
+         // Success Trigger
+         onAuthSuccess();
+       }
+     } catch (err: any) {
+       console.error("Auth register failed", err);
+       let friendlyMessage = "An unexpected error occurred during registration. Please try again.";
+       
+       if (err.message?.includes("User already registered") || err.message?.includes("already exists")) {
+         friendlyMessage = "This email is already registered. Please login or use a different one.";
+       } else if (err.message?.includes("Invalid email")) {
+         friendlyMessage = "Please provide a valid email address structure.";
+       } else if (err.message?.includes("Password") && err.message?.includes("weak")) {
+         friendlyMessage = "Weak password. Minimum of 6 characters required by security policies.";
+       } else if (err.message && err.message.includes("Supabase")) {
+         friendlyMessage = "Authentication succeeded, but profile creation was blocked by security rules.";
+       }
 
-      try {
-        await setDoc(userRef, userPayload);
-      } catch (firestoreError) {
-        // Enforce the custom error handle as outlined in skill guidelines
-        handleFirestoreError(firestoreError, OperationType.CREATE, `users/${user.uid}`);
-      }
-
-      // Success Trigger
-      onAuthSuccess();
-    } catch (err: any) {
-      console.error("Auth register failed", err);
-      let friendlyMessage = "An unexpected error occurred during registration. Please try again.";
-      
-      if (err.code === "auth/email-already-in-use") {
-        friendlyMessage = "This email is already registered. Please login or use a different one.";
-      } else if (err.code === "auth/invalid-email") {
-        friendlyMessage = "Please provide a valid email address structure.";
-      } else if (err.code === "auth/weak-password") {
-        friendlyMessage = "Weak password. Minimum of 6 characters required by security policies.";
-      } else if (err.message && err.message.includes("Firestore")) {
-        friendlyMessage = "Authentication succeeded, but profile creation was blocked by security rules.";
-      }
-
-      setErrorText(friendlyMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
+       setErrorText(friendlyMessage);
+     } finally {
+       setLoading(false);
+     }
+   };
 
   return (
     <div className="min-h-screen bg-[#0A0C10] text-[#E0E0E0] select-none font-sans relative overflow-y-auto flex flex-col justify-center items-center py-10 px-4">
@@ -470,7 +481,7 @@ export default function RegisterPage({ onNavigate, onAuthSuccess }: RegisterPage
             <div className="flex-1 overflow-y-auto text-xs text-stone-300 space-y-4 pr-1 leading-relaxed font-sans scrollbar-thin scrollbar-thumb-white/10 text-left">
               <p className="font-semibold text-white">1. INTRODUCTION & DATA ETHICS</p>
               <p>
-                Welcome to Chaver AI. We respect your sanctuary's privacy and administrative confidentiality. This privacy statement documents our data handling policies for the Pulpit Studio church software ecosystem integrated with Firebase Authentication and Firestore DB instances.
+                Welcome to Chaver AI. We respect your sanctuary's privacy and administrative confidentiality. This privacy statement documents our data handling policies for the Pulpit Studio church software ecosystem integrated with Supabase Authentication and PostgreSQL instances.
               </p>
 
               <p className="font-semibold text-white">2. INFORMATION WE COLLECT</p>
@@ -543,7 +554,7 @@ export default function RegisterPage({ onNavigate, onAuthSuccess }: RegisterPage
 
               <p className="font-semibold text-white">4. LIMITATION OF LIABILITY & STABILITY</p>
               <p>
-                Chaver AI is delivered on an "as-is" and "as available" basis. While we provide robust Firebase synchronization, we are not liable for accidental hardware internet dropouts occurring mid-sermon.
+                Chaver AI is delivered on an "as-is" and "as available" basis. While we provide robust Supabase synchronization, we are not liable for accidental hardware internet dropouts occurring mid-sermon.
               </p>
 
               <p className="font-semibold text-white">5. INTELLECTUAL CODES</p>
@@ -567,3 +578,5 @@ export default function RegisterPage({ onNavigate, onAuthSuccess }: RegisterPage
     </div>
   );
 }
+
+

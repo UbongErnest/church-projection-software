@@ -6,9 +6,8 @@ import SermonNotepad from "./components/SermonNotepad";
 import LandingPage from "./components/LandingPage";
 import RegisterPage from "./components/RegisterPage";
 import LoginPage from "./components/LoginPage";
-import { auth, db } from "./firebase";
-import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
-import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { supabase, mapProfileFromDB } from "./supabase";
+import { User as SupabaseUser } from "@supabase/supabase-js";
 import { Sparkles, CornerDownRight, Volume2, Notebook } from "lucide-react";
 import { BIBLE_BOOKS, parseSpokenNumbers, getKjvVerseText } from "./bibleDatabase";
 // High-speed, high-density client-side regex matching to intercept spoken scriptures locally
@@ -72,102 +71,116 @@ const PulPULP_SIMULATORS = [
 export default function App() {
   const [viewMode, setViewMode] = useState<"operator" | "projector" | "loading">("loading");
 
-  // Firebase Authenticated Session State Tracking
-  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
-  const [userProfile, setUserProfile] = useState<{
-    uid: string;
-    email: string;
-    displayName: string;
-    createdAt: string;
-    churchName: string;
-    country: string;
-    state: string;
-    city: string;
-    location: string;
-    denomination: string;
-    subscriptionPlan: "free" | "monthly" | "yearly";
-    subscriptionStatus: string;
-  } | null>(null);
+// Supabase Authenticated Session State Tracking
+   const [currentUser, setCurrentUser] = useState<SupabaseUser | null>(null);
+   const [userProfile, setUserProfile] = useState<{
+     uid: string;
+     email: string;
+     displayName: string;
+     createdAt: string;
+     churchName: string;
+     country: string;
+     state: string;
+     city: string;
+     location: string;
+     denomination: string;
+     subscriptionPlan: "free" | "monthly" | "yearly";
+     subscriptionStatus: string;
+   } | null>(null);
   const [authChecked, setAuthChecked] = useState<boolean>(false);
   const [authView, setAuthView] = useState<"landing" | "login" | "register">("landing");
 
-  // Auth monitoring listener and real-time Firestore profile sync
-  useEffect(() => {
-    let unsubscribeProfile: (() => void) | null = null;
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-      if (user) {
-        // Subscribe to real-time updates of the user profile document in Firestore
-        unsubscribeProfile = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
-          if (docSnap.exists()) {
-            setUserProfile(docSnap.data() as any);
-          } else {
-            // Fallback default profile if the Firestore doc is delayed
-            setUserProfile({
-              uid: user.uid,
-              email: user.email || "",
-              displayName: user.displayName || "",
-              createdAt: new Date().toISOString(),
-              churchName: "My Congregation",
-              country: "",
-              state: "",
-              city: "",
-              location: "",
-              denomination: "",
-              subscriptionPlan: "free",
-              subscriptionStatus: "active"
-            });
-          }
-        }, (err) => {
-          console.error("Firestore user profile fetch error:", err);
-          setUserProfile({
-            uid: user.uid,
-            email: user.email || "",
-            displayName: user.displayName || "",
-            createdAt: new Date().toISOString(),
-            churchName: "My Congregation",
-            country: "",
-            state: "",
-            city: "",
-            location: "",
-            denomination: "",
-            subscriptionPlan: "free",
-            subscriptionStatus: "active"
-          });
-        });
-      } else {
-        setUserProfile(null);
-        if (unsubscribeProfile) {
-          unsubscribeProfile();
-          unsubscribeProfile = null;
-        }
-      }
-      setAuthChecked(true);
-    });
+// Auth monitoring listener and real-time Supabase profile sync
+   useEffect(() => {
+     let mounted = true;
 
-    return () => {
-      unsubscribeAuth();
-      if (unsubscribeProfile) unsubscribeProfile();
-    };
-  }, []);
+     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+       if (!mounted) return;
+       
+       setCurrentUser(session?.user || null);
+       if (session?.user) {
+         // Fetch user profile from users table
+         const { data: profile, error } = await supabase
+           .from('users')
+           .select('*')
+           .eq('user_id', session.user.id)
+           .single();
+         
+         if (error) {
+           console.error("Supabase user profile fetch error:", error);
+           setUserProfile({
+             uid: session.user.id,
+             email: session.user.email || "",
+             displayName: session.user.user_metadata?.display_name || "",
+             createdAt: new Date().toISOString(),
+             churchName: "My Congregation",
+             country: "",
+             state: "",
+             city: "",
+             location: "",
+             denomination: "",
+             subscriptionPlan: "free",
+             subscriptionStatus: "active"
+           });
+         } else {
+           setUserProfile(mapProfileFromDB(profile));
+         }
+       } else {
+         setUserProfile(null);
+       }
+       setAuthChecked(true);
+     });
 
-  // Update user subscription plan helper function
-  const handleUpdateSubscription = async (newPlan: "free" | "monthly" | "yearly") => {
-    if (!currentUser || !userProfile) return;
-    const userRef = doc(db, "users", currentUser.uid);
-    const updatedPayload = {
-      ...userProfile,
-      subscriptionPlan: newPlan,
-      subscriptionStatus: "active"
-    };
-    try {
-      await setDoc(userRef, updatedPayload);
-    } catch (err) {
-      console.error("Failed to update subscription profile in Firestore:", err);
-      // Fallback state update
-      setUserProfile((prev: any) => prev ? { ...prev, subscriptionPlan: newPlan } : null);
-    }
-  };
+     // Check for existing session on load
+     supabase.auth.getSession().then(({ data: { session } }) => {
+       if (!mounted) return;
+       if (session) {
+         setAuthChecked(true);
+       }
+     });
+
+     return () => {
+       mounted = false;
+       subscription.unsubscribe();
+     };
+   }, []);
+
+// Update user subscription plan helper function
+   const handleUpdateSubscription = async (newPlan: "free" | "monthly" | "yearly") => {
+     if (!currentUser || !userProfile) return;
+     const updatedPayload = {
+       ...userProfile,
+       subscriptionPlan: newPlan,
+       subscriptionStatus: "active"
+     };
+     try {
+       const { error } = await supabase
+         .from('users')
+         .upsert({
+           user_id: currentUser.id,
+           email: userProfile.email,
+           display_name: userProfile.displayName,
+           created_at: userProfile.createdAt,
+           church_name: userProfile.churchName,
+           country: userProfile.country,
+           state: userProfile.state,
+           city: userProfile.city,
+           location: userProfile.location,
+           denomination: userProfile.denomination,
+           subscription_plan: newPlan,
+           subscription_status: "active"
+         });
+       if (error) {
+         console.error("Failed to update subscription profile in Supabase:", error);
+         setUserProfile((prev: any) => prev ? { ...prev, subscriptionPlan: newPlan } : null);
+       } else {
+         setUserProfile((prev: any) => prev ? { ...prev, subscriptionPlan: newPlan, subscriptionStatus: "active" } : null);
+       }
+     } catch (err) {
+       console.error("Failed to update subscription profile:", err);
+       setUserProfile((prev: any) => prev ? { ...prev, subscriptionPlan: newPlan } : null);
+     }
+   };
 
   // Main system active slide
   const [activeSlide, setActiveSlide] = useState<ActiveSlide>({

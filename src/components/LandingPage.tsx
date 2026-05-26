@@ -49,7 +49,7 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
       {/* Hero section */}
       <main className="max-w-4xl mx-auto w-full px-6 py-12 md:py-20 text-center relative z-10 flex-1 flex flex-col justify-center">
         <div className="inline-flex items-center gap-1.5 bg-blue-950/20 border border-blue-500/20 px-3 py-1 rounded-full text-[10px] font-mono tracking-wider text-blue-400 uppercase font-bold mb-6 mx-auto animate-pulse">
-          <Sparkles className="w-3.5 h-3.5 text-blue-400" /> Currently Enforcing Zero-Trust Security With Firebase Realtime
+          <Sparkles className="w-3.5 h-3.5 text-blue-400" /> Currently Enforcing Zero-Trust Security With Supabase
         </div>
 
         <h2 className="font-sans font-extrabold text-3xl md:text-5xl text-white tracking-tight leading-none max-w-2xl mx-auto">
@@ -156,7 +156,7 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
             <div className="flex-1 overflow-y-auto text-xs text-stone-300 space-y-4 pr-1 leading-relaxed font-sans scrollbar-thin scrollbar-thumb-white/10">
               <p className="font-semibold text-white">1. INTRODUCTION & DATA ETHICS</p>
               <p>
-                Welcome to Chaver AI. We respect your sanctuary's privacy and administrative confidentiality. This privacy statement documents our data handling policies for the Pulpit Studio church software ecosystem integrated with Firebase Authentication and Firestore DB instances.
+                Welcome to Chaver AI. We respect your sanctuary's privacy and administrative confidentiality. This privacy statement documents our data handling policies for the Pulpit Studio church software ecosystem integrated with Supabase Authentication and PostgreSQL.
               </p>
 
               <p className="font-semibold text-white">2. INFORMATION WE COLLECT</p>
@@ -166,7 +166,7 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
 
               <p className="font-semibold text-white">3. SECURING SERMON NOTES & PRIVATE LITURGY DATA</p>
               <p>
-                All personal notes, scriptures saved, and logs created in the Sermon Journal are stored securely under individual secure records restricted by Firestore Security rules. No ecclesiastical or scriptural texts written are transferred, shared, or scanned by unauthorized exterior third-parties.
+                All personal notes, scriptures saved, and logs created in the Sermon Journal are stored securely under individual secure records restricted by Supabase Row Level Security policies. No ecclesiastical or scriptural texts written are transferred, shared, or scanned by unauthorized exterior third-parties.
               </p>
 
               <p className="font-semibold text-white">4. SPEECH TRANSCRIPTION AND SIMULATION DATA</p>
@@ -229,7 +229,7 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
 
               <p className="font-semibold text-white">4. LIMITATION OF LIABILITY & STABILITY</p>
               <p>
-                Chaver AI is delivered on an "as-is" and "as available" basis. While we provide robust Firebase synchronization, we are not liable for accidental hardware internet dropouts occurring mid-sermon.
+                Chaver AI is delivered on an "as-is" and "as available" basis. While we provide robust Supabase synchronization, we are not liable for accidental hardware internet dropouts occurring mid-sermon.
               </p>
 
               <p className="font-semibold text-white">5. INTELLECTUAL CODES</p>
@@ -253,3 +253,7 @@ export default function LandingPage({ onNavigate }: LandingPageProps) {
     </div>
   );
 }
+
+
+
+

@@ -1,38 +1,37 @@
 import React, { useState, useEffect, useRef, FormEvent } from "react";
 import { ActiveSlide } from "../types";
-import { auth, db, handleFirestoreError, OperationType } from "../firebase";
-import { collection, query, where, getDocs, setDoc, deleteDoc, doc } from "firebase/firestore";
+import { supabase } from "../supabase";
 import { 
-  Notebook, 
-  Save, 
-  Trash2, 
-  Download, 
-  Edit, 
-  Plus, 
-  FileText, 
-  Check, 
-  Sparkles, 
-  ClipboardPaste, 
-  FileDown, 
-  BookOpen, 
-  FileUp, 
-  ChevronDown, 
-  ChevronUp, 
-  RotateCcw,
-  Crown,
-  Lock,
-  X
-} from "lucide-react";
+   Notebook, 
+   Save, 
+   Trash2, 
+   Download, 
+   Edit, 
+   Plus, 
+   FileText, 
+   Check, 
+   Sparkles, 
+   ClipboardPaste, 
+   FileDown, 
+   BookOpen, 
+   FileUp, 
+   ChevronDown, 
+   ChevronUp, 
+   RotateCcw,
+   Crown,
+   Lock,
+   X
+ } from "lucide-react";
 
 interface SavedSermonNote {
-  id: string;
-  userId: string;
-  title: string;
-  content: string;
-  createdAt: string;
-  timestamp: string;
-  rawDate: number;
-}
+   id: string;
+   user_id: string;
+   title: string;
+   content: string;
+   created_at: string;
+   timestamp: string;
+   raw_date: number;
+ }
 
 interface SermonNotepadProps {
   sermonTopic: string;
@@ -113,32 +112,27 @@ export default function SermonNotepad({
     }
   };
 
-  // Load saved notes once on load via Cloud Firestore
-  useEffect(() => {
-    const fetchSermonNotes = async () => {
-      const user = auth.currentUser;
-      if (!user) return;
-      try {
-        const q = query(
-          collection(db, "sermonNotes"),
-          where("userId", "==", user.uid)
-        );
-        const snapshot = await getDocs(q);
-        const notes: SavedSermonNote[] = [];
-        snapshot.forEach((d) => {
-          notes.push(d.data() as SavedSermonNote);
-        });
-        // Sort descending by rawDate
-        notes.sort((a, b) => b.rawDate - a.rawDate);
-        setSavedNotes(notes);
-      } catch (e) {
-        // Log/throw according to instruction error guidelines
-        handleFirestoreError(e, OperationType.LIST, "sermonNotes");
-      }
-    };
+// Load saved notes once on load via Supabase
+   useEffect(() => {
+     const fetchSermonNotes = async () => {
+       const { data: { user } } = await supabase.auth.getUser();
+       if (!user) return;
+       try {
+         const { data: notes, error } = await supabase
+           .from('sermon_notes')
+           .select('*')
+           .eq('user_id', user.id)
+           .order('raw_date', { ascending: false });
+         
+         if (error) throw error;
+         setSavedNotes(notes || []);
+       } catch (e) {
+         console.error("Supabase sermon notes fetch error:", e);
+       }
+     };
 
-    fetchSermonNotes();
-  }, []);
+     fetchSermonNotes();
+   }, []);
 
   // Sync title with sermonTopic if title is empty or hasn't been modified yet
   useEffect(() => {
@@ -153,80 +147,88 @@ export default function SermonNotepad({
     setTimeout(() => setIsSuccessAction(""), 2500);
   };
 
-  // Perform sermon note saving to Cloud Firestore
-  const handleSaveNote = async (e: FormEvent) => {
-    e.preventDefault();
-    const user = auth.currentUser;
-    if (!user) {
-      triggerSuccessFeedback("⚠️ Authenticated session required!");
-      return;
-    }
+// Perform sermon note saving to Supabase
+   const handleSaveNote = async (e: FormEvent) => {
+     e.preventDefault();
+     const { data: { user } } = await supabase.auth.getUser();
+     if (!user) {
+       triggerSuccessFeedback("⚠️ Authenticated session required!");
+       return;
+     }
 
-    const titleVal = noteTitle.trim() || sermonTopic || "Untold Sunday Study";
-    const bodyVal = noteContent.trim();
+     const titleVal = noteTitle.trim() || sermonTopic || "Untold Sunday Study";
+     const bodyVal = noteContent.trim();
 
-    if (!bodyVal) {
-      triggerSuccessFeedback("⚠️ Canvas empty! Please write some notes before saving.");
-      return;
-    }
+     if (!bodyVal) {
+       triggerSuccessFeedback("⚠️ Canvas empty! Please write some notes before saving.");
+       return;
+     }
 
-    const now = new Date();
-    const formattedDate = now.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-    const formattedTime = now.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+     const now = new Date();
+     const formattedDate = now.toLocaleDateString("en-US", {
+       year: "numeric",
+       month: "short",
+       day: "numeric",
+     });
+     const formattedTime = now.toLocaleTimeString([], {
+       hour: "2-digit",
+       minute: "2-digit",
+     });
 
-    if (editingNoteId) {
-      // Modify existing note inside Firestore
-      const updatedNote: SavedSermonNote = {
-        id: editingNoteId,
-        userId: user.uid,
-        title: titleVal,
-        content: bodyVal,
-        createdAt: formattedDate,
-        timestamp: formattedTime,
-        rawDate: now.getTime(),
-      };
+     if (editingNoteId) {
+       // Modify existing note in Supabase
+       const updatedNote = {
+         id: editingNoteId,
+         user_id: user.id,
+         title: titleVal,
+         content: bodyVal,
+         created_at: formattedDate,
+         timestamp: formattedTime,
+         raw_date: now.getTime(),
+       };
 
-      try {
-        await setDoc(doc(db, "sermonNotes", editingNoteId), updatedNote);
-        const updated = savedNotes.map((note) =>
-          note.id === editingNoteId ? updatedNote : note
-        );
-        setSavedNotes(updated);
-        triggerSuccessFeedback("Note updated in cloud diary!");
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, `sermonNotes/${editingNoteId}`);
-      }
-    } else {
-      // Create fresh sermon note inside Firestore
-      const noteId = `note-${now.getTime()}`;
-      const newNote: SavedSermonNote = {
-        id: noteId,
-        userId: user.uid,
-        title: titleVal,
-        content: bodyVal,
-        createdAt: formattedDate,
-        timestamp: formattedTime,
-        rawDate: now.getTime(),
-      };
+       try {
+         const { error } = await supabase
+           .from('sermon_notes')
+           .upsert(updatedNote);
+         
+         if (error) throw error;
+         const updated = savedNotes.map((note) =>
+           note.id === editingNoteId ? updatedNote : note
+         );
+         setSavedNotes(updated);
+         triggerSuccessFeedback("Note updated in cloud diary!");
+       } catch (err) {
+         console.error("Supabase note update error:", err);
+       }
+     } else {
+       // Create fresh sermon note in Supabase
+       const noteId = `note-${now.getTime()}`;
+       const newNote = {
+         id: noteId,
+         user_id: user.id,
+         title: titleVal,
+         content: bodyVal,
+         created_at: formattedDate,
+         timestamp: formattedTime,
+         raw_date: now.getTime(),
+       };
 
-      try {
-        await setDoc(doc(db, "sermonNotes", noteId), newNote);
-        const updated = [newNote, ...savedNotes];
-        setSavedNotes(updated);
-        setEditingNoteId(newNote.id); // set as active editing session
-        triggerSuccessFeedback("Saved note to secure cloud!");
-      } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, `sermonNotes/${noteId}`);
-      }
-    }
-  };
+       try {
+         const { error } = await supabase
+           .from('sermon_notes')
+           .insert(newNote);
+         
+         if (error) throw error;
+         const updated = [newNote, ...savedNotes];
+         setSavedNotes(updated);
+         setEditingNoteId(newNote.id); // set as active editing session
+         triggerSuccessFeedback("Saved note to secure cloud!");
+       } catch (err) {
+         console.error("Supabase note insert error:", err);
+       }
+     }
+   };
 
   // Create clean fresh slate
   const handleResetEditor = () => {
@@ -249,49 +251,58 @@ export default function SermonNotepad({
     }, 100);
   };
 
-  // Initiate or complete removal of sermon note inside Firestore
-  const handleDeleteNote = async (id: string, e: React.MouseEvent, confirmed = false) => {
-    e.stopPropagation(); // preserve accordion toggle triggers
-    if (!confirmed) {
-      setPendingDeleteId(id);
-      return;
-    }
-    
-    try {
-      await deleteDoc(doc(db, "sermonNotes", id));
-      const updated = savedNotes.filter((note) => note.id !== id);
-      setSavedNotes(updated);
+// Initiate or complete removal of sermon note in Supabase
+   const handleDeleteNote = async (id: string, e: React.MouseEvent, confirmed = false) => {
+     e.stopPropagation(); // preserve accordion toggle triggers
+     if (!confirmed) {
+       setPendingDeleteId(id);
+       return;
+     }
+     
+     try {
+       const { error } = await supabase
+         .from('sermon_notes')
+         .delete()
+         .eq('id', id);
       
-      if (editingNoteId === id) {
-        setEditingNoteId(null);
-        setNoteTitle(sermonTopic || "Sunday Message Note");
-        setNoteContent("");
-      }
-      setPendingDeleteId(null);
-      triggerSuccessFeedback("Note removed from cloud");
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `sermonNotes/${id}`);
-    }
-  };
+       if (error) throw error;
+       const updated = savedNotes.filter((note) => note.id !== id);
+       setSavedNotes(updated);
+       
+       if (editingNoteId === id) {
+         setEditingNoteId(null);
+         setNoteTitle(sermonTopic || "Sunday Message Note");
+         setNoteContent("");
+       }
+       setPendingDeleteId(null);
+       triggerSuccessFeedback("Note removed from cloud");
+     } catch (err) {
+       console.error("Supabase note delete error:", err);
+     }
+   };
 
-  // Clear all notes inside Firestore
-  const handleClearAllNotes = async (confirmed = false) => {
-    if (!confirmed) {
-      setShowPurgeConfirm(true);
-      return;
-    }
+   // Clear all notes in Supabase
+   const handleClearAllNotes = async (confirmed = false) => {
+     if (!confirmed) {
+       setShowPurgeConfirm(true);
+       return;
+     }
 
-    try {
-      // For each saved note, trigger the deleteDoc
-      await Promise.all(savedNotes.map((note) => deleteDoc(doc(db, "sermonNotes", note.id))));
-      setSavedNotes([]);
-      handleResetEditor();
-      setShowPurgeConfirm(false);
-      triggerSuccessFeedback("Sanctuary cloud journal purged!");
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, "sermonNotes");
-    }
-  };
+     try {
+       const { error } = await supabase
+         .from('sermon_notes')
+         .delete()
+         .gte('raw_date', 0);
+      
+       if (error) throw error;
+       setSavedNotes([]);
+       handleResetEditor();
+       setShowPurgeConfirm(false);
+       triggerSuccessFeedback("Sanctuary cloud journal purged!");
+     } catch (err) {
+       console.error("Supabase clear all notes error:", err);
+     }
+   };
 
   // Dynamic attachment logic: Insert current scripture slide to the body
   const handleInsertActiveSlide = () => {
@@ -336,7 +347,7 @@ export default function SermonNotepad({
 
     const timestampHeader = `---
 Sermon Title : ${note.title}
-Date Taken   : ${note.createdAt} at ${note.timestamp}
+Date Taken   : ${note.created_at} at ${note.timestamp}
 System Source: Chaver AI Automatic Pulpit Monitor
 ---
 
@@ -568,7 +579,7 @@ System Source: Chaver AI Automatic Pulpit Monitor
                 {/* Header info */}
                 <div className="flex items-start justify-between gap-2 mb-1">
                   <span className="text-[8.5px] font-mono text-[#8b9bb4]">
-                    📅 {note.createdAt} — {note.timestamp}
+                    📅 {note.created_at} — {note.timestamp}
                   </span>
                   
                   {pendingDeleteId === note.id ? (
