@@ -44,7 +44,6 @@ interface ControlPanelProps {
   activeProjectedSlide: ActiveSlide;
   detectedVerses: DetectedVerse[];
   onTriggerDetect: (transcript: string) => void;
-  onAutoSearch?: (query: string) => void;
   isListening: boolean;
   onToggleListening: () => void;
   transcript: string;
@@ -82,7 +81,6 @@ export default function ControlPanel({
   activeProjectedSlide,
   detectedVerses,
   onTriggerDetect,
-  onAutoSearch,
   isListening,
   onToggleListening,
   transcript,
@@ -395,8 +393,26 @@ body: data.text[bibleVersion],
        }
      } else {
        alert("Please match standard references: 'Book Chapter:Verse' (e.g., Romans 8:28)");
-     }
-   };
+}
+    };
+
+  // Auto-search when a verse is detected in live transcription
+  const prevDetectedCountRef = useRef(detectedVerses.length);
+  useEffect(() => {
+    if (detectedVerses.length > prevDetectedCountRef.current && activeTab === "manual-bible") {
+      const latest = detectedVerses[0];
+      if (latest) {
+        const query = `${latest.book} ${latest.chapter}:${latest.verse}`;
+        setSearchQuery(query);
+        setSelectedBook(latest.book);
+        setSelectedChapter(latest.chapter);
+        setSelectedVerse(latest.verse);
+        // Only fetch preview, don't re-project since App already projected
+        fetchManualVerse(latest.book, latest.chapter, latest.verse, false);
+      }
+    }
+    prevDetectedCountRef.current = detectedVerses.length;
+  }, [detectedVerses, activeTab]);
 
   // Trigger quick manual verse projection casting
   const handleCastManualVerse = () => {
