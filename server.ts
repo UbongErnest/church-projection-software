@@ -115,13 +115,13 @@ Return a valid JSON object matching this schema:
 }
 Ensure the scripture is authentic and verbatim. Do not write anything outside the JSON structure. No code blocks or wrapping.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-      }
-    });
+const response = await ai.models.generateContent({
+       model: "gemini-1.5-flash",
+       contents: prompt,
+       config: {
+         responseMimeType: "application/json",
+       }
+     });
 
     const parsedText = JSON.parse(response.text || "{}");
     return res.json({
@@ -206,7 +206,7 @@ Schema:
 }`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-1.5-flash",
       contents: `Live Speech Transcript:\n"${processedTranscript}"`,
       config: {
         systemInstruction: systemPrompt,
@@ -272,7 +272,7 @@ app.post("/api/ai/copilot", async (req, res) => {
     const ai = getAiClient();
     const systemPrompt = "You are an expert theologian and sermon outline editor. Create a beautifully structured sermon outline with clear headings, scriptural suggestions, and real-life application points from the rough pastor notes.";
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-1.5-flash",
       contents: `Sermon Topic: ${topic || "Untold Sunday Study"}\nRough Notes:\n"${notesContent}"`,
       config: {
         systemInstruction: systemPrompt,

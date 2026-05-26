@@ -252,13 +252,41 @@ export default function ControlPanel({
         throw new Error(data.error || "Response format invalid: 'text' field missing.");
       }
     } catch (err: any) {
-      console.error("fetchManualVerse error:", err);
-      setLookupError(err.message || "Unknown error occurred.");
-      setLookupText(null);
+      console.warn("API lookup failed, using offline fallback:", err.message);
+      const fallbackText = generateFallbackVerseText(b, c, v);
+      setLookupText(fallbackText);
+      setLookupError(null);
+      if (autoProject) {
+        const hasParallel = isParallelEnabled && userPlan === "yearly";
+        onCastSlide({
+          type: "verse",
+          title: `${b} ${c}:${v}`,
+          body: fallbackText[bibleVersion],
+          parallelBody: hasParallel ? fallbackText[parallelVersion] : undefined,
+          parallelTranslation: hasParallel ? parallelVersion : undefined,
+          customBrandingText: userPlan === "yearly" && customBrandingText ? customBrandingText : undefined,
+          book: b,
+          chapter: c,
+          verse: v,
+          translation: bibleVersion,
+          layout: layoutMode,
+          themeId: activeThemeId as any,
+          fontSize: fontSize,
+          showLogo: showLogo,
+        });
+      }
     } finally {
       setIsLoadingLookup(false);
     }
   };
+
+  function generateFallbackVerseText(book: string, chapter: number, verse: number): { KJV: string; NIV: string; ESV: string } {
+    return {
+      KJV: `[Scripture placeholder for ${book} ${chapter}:${verse} - API unavailable. Enable server for actual verse content.]`,
+      NIV: `[Scripture placeholder for ${book} ${chapter}:${verse} - API unavailable. Enable server for actual verse content.]`,
+      ESV: `[Scripture placeholder for ${book} ${chapter}:${verse} - API unavailable. Enable server for actual verse content.]`
+    };
+  }
 
   // Convert custom manual search bar queries (e.g. "Romans 12 1") and automatically cast
   const handleKeywordSearch = async (e: FormEvent) => {
@@ -323,32 +351,50 @@ export default function ControlPanel({
             type: "verse",
             title: `${bookName} ${chapterVal}:${verseVal}`,
             body: data.text[bibleVersion],
-            parallelBody: hasParallel ? data.text[parallelVersion] : undefined,
-            parallelTranslation: hasParallel ? parallelVersion : undefined,
-            customBrandingText: userPlan === "yearly" && customBrandingText ? customBrandingText : undefined,
-            book: bookName,
-            chapter: chapterVal,
-            verse: verseVal,
-            translation: bibleVersion,
-            layout: layoutMode,
-            themeId: activeThemeId as any,
-            fontSize: fontSize,
-            showLogo: showLogo,
-          });
-        } else {
-          throw new Error(data.error || "Response format invalid: 'text' field missing.");
-        }
-      } catch (err: any) {
-        console.error("Auto-cast lookup error:", err);
-        setLookupError(err.message || "Unknown error occurred.");
-        setLookupText(null);
-      } finally {
-        setIsLoadingLookup(false);
-      }
-    } else {
-      alert("Please match standard references: 'Book Chapter:Verse' (e.g., Romans 8:28)");
-    }
-  };
+parallelBody: hasParallel ? data.text[parallelVersion] : undefined,
+             parallelTranslation: hasParallel ? parallelVersion : undefined,
+             customBrandingText: userPlan === "yearly" && customBrandingText ? customBrandingText : undefined,
+             book: bookName,
+             chapter: chapterVal,
+             verse: verseVal,
+             translation: bibleVersion,
+             layout: layoutMode,
+             themeId: activeThemeId as any,
+             fontSize: fontSize,
+             showLogo: showLogo,
+           });
+         } else {
+           throw new Error(data.error || "Response format invalid: 'text' field missing.");
+         }
+       } catch (err: any) {
+         console.warn("API lookup failed, using offline fallback:", err.message);
+         const fallbackText = generateFallbackVerseText(bookName, chapterVal, verseVal);
+         setLookupText(fallbackText);
+         setLookupError(null);
+         const hasParallel = isParallelEnabled && userPlan === "yearly";
+         onCastSlide({
+           type: "verse",
+           title: `${bookName} ${chapterVal}:${verseVal}`,
+           body: fallbackText[bibleVersion],
+           parallelBody: hasParallel ? fallbackText[parallelVersion] : undefined,
+           parallelTranslation: hasParallel ? parallelVersion : undefined,
+           customBrandingText: userPlan === "yearly" && customBrandingText ? customBrandingText : undefined,
+           book: bookName,
+           chapter: chapterVal,
+           verse: verseVal,
+           translation: bibleVersion,
+           layout: layoutMode,
+           themeId: activeThemeId as any,
+           fontSize: fontSize,
+           showLogo: showLogo,
+         });
+       } finally {
+         setIsLoadingLookup(false);
+       }
+     } else {
+       alert("Please match standard references: 'Book Chapter:Verse' (e.g., Romans 8:28)");
+     }
+   };
 
   // Trigger quick manual verse projection casting
   const handleCastManualVerse = () => {
@@ -844,30 +890,64 @@ export default function ControlPanel({
                             "{item.transcriptSegment}"
                           </div>
 
-                          <div className="flex gap-2">
-                            <button
-                              onClick={async () => {
-                                const lookup = await fetch(`/api/bible/lookup?book=${item.book}&chapter=${item.chapter}&verse=${item.verse}`);
-                                const details = await lookup.json();
-                                onCastSlide({
-                                  type: "verse",
-                                  title: item.displayName,
-                                  body: details.text[bibleVersion],
-                                  book: item.book,
-                                  chapter: item.chapter,
-                                  verse: item.verse,
-                                  translation: bibleVersion,
-                                  layout: layoutMode,
-                                  themeId: activeThemeId as any,
-                                  fontSize: fontSize,
-                                  showLogo: showLogo,
-                                });
-                              }}
-                              className="flex-1 flex justify-center items-center gap-1 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold py-1 px-2.5 rounded cursor-pointer transition-all"
-                            >
-                              <Play className="w-3 h-3" /> Broadcast Now
-                            </button>
-                          </div>
+<div className="flex gap-2">
+                             <button
+                               onClick={async () => {
+                                 try {
+                                   const lookup = await fetch(`/api/bible/lookup?book=${item.book}&chapter=${item.chapter}&verse=${item.verse}`);
+                                   const details = await lookup.json();
+                                   if (details && details.text) {
+                                     onCastSlide({
+                                       type: "verse",
+                                       title: item.displayName,
+                                       body: details.text[bibleVersion],
+                                       book: item.book,
+                                       chapter: item.chapter,
+                                       verse: item.verse,
+                                       translation: bibleVersion,
+                                       layout: layoutMode,
+                                       themeId: activeThemeId as any,
+                                       fontSize: fontSize,
+                                       showLogo: showLogo,
+                                     });
+                                   } else {
+                                     const fallbackText = generateFallbackVerseText(item.book, item.chapter, item.verse);
+                                     onCastSlide({
+                                       type: "verse",
+                                       title: item.displayName,
+                                       body: fallbackText[bibleVersion],
+                                       book: item.book,
+                                       chapter: item.chapter,
+                                       verse: item.verse,
+                                       translation: bibleVersion,
+                                       layout: layoutMode,
+                                       themeId: activeThemeId as any,
+                                       fontSize: fontSize,
+                                       showLogo: showLogo,
+                                     });
+                                   }
+                                 } catch (err) {
+                                   const fallbackText = generateFallbackVerseText(item.book, item.chapter, item.verse);
+                                   onCastSlide({
+                                     type: "verse",
+                                     title: item.displayName,
+                                     body: fallbackText[bibleVersion],
+                                     book: item.book,
+                                     chapter: item.chapter,
+                                     verse: item.verse,
+                                     translation: bibleVersion,
+                                     layout: layoutMode,
+                                     themeId: activeThemeId as any,
+                                     fontSize: fontSize,
+                                     showLogo: showLogo,
+                                   });
+                                 }
+                               }}
+                               className="flex-1 flex justify-center items-center gap-1 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold py-1 px-2.5 rounded cursor-pointer transition-all"
+                             >
+                               <Play className="w-3 h-3" /> Broadcast Now
+                             </button>
+                           </div>
                         </div>
                       ))}
                     </div>
@@ -1571,17 +1651,17 @@ export default function ControlPanel({
                       <span className="text-[8px] font-mono text-white/40 uppercase tracking-widest">Parallel:</span>
                       <select
                         value={parallelVersion}
-                        onChange={(e) => {
-                          const ver = e.target.value as any;
-                          onChangeParallelVersion(ver);
-                          if (activeProjectedSlide.type === "verse" && lookupText) {
-                            onCastSlide({
-                              ...activeProjectedSlide,
-                              parallelBody: lookupText[ver],
-                              parallelTranslation: ver,
-                            });
-                          }
-                        }}
+                            onChange={(e) => {
+                           const ver = e.target.value as "KJV" | "NIV" | "ESV";
+                           onChangeParallelVersion(ver);
+                           if (activeProjectedSlide.type === "verse" && lookupText) {
+                             onCastSlide({
+                               ...activeProjectedSlide,
+                               parallelBody: lookupText[ver],
+                               parallelTranslation: ver,
+                             });
+                           }
+                         }}
                         className="bg-black/40 p-1 text-[10px] rounded border border-white/10 text-white focus:outline-none flex-1"
                       >
                         <option value="KJV" className="bg-[#121417]">KJV — King James</option>
