@@ -313,6 +313,7 @@ for (const key of Object.keys((KJV_JSON as any).verses)) {
 
 // Comprehensive offline KJV verse lookup using JSON data
 export function getKjvVerseText(book: string, chapter: number, verse: number): string | null {
-  const key = `${normalizeBookName(book) || book.toLowerCase()} ${chapter}:${verse}`;
+  const normalized = normalizeBookName(book);
+  const key = `${(normalized || book).toLowerCase()} ${chapter}:${verse}`;
   return KJV_VERSE_INDEX[key] || null;
 }
