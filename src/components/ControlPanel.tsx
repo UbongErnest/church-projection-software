@@ -37,7 +37,7 @@ import {
   Image,
   Video
 } from "lucide-react";
-import { ActiveSlide, DetectedVerse, Song, AnnouncementSlide } from "../types";
+import { ActiveSlide, DetectedVerse, Song, AnnouncementSlide, MediaSlide } from "../types";
 import { DEFAULT_SONGS, DEFAULT_ANNOUNCEMENTS, THEME_PRESETS } from "../data";
 import { BIBLE_BOOKS, normalizeBookName, OFFLINE_BIBLE_DB, getKjvVerseText } from "../bibleDatabase";
 
@@ -172,15 +172,15 @@ export default function ControlPanel({
    const [timerMinutes, setTimerMinutes] = useState<number>(5);
 
 // Media files state
-    const [mediaFiles, setMediaFiles] = useState<Array<{id: string; type: "image" | "video"; name: string; url: string}>>(() => {
-      try {
-        const stored = localStorage.getItem("chaver_media_files");
-        if (stored) return JSON.parse(stored);
-      } catch (e) {
-        console.warn("Storage reading blocked or empty, loaded defaults.");
-      }
-      return [];
-    });
+     const [mediaFiles, setMediaFiles] = useState<MediaSlide[]>(() => {
+       try {
+         const stored = localStorage.getItem("chaver_media_files");
+         if (stored) return JSON.parse(stored);
+       } catch (e) {
+         console.warn("Storage reading blocked or empty, loaded defaults.");
+       }
+       return [];
+     });
 
     // Persist media files to localStorage
     useEffect(() => {
@@ -1437,19 +1437,23 @@ function generateFallbackVerseText(book: string, chapter: number, verse: number)
                         id="media-upload"
                         accept="image/*,video/*"
                         multiple
-                        onChange={(e) => {
+onChange={(e) => {
                           const files = e.target.files;
                           if (files) {
                             Array.from(files).forEach(file => {
                               if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
-                                const url = URL.createObjectURL(file);
-                                const mediaItem = {
-                                  id: `media-${Date.now()}-${Math.random()}`,
-                                  type: file.type.startsWith("video/") ? "video" as const : "image" as const,
-                                  name: file.name,
-                                  url: url
+                                const reader = new FileReader();
+                                reader.onload = (event) => {
+                                  const dataUrl = event.target?.result as string;
+                                  const mediaItem = {
+                                    id: `media-${Date.now()}-${Math.random()}`,
+                                    type: file.type.startsWith("video/") ? "video" as const : "image" as const,
+                                    name: file.name,
+                                    url: dataUrl
+                                  };
+                                  setMediaFiles(prev => [...prev, mediaItem]);
                                 };
-                                setMediaFiles(prev => [...prev, mediaItem]);
+                                reader.readAsDataURL(file);
                               }
                             });
                           }

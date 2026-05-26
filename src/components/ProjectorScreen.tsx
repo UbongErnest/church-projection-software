@@ -236,7 +236,7 @@ export default function ProjectorScreen({ syncedSlide, subscriptionPlan = "free"
             </motion.div>
           )}
 
-          {slide.type === "announcement" && (
+{slide.type === "announcement" && (
             <motion.div
               key={`announcement-${slide.title}`}
               initial={{ opacity: 0, y: 15 }}
@@ -257,7 +257,7 @@ export default function ProjectorScreen({ syncedSlide, subscriptionPlan = "free"
             </motion.div>
           )}
 
-{slide.type === "timer" && (
+          {slide.type === "timer" && (
             <motion.div
               key={`timer-${slide.title}-${timeLeft}`}
               initial={{ opacity: 0, scale: 1.1 }}
@@ -276,33 +276,39 @@ export default function ProjectorScreen({ syncedSlide, subscriptionPlan = "free"
             </motion.div>
           )}
 
-          {slide.type === "media" && slide.mediaUrl && (
-            <motion.div
-              key={`media-${slide.mediaUrl}-${slide.mediaType}`}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.5 }}
-              className="w-full h-full flex items-center justify-center"
-            >
-              {slide.mediaType === "image" ? (
-                <img
-                  src={slide.mediaUrl}
-                  alt={slide.title}
-                  className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
-                />
-              ) : (
-                <video
-                  src={slide.mediaUrl}
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                  className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
-                />
-              )}
-            </motion.div>
-          )}
+{slide.type === "media" && (
+             <motion.div
+               key={`media-${slide.mediaUrl}-${slide.mediaType}`}
+               initial={{ opacity: 0, scale: 0.95 }}
+               animate={{ opacity: 1, scale: 1 }}
+               exit={{ opacity: 0, scale: 0.95 }}
+               transition={{ duration: 0.5 }}
+               className="w-full h-full flex items-center justify-center"
+             >
+               {slide.mediaUrl ? (
+                 slide.mediaType === "image" ? (
+                   <img
+                     src={slide.mediaUrl}
+                     alt={slide.title}
+                     className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                   />
+                 ) : (
+                   <video
+                     src={slide.mediaUrl}
+                     autoPlay
+                     muted
+                     loop
+                     playsInline
+                     className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                   />
+                 )
+               ) : (
+                 <div className="text-center">
+                   <span className="text-white/40 text-xl font-mono">{slide.title || "No Media Loaded"}</span>
+                 </div>
+               )}
+             </motion.div>
+           )}
         </AnimatePresence>
       </div>
 
