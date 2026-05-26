@@ -94,6 +94,12 @@ setLoading(true);
           options: {
             data: {
               display_name: nameVal,
+              church_name: churchVal,
+              country: countryVal,
+              state: stateVal,
+              city: cityVal,
+              location: locationVal,
+              denomination: denomVal,
             }
           }
         });
@@ -102,14 +108,16 @@ setLoading(true);
           throw signUpError;
         }
         
-        const user = data.user;
-        if (!user && !data.session) {
+        // Check if user was created (even if email confirmation required)
+        const userId = data.user?.id || data.session?.user?.id;
+        if (!userId) {
           throw new Error("User creation failed - no user returned");
         }
 
+        // Try to insert user profile - may fail if email confirmation required
         const now = new Date().toISOString();
         const userPayload = {
-          user_id: user.id,
+          user_id: userId,
           email: emailVal,
           display_name: nameVal,
           created_at: now,
@@ -128,15 +136,15 @@ setLoading(true);
           .insert(userPayload);
         
         if (profileError) {
+          // Log but don't necessarily fail - user can complete profile later
           console.error("Profile creation error:", profileError);
-          setErrorText("Authentication succeeded, but profile creation was blocked by security rules.");
-        } else {
-          onAuthSuccess();
         }
+        
+        // Success - user will need to confirm email if required
+        onAuthSuccess();
       } catch (err: any) {
         console.error("Auth register failed", err);
-        let friendlyMessage = err.message || "An unexpected error occurred during registration. Please try again.";
-        setErrorText(friendlyMessage);
+        setErrorText(err.message || "An unexpected error occurred during registration. Please try again.");
       } finally {
         setLoading(false);
       }
