@@ -85,75 +85,61 @@ export default function RegisterPage({ onNavigate, onAuthSuccess }: RegisterPage
        return;
      }
 
-     setLoading(true);
+setLoading(true);
 
-     try {
-       // 1. Create user with Supabase Auth
-       const { data, error: signUpError } = await supabase.auth.signUp({
-         email: emailVal,
-         password: passVal,
-         options: {
-           data: {
-             display_name: nameVal,
-           }
-         }
-       });
-       
-       if (signUpError) {
-         throw signUpError;
-       }
-       
-       const user = data.user;
-       if (!user) {
-         throw new Error("User creation failed - no user returned");
-       }
+      try {
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email: emailVal,
+          password: passVal,
+          options: {
+            data: {
+              display_name: nameVal,
+            }
+          }
+        });
+        
+        if (signUpError) {
+          throw signUpError;
+        }
+        
+        const user = data.user;
+        if (!user && !data.session) {
+          throw new Error("User creation failed - no user returned");
+        }
 
-       // 2. Insert user profile into Supabase users table
-       const now = new Date().toISOString();
-       const userPayload = {
-         user_id: user.id,
-         email: emailVal,
-         display_name: nameVal,
-         created_at: now,
-         church_name: churchVal,
-         country: countryVal,
-         state: stateVal,
-         city: cityVal,
-         location: locationVal,
-         denomination: denomVal,
-         subscription_plan: "free" as const,
-         subscription_status: "active"
-       };
+        const now = new Date().toISOString();
+        const userPayload = {
+          user_id: user.id,
+          email: emailVal,
+          display_name: nameVal,
+          created_at: now,
+          church_name: churchVal,
+          country: countryVal,
+          state: stateVal,
+          city: cityVal,
+          location: locationVal,
+          denomination: denomVal,
+          subscription_plan: "free" as const,
+          subscription_status: "active"
+        };
 
-       const { error: profileError } = await supabase
-         .from('users')
-         .insert(userPayload);
-       
-       if (profileError) {
-         console.error("Profile creation error:", profileError);
-         setErrorText("Authentication succeeded, but profile creation was blocked by security rules.");
-       } else {
-         // Success Trigger
-         onAuthSuccess();
-       }
-     } catch (err: any) {
-       console.error("Auth register failed", err);
-       let friendlyMessage = "An unexpected error occurred during registration. Please try again.";
-       
-       if (err.message?.includes("User already registered") || err.message?.includes("already exists")) {
-         friendlyMessage = "This email is already registered. Please login or use a different one.";
-       } else if (err.message?.includes("Invalid email")) {
-         friendlyMessage = "Please provide a valid email address structure.";
-       } else if (err.message?.includes("Password") && err.message?.includes("weak")) {
-         friendlyMessage = "Weak password. Minimum of 6 characters required by security policies.";
-       } else if (err.message && err.message.includes("Supabase")) {
-         friendlyMessage = "Authentication succeeded, but profile creation was blocked by security rules.";
-       }
-
-       setErrorText(friendlyMessage);
-     } finally {
-       setLoading(false);
-     }
+        const { error: profileError } = await supabase
+          .from('users')
+          .insert(userPayload);
+        
+        if (profileError) {
+          console.error("Profile creation error:", profileError);
+          setErrorText("Authentication succeeded, but profile creation was blocked by security rules.");
+        } else {
+          onAuthSuccess();
+        }
+      } catch (err: any) {
+        console.error("Auth register failed", err);
+        let friendlyMessage = err.message || "An unexpected error occurred during registration. Please try again.";
+        setErrorText(friendlyMessage);
+      } finally {
+        setLoading(false);
+      }
    };
 
   return (
