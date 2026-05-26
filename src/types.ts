@@ -1,6 +1,13 @@
 // Shared type definitions and interfaces for Church Projection Software
 
-export type PresentationType = "verse" | "lyrics" | "announcement" | "timer" | "black";
+export type PresentationType = "verse" | "lyrics" | "announcement" | "timer" | "black" | "media";
+
+export interface MediaSlide {
+  id: string;
+  type: "image" | "video";
+  name: string;
+  url: string;
+}
 
 export type LayoutMode = "fullscreen" | "lower-third" | "split-screen";
 
@@ -19,10 +26,12 @@ export interface ActiveSlide {
   customBrandingText?: string;
   layout: LayoutMode;
   themeId: BackgroundThemeId;
-  fontSize: number; // in pixels or percentage ratio
+  fontSize: number;
   showLogo: boolean;
-  timerDuration?: number; // total duration in seconds for counting down
-  timerEndTime?: number; // timestamp when timer expires
+  timerDuration?: number;
+  timerEndTime?: number;
+  mediaUrl?: string;
+  mediaType?: "image" | "video";
 }
 
 export interface DetectedVerse {

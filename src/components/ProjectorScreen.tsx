@@ -113,7 +113,7 @@ export default function ProjectorScreen({ syncedSlide, subscriptionPlan = "free"
         <div className={`z-10 flex justify-between items-center opacity-70 border-b ${isLightTheme ? "border-black/10 text-stone-600" : "border-white/5 text-white/70"} pb-4`}>
           <div className="flex items-center space-x-2 text-xs uppercase tracking-[0.25em] font-mono">
             <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
-            <span>{slide.type === "verse" ? "Holy Scripture" : slide.type === "lyrics" ? "Worship Lyric" : "Church Announcement"}</span>
+            <span>{slide.type === "verse" ? "Holy Scripture" : slide.type === "lyrics" ? "Worship Lyric" : slide.type === "media" ? "Media Projection" : "Church Announcement"}</span>
           </div>
           {slide.showLogo && (
             <div className={`text-xs font-semibold tracking-widest uppercase font-display border px-2.5 py-0.5 rounded ${isLightTheme ? "border-stone-400 text-stone-800" : "border-white/20 text-white/80"}`}>
@@ -257,7 +257,7 @@ export default function ProjectorScreen({ syncedSlide, subscriptionPlan = "free"
             </motion.div>
           )}
 
-          {slide.type === "timer" && (
+{slide.type === "timer" && (
             <motion.div
               key={`timer-${slide.title}-${timeLeft}`}
               initial={{ opacity: 0, scale: 1.1 }}
@@ -273,6 +273,34 @@ export default function ProjectorScreen({ syncedSlide, subscriptionPlan = "free"
               <p className={`font-display font-bold text-7xl md:text-8xl tracking-widest font-mono ${isLightTheme ? "text-black" : "text-white"}`}>
                 {timeLeft || "00:00"}
               </p>
+            </motion.div>
+          )}
+
+          {slide.type === "media" && slide.mediaUrl && (
+            <motion.div
+              key={`media-${slide.mediaUrl}-${slide.mediaType}`}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.5 }}
+              className="w-full h-full flex items-center justify-center"
+            >
+              {slide.mediaType === "image" ? (
+                <img
+                  src={slide.mediaUrl}
+                  alt={slide.title}
+                  className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                />
+              ) : (
+                <video
+                  src={slide.mediaUrl}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                />
+              )}
             </motion.div>
           )}
         </AnimatePresence>

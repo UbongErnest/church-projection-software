@@ -33,7 +33,9 @@ import {
   AlertTriangle,
   Award,
   Zap,
-  Globe
+  Globe,
+  Image,
+  Video
 } from "lucide-react";
 import { ActiveSlide, DetectedVerse, Song, AnnouncementSlide } from "../types";
 import { DEFAULT_SONGS, DEFAULT_ANNOUNCEMENTS, THEME_PRESETS } from "../data";
@@ -111,7 +113,7 @@ export default function ControlPanel({
   const userPlan = userProfile?.subscriptionPlan || "free";
 
   // Navigation sub-tabs (adding plans tab)
-  const [activeTab, setActiveTab] = useState<"ai-feed" | "manual-bible" | "songs" | "announcements" | "plans">("plans");
+  const [activeTab, setActiveTab] = useState<"ai-feed" | "manual-bible" | "songs" | "announcements" | "media-library" | "plans">("plans");
 
   // Upgrade prompt modal states
   const [showUpgradePromptModal, setShowUpgradePromptModal] = useState(false);
@@ -165,13 +167,51 @@ export default function ControlPanel({
   const [newAnnTitle, setNewAnnTitle] = useState("");
   const [newAnnBody, setNewAnnBody] = useState("");
 
-  // Timer settings
-  const [timerLabel, setTimerLabel] = useState<string>("Service Begins");
-  const [timerMinutes, setTimerMinutes] = useState<number>(5);
+// Timer settings
+   const [timerLabel, setTimerLabel] = useState<string>("Service Begins");
+   const [timerMinutes, setTimerMinutes] = useState<number>(5);
 
+// Media files state
+    const [mediaFiles, setMediaFiles] = useState<Array<{id: string; type: "image" | "video"; name: string; url: string}>>(() => {
+      try {
+        const stored = localStorage.getItem("chaver_media_files");
+        if (stored) return JSON.parse(stored);
+      } catch (e) {
+        console.warn("Storage reading blocked or empty, loaded defaults.");
+      }
+      return [];
+    });
 
+    // Persist media files to localStorage
+    useEffect(() => {
+      try {
+        localStorage.setItem("chaver_media_files", JSON.stringify(mediaFiles));
+      } catch (err) {
+        console.error("Storage save failed:", err);
+      }
+    }, [mediaFiles]);
 
-  // Load selected Bible verse text on change
+   // Handle media file upload and projection
+   const handleCastMedia = (media: { type: "image" | "video"; name: string; url: string }) => {
+     onCastSlide({
+       type: "media",
+       title: media.name,
+       body: "",
+       mediaUrl: media.url,
+       mediaType: media.type,
+       customBrandingText: userPlan === "yearly" && customBrandingText ? customBrandingText : undefined,
+       layout: layoutMode,
+       themeId: activeThemeId as any,
+       fontSize: fontSize,
+       showLogo: showLogo,
+     });
+   };
+
+const handleDeleteMedia = (id: string) => {
+      setMediaFiles(prev => prev.filter(m => m.id !== id));
+    };
+
+   // Load selected Bible verse text on change
   const isFirstMount = useRef(true);
 
   useEffect(() => {
@@ -597,7 +637,7 @@ function generateFallbackVerseText(book: string, chapter: number, verse: number)
     }
   };
 
-  const handleTabClick = (tab: "ai-feed" | "manual-bible" | "songs" | "announcements" | "plans") => {
+  const handleTabClick = (tab: "ai-feed" | "manual-bible" | "songs" | "announcements" | "media-library" | "plans") => {
     if (tab === "plans" || tab === "manual-bible") {
       setActiveTab(tab);
       return;
@@ -610,13 +650,15 @@ function generateFallbackVerseText(book: string, chapter: number, verse: number)
           ? "AI Live Session Listener" 
           : tab === "songs" 
             ? "Hymnals Library" 
-            : "Church Announcements"
+            : tab === "announcements"
+              ? "Church Announcements"
+              : "Media Projection"
       );
       setShowUpgradePromptModal(true);
       return;
     }
 
-    // Monthly/Pro plan: bible explorer + AI listener
+    // Monthly/Pro plan: bible explorer + AI listener + media projection
     if (userPlan === "monthly") {
       if (tab === "songs" || tab === "announcements") {
         setUpgradeTriggerSource(
@@ -711,6 +753,16 @@ function generateFallbackVerseText(book: string, chapter: number, verse: number)
               }`}
             >
               ANNOUNCEMENTS
+            </button>
+            <button
+              onClick={() => handleTabClick("media-library")}
+              className={`pb-1 uppercase transition-all whitespace-nowrap cursor-pointer ${
+                activeTab === "media-library"
+                  ? "text-white border-b-2 border-blue-500 font-bold"
+                  : "hover:text-white"
+              }`}
+            >
+              MEDIA
             </button>
             <button
               onClick={() => handleTabClick("plans")}
@@ -915,7 +967,17 @@ function generateFallbackVerseText(book: string, chapter: number, verse: number)
                     : "text-white/45 bg-transparent border border-transparent hover:text-white/90"
                 }`}
               >
-                📢 MEDIA & TIMERS
+                📢 ANNOUNCEMENTS
+              </button>
+              <button
+                onClick={() => handleTabClick("media-library")}
+                className={`px-3 py-1 font-sans text-[11px] font-bold tracking-tight rounded cursor-pointer transition-all duration-150 whitespace-nowrap ${
+                  activeTab === "media-library"
+                    ? "bg-blue-600/15 text-blue-400 border border-blue-500/30"
+                    : "text-white/45 bg-transparent border border-transparent hover:text-white/90"
+                }`}
+              >
+                🖼 MEDIA PROJECTOR
               </button>
               <button
                 onClick={() => handleTabClick("plans")}
@@ -1362,6 +1424,114 @@ function generateFallbackVerseText(book: string, chapter: number, verse: number)
                 </div>
               )}
 
+              {/* TAB 4.5: MEDIA LIBRARY */}
+              {activeTab === "media-library" && userPlan !== "free" && (
+                <div className="space-y-3">
+                  <div>
+                    <span className="text-[8px] font-mono uppercase tracking-widest text-white/40 block mb-1.5">
+                      📤 Upload Media Files
+                    </span>
+                    <div className="border-2 border-dashed border-white/10 rounded-lg p-4 text-center hover:border-blue-500/30 transition-all">
+                      <input
+                        type="file"
+                        id="media-upload"
+                        accept="image/*,video/*"
+                        multiple
+                        onChange={(e) => {
+                          const files = e.target.files;
+                          if (files) {
+                            Array.from(files).forEach(file => {
+                              if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
+                                const url = URL.createObjectURL(file);
+                                const mediaItem = {
+                                  id: `media-${Date.now()}-${Math.random()}`,
+                                  type: file.type.startsWith("video/") ? "video" as const : "image" as const,
+                                  name: file.name,
+                                  url: url
+                                };
+                                setMediaFiles(prev => [...prev, mediaItem]);
+                              }
+                            });
+                          }
+                        }}
+                        className="hidden"
+                      />
+                      <label
+                        htmlFor="media-upload"
+                        className="cursor-pointer flex flex-col items-center gap-2"
+                      >
+                        <div className="w-10 h-10 rounded-full bg-blue-600/20 flex items-center justify-center">
+                          <Plus className="w-5 h-5 text-blue-400" />
+                        </div>
+                        <span className="text-[10px] text-white/60 font-mono">
+                          Click to upload images or videos
+                        </span>
+                        <span className="text-[9px] text-white/40">
+                          Supports JPG, PNG, GIF, MP4, WebM
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {mediaFiles.length > 0 && (
+                    <>
+                      <span className="text-[8px] font-mono text-white/40 uppercase tracking-widest block mt-3 mb-1">
+                        🖼 Media Gallery ({mediaFiles.length} files)
+                      </span>
+                      <div className="grid grid-cols-2 gap-2 max-h-[280px] overflow-y-auto scrollbar pr-0.5">
+                        {mediaFiles.map((media) => (
+                          <div
+                            key={media.id}
+                            className="bg-white/5 border border-white/5 rounded p-2 flex flex-col gap-1.5 hover:border-white/15 transition-all group relative"
+                          >
+                            {media.type === "image" ? (
+                              <img
+                                src={media.url}
+                                alt={media.name}
+                                className="w-full h-20 object-cover rounded border border-white/5"
+                              />
+                            ) : (
+                              <video
+                                src={media.url}
+                                className="w-full h-20 object-cover rounded border border-white/5"
+                              />
+                            )}
+                            <span className="text-[10px] text-white/70 truncate font-mono">
+                              {media.name}
+                            </span>
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => handleCastMedia(media)}
+                                className="flex-1 flex justify-center items-center gap-1 bg-blue-600 hover:bg-blue-500 text-white text-[9px] font-bold py-1 rounded cursor-pointer transition-all"
+                              >
+                                <Play className="w-2.5 h-2.5" /> Cast
+                              </button>
+                              <button
+                                onClick={() => handleDeleteMedia(media.id)}
+                                title="Remove media"
+                                className="p-1 text-white/30 hover:text-red-400 hover:bg-red-950/20 rounded cursor-pointer transition-all"
+                              >
+                                <Trash className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  {mediaFiles.length === 0 && (
+                    <div className="flex-1 flex flex-col justify-center items-center text-center p-6 bg-black/40 border border-white/5 rounded-lg">
+                      <Image className="w-8 h-8 text-blue-500/40 mb-2" />
+                      <h4 className="font-sans font-bold text-white/70 text-xs uppercase tracking-wider">No Media Files</h4>
+                      <p className="text-white/40 text-[10px] max-w-xs mt-1 leading-normal">
+                        Upload images or videos to display them on the projector screen during your service.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* TAB 5: PLANS & SUBSCRIPTIONS */}
               {activeTab === "plans" && (
                 <div className="space-y-4 flex-1 flex flex-col">
@@ -1417,7 +1587,7 @@ function generateFallbackVerseText(book: string, chapter: number, verse: number)
                       <div>
                         <h4 className="font-sans font-bold text-xs text-white uppercase tracking-wider">Pro Monthly</h4>
                         <div className="text-lg font-bold text-white font-mono mt-1">₦10,000<span className="text-xs text-white/55">/mo</span></div>
-                        <p className="text-[10px] text-white/50 mt-1 leading-normal">Unlocks the AI-powered sermon feature alone: automatic speech recognition and instant scripture projection.</p>
+                        <p className="text-[10px] text-white/50 mt-1 leading-normal">Unlocks AI-powered sermon live listening, automatic scripture projection, <strong>plus Media Projection</strong> for images and videos.</p>
                       </div>
                       {userPlan !== "monthly" && (
                         <button
