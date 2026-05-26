@@ -779,12 +779,12 @@ export default function App() {
       
       {/* Primary Workspace Control panel layout */}
       <div className="flex-1 flex flex-col">
-        <ControlPanel
-          onCastSlide={castSlide}
-          activeProjectedSlide={activeSlide}
-          detectedVerses={detectedVerses}
-          onTriggerDetect={triggerAiDetection}
-          isListening={isListening}
+<ControlPanel
+           onCastSlide={castSlide}
+           activeProjectedSlide={activeSlide}
+           detectedVerses={detectedVerses}
+           onTriggerDetect={triggerAiDetection}
+           isListening={isListening}
           onToggleListening={toggleListening}
           transcript={transcript}
           sermonTopic={sermonTopic}

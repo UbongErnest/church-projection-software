@@ -44,6 +44,7 @@ interface ControlPanelProps {
   activeProjectedSlide: ActiveSlide;
   detectedVerses: DetectedVerse[];
   onTriggerDetect: (transcript: string) => void;
+  onAutoSearch?: (query: string) => void;
   isListening: boolean;
   onToggleListening: () => void;
   transcript: string;
@@ -81,6 +82,7 @@ export default function ControlPanel({
   activeProjectedSlide,
   detectedVerses,
   onTriggerDetect,
+  onAutoSearch,
   isListening,
   onToggleListening,
   transcript,
@@ -109,6 +111,20 @@ export default function ControlPanel({
 }: ControlPanelProps) {
   // User level plan and restrictions state mapping
   const userPlan = userProfile?.subscriptionPlan || "free";
+
+  // Auto-search when a verse is detected in live transcription
+  const prevDetectedCountRef = useRef(detectedVerses.length);
+  useEffect(() => {
+    if (detectedVerses.length > prevDetectedCountRef.current) {
+      const latest = detectedVerses[0];
+      if (latest) {
+        const query = `${latest.book} ${latest.chapter}:${latest.verse}`;
+        setSearchQuery(query);
+        handleKeywordSearch();
+      }
+    }
+    prevDetectedCountRef.current = detectedVerses.length;
+  }, [detectedVerses]);
 
   // Navigation sub-tabs (adding plans tab)
   const [activeTab, setActiveTab] = useState<"ai-feed" | "manual-bible" | "songs" | "announcements" | "plans">("plans");
@@ -289,8 +305,8 @@ body: data.text[bibleVersion],
   }
 
   // Convert custom manual search bar queries (e.g. "Romans 12 1") and automatically cast
-  const handleKeywordSearch = async (e: FormEvent) => {
-    e.preventDefault();
+  const handleKeywordSearch = async (e?: FormEvent) => {
+    if (e) e.preventDefault();
     if (!searchQuery.trim()) return;
 
     // Direct parser
@@ -344,7 +360,7 @@ body: data.text[bibleVersion],
           throw new Error(`Server returned status ${res.status}: ${res.statusText}`);
         }
         const data = await res.json();
-if (data && data.text) {
+        if (data && data.text) {
            setLookupText(data.text);
            const hasParallel = isParallelEnabled && userPlan === "yearly";
            onCastSlide({
