@@ -7,14 +7,12 @@ import LandingPage from "./components/LandingPage";
 import RegisterPage from "./components/RegisterPage";
 import LoginPage from "./components/LoginPage";
 import { auth, db } from "./firebase";
-import { onAuthStateChanged, signOut, User as FirebaseUser } from "firebase/auth";
+import { onAuthStateChanged, User as FirebaseUser } from "firebase/auth";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
-import { THEME_PRESETS } from "./data";
-import { Sparkles, Mic, HelpCircle, CornerDownRight, Volume2, Notebook, LogOut } from "lucide-react";
-import { BIBLE_BOOKS, normalizeBookName, parseSpokenNumbers } from "./bibleDatabase";
-
+import { Sparkles, CornerDownRight, Volume2, Notebook } from "lucide-react";
+import { BIBLE_BOOKS, parseSpokenNumbers } from "./bibleDatabase";
 // High-speed, high-density client-side regex matching to intercept spoken scriptures locally
-function scanForVerseLocally(text: string) {
+function scanForVerseLocally(text: string): { book: string; chapter: number; verse: number; displayName: string; } | null {
   if (!text) return null;
   const processed = parseSpokenNumbers(text.toLowerCase());
 

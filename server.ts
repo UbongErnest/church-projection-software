@@ -3,7 +3,7 @@ import path from "path";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
-import { OFFLINE_BIBLE_DB, normalizeBookName, parseSpokenNumbers, BIBLE_BOOKS } from "./src/bibleDatabase.js";
+import { OFFLINE_BIBLE_DB, normalizeBookName, parseSpokenNumbers, BIBLE_BOOKS } from "./src/bibleDatabase";
 
 dotenv.config();
 
@@ -39,6 +39,8 @@ app.get("/api/bible/lookup", async (req, res) => {
   if (!book || !chapter || !verse) {
     return res.status(400).json({ error: "Missing required parameters: book, chapter, verse" });
   }
+
+  console.log(`[API LOOKUP REQUEST] Book: "${book}", Chapter: ${chapter}, Verse: ${verse}`);
 
   const chNum = parseInt(chapter as string, 10);
   const vNum = parseInt(verse as string, 10);

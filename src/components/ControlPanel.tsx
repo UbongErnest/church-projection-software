@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 import { ActiveSlide, DetectedVerse, Song, AnnouncementSlide } from "../types";
 import { DEFAULT_SONGS, DEFAULT_ANNOUNCEMENTS, THEME_PRESETS } from "../data";
-import { BIBLE_BOOKS, normalizeBookName } from "../bibleDatabase";
+import { BIBLE_BOOKS, normalizeBookName, OFFLINE_BIBLE_DB } from "../bibleDatabase";
 
 interface ControlPanelProps {
   onCastSlide: (slide: ActiveSlide) => void;
@@ -186,6 +186,41 @@ export default function ControlPanel({
   const fetchManualVerse = async (b: string, c: number, v: number, autoProject: boolean = false) => {
     setIsLoadingLookup(true);
     setLookupError(null);
+
+    // 1. Attempt client-side offline database lookup first
+    const normalized = normalizeBookName(b) || b;
+    const offlineMatch = OFFLINE_BIBLE_DB.find(
+      (verse) =>
+        verse.book.toLowerCase() === normalized.toLowerCase() &&
+        verse.chapter === c &&
+        verse.verse === v
+    );
+
+    if (offlineMatch) {
+      setLookupText(offlineMatch.text);
+      setIsLoadingLookup(false);
+      if (autoProject) {
+        const hasParallel = isParallelEnabled && userPlan === "yearly";
+        onCastSlide({
+          type: "verse",
+          title: `${b} ${c}:${v}`,
+          body: offlineMatch.text[bibleVersion],
+          parallelBody: hasParallel ? offlineMatch.text[parallelVersion] : undefined,
+          parallelTranslation: hasParallel ? parallelVersion : undefined,
+          customBrandingText: userPlan === "yearly" && customBrandingText ? customBrandingText : undefined,
+          book: b,
+          chapter: c,
+          verse: v,
+          translation: bibleVersion,
+          layout: layoutMode,
+          themeId: activeThemeId as any,
+          fontSize: fontSize,
+          showLogo: showLogo,
+        });
+      }
+      return;
+    }
+
     try {
       const res = await fetch(`/api/bible/lookup?book=${encodeURIComponent(b)}&chapter=${c}&verse=${v}`);
       if (!res.ok) {
@@ -240,10 +275,46 @@ export default function ControlPanel({
       setSelectedChapter(chapterVal);
       setSelectedVerse(verseVal);
 
+      // 1. Attempt client-side offline database lookup first
+      const normalized = normalizeBookName(bookName) || bookName;
+      const offlineMatch = OFFLINE_BIBLE_DB.find(
+        (verse) =>
+          verse.book.toLowerCase() === normalized.toLowerCase() &&
+          verse.chapter === chapterVal &&
+          verse.verse === verseVal
+      );
+
+      if (offlineMatch) {
+        setLookupText(offlineMatch.text);
+        setLookupError(null);
+        const hasParallel = isParallelEnabled && userPlan === "yearly";
+        onCastSlide({
+          type: "verse",
+          title: `${bookName} ${chapterVal}:${verseVal}`,
+          body: offlineMatch.text[bibleVersion],
+          parallelBody: hasParallel ? offlineMatch.text[parallelVersion] : undefined,
+          parallelTranslation: hasParallel ? parallelVersion : undefined,
+          customBrandingText: userPlan === "yearly" && customBrandingText ? customBrandingText : undefined,
+          book: bookName,
+          chapter: chapterVal,
+          verse: verseVal,
+          translation: bibleVersion,
+          layout: layoutMode,
+          themeId: activeThemeId as any,
+          fontSize: fontSize,
+          showLogo: showLogo,
+        });
+        return;
+      }
+
       // Fetch immediately and project automatically without requiring manual "Project Selector Verse" click
       setIsLoadingLookup(true);
+      setLookupError(null);
       try {
         const res = await fetch(`/api/bible/lookup?book=${encodeURIComponent(bookName)}&chapter=${chapterVal}&verse=${verseVal}`);
+        if (!res.ok) {
+          throw new Error(`Server returned status ${res.status}: ${res.statusText}`);
+        }
         const data = await res.json();
         if (data && data.text) {
           setLookupText(data.text);
@@ -264,9 +335,13 @@ export default function ControlPanel({
             fontSize: fontSize,
             showLogo: showLogo,
           });
+        } else {
+          throw new Error(data.error || "Response format invalid: 'text' field missing.");
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("Auto-cast lookup error:", err);
+        setLookupError(err.message || "Unknown error occurred.");
+        setLookupText(null);
       } finally {
         setIsLoadingLookup(false);
       }
