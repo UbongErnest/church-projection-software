@@ -3,10 +3,14 @@ import path from "path";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { normalizeBookName, parseSpokenNumbers } from "./src/bibleDatabase";
 import KJV_DATA from "./src/BibleData/kjv.json";
-import crypto from "crypto";
+import {
+  initializePaystackTransaction,
+  normalizeSubscriptionPlan,
+  resolveAppUrlFromRequest,
+  verifyAndActivatePayment,
+} from "./src/server/payments";
 
 dotenv.config();
 
@@ -18,20 +22,6 @@ type KjvVerse = {
 };
 
 const KJV_VERSES = (KJV_DATA as { verses: KjvVerse[] }).verses;
-
-// Supabase client - lazy initialized when needed
-let supabaseAdmin: SupabaseClient | null = null;
-function getSupabaseAdmin(): SupabaseClient {
-  if (!supabaseAdmin) {
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for payment features.");
-    }
-    supabaseAdmin = createClient(supabaseUrl, supabaseKey);
-  }
-  return supabaseAdmin;
-}
 
 // Build optimized lookup index from KJV JSON data
 const KJV_VERSE_INDEX: Record<string, string> = {};
@@ -245,226 +235,102 @@ app.post("/api/ai/copilot", async (req, res) => {
 
 
 // Paystack payment endpoints
-const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || "";
-
-async function paystackRequest(endpoint: string, data: any, method: string = "POST") {
-  if (!PAYSTACK_SECRET_KEY) {
-    throw new Error("PAYSTACK_SECRET_KEY is not configured");
-  }
-  const response = await fetch(`https://api.paystack.co${endpoint}`, {
-    method,
-    headers: {
-      "Authorization": `Bearer ${PAYSTACK_SECRET_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: method === "POST" ? JSON.stringify(data) : undefined
-  });
-  const result = await response.json();
-  if (!response.ok) {
-    throw new Error(`Paystack API error: ${result.message || response.statusText}`);
-  }
-  return result;
-}
-
-async function verifyPaystackTransaction(reference: string, logPrefix: string) {
-  const maxAttempts = 8;
-  const retryDelayMs = 3000;
-  let lastVerification: any = null;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    lastVerification = await paystackRequest(`/transaction/verify/${reference}`, {}, "GET");
-    const paystackStatus = lastVerification?.data?.status;
-
-    console.log(`${logPrefix} Attempt ${attempt}/${maxAttempts}:`, {
-      status: lastVerification?.status,
-      message: lastVerification?.message,
-      paystackStatus,
-      reference,
-    });
-
-    if (lastVerification?.data?.status === "success") {
-      return lastVerification;
-    }
-
-    const shouldRetry =
-      attempt < maxAttempts &&
-      (
-        !lastVerification?.status ||
-        ["pending", "ongoing", "processing", "queued"].includes(paystackStatus)
-      );
-
-    if (!shouldRetry) {
-      return lastVerification;
-    }
-
-    await new Promise(resolve => setTimeout(resolve, retryDelayMs));
-  }
-
-  return lastVerification;
-}
-
-// Initialize Paystack transaction
 app.post("/api/payment/initialize", async (req, res) => {
-  const { email, amount, plan, userId } = req.body;
-  
-  if (!email || !amount || !plan) {
-    return res.status(400).json({ error: "Missing required fields: email, amount, plan" });
+  const { email, plan, userId } = req.body || {};
+  const normalizedPlan = normalizeSubscriptionPlan(plan);
+
+  if (!email || !userId || !normalizedPlan) {
+    return res.status(400).json({ error: "Missing or invalid email, userId, or plan." });
   }
 
   try {
-    const callbackUrl = process.env.APP_URL 
-      ? `${process.env.APP_URL}/api/payment/callback` 
-      : `${req.protocol}://${req.get("host")}/api/payment/callback`;
-    
-    const transaction = await paystackRequest("/transaction/initialize", {
+    const callbackUrl = `${resolveAppUrlFromRequest(req)}/api/payment/callback`;
+    const transaction = await initializePaystackTransaction({
       email,
-      amount: amount * 100, // Convert to kobo/pesewa
-      callback_url: callbackUrl,
-      metadata: {
-        plan,
-        userId: userId || ""
-      }
+      plan: normalizedPlan,
+      userId,
+      callbackUrl,
     });
-    
-    if (transaction.status) {
-      res.json({
-        success: true,
-        authorizationUrl: transaction.data.authorization_url,
-        reference: transaction.data.reference
-      });
-    } else {
-      res.status(500).json({ error: transaction.message || "Failed to initialize payment" });
-    }
+
+    return res.json({
+      success: true,
+      authorizationUrl: transaction.authorizationUrl,
+      accessCode: transaction.accessCode,
+      reference: transaction.reference,
+    });
   } catch (error: any) {
     console.error("Paystack initialize error:", error);
-    res.status(500).json({ error: "Failed to initialize payment" });
+    return res.status(500).json({
+      error: "Failed to initialize payment",
+      details: error.message,
+    });
   }
 });
 
-// Verify payment and update subscription
 app.post("/api/payment/verify", async (req, res) => {
-  const { reference, userId, plan } = req.body;
-  
+  const { reference, userId, plan } = req.body || {};
+
   if (!reference) {
-    return res.status(400).json({ error: "Missing reference" });
+    return res.status(400).json({ error: "Missing reference." });
   }
 
   try {
-    const verification = await verifyPaystackTransaction(reference, "[Paystack Verify]");
-    
-    if ((verification.status && verification.data?.status === "success") || verification.data?.status === "success") {
-      // Use plan from request body as fallback if metadata not available
-      const planValue = plan || verification.data?.metadata?.plan || "monthly";
-      
-      // Calculate subscription end date
-      const endDate = new Date(Date.now() + (planValue === "monthly" ? 30 : 365) * 24 * 60 * 60 * 1000).toISOString();
-      
-      if (userId && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-        await getSupabaseAdmin()
-          .from('users')
-          .update({ 
-            subscription_plan: planValue,
-            subscription_status: "active",
-            subscription_end: endDate
-          })
-          .eq('user_id', userId);
-      }
-      
-      res.json({ 
-        success: true, 
-        status: "active",
-        paystackStatus: verification.data?.status,
-        plan: planValue,
-        subscriptionEnd: endDate
-      });
-    } else {
-      res.json({
+    const result = await verifyAndActivatePayment({
+      reference,
+      fallbackPlan: normalizeSubscriptionPlan(plan),
+      fallbackUserId: userId,
+      logPrefix: "[Paystack Verify]",
+    });
+
+    if (!result.success) {
+      return res.json({
         success: false,
-        status: verification.data?.status || "pending",
-        paystackStatus: verification.data?.status || null,
-        message: verification.message || "Transaction not successful",
+        status: result.paystackStatus || "pending",
+        paystackStatus: result.paystackStatus,
+        message: result.message,
       });
     }
+
+    return res.json({
+      success: true,
+      status: "active",
+      paystackStatus: result.paystackStatus,
+      plan: result.plan,
+      subscriptionEnd: result.subscriptionEnd,
+      reference,
+    });
   } catch (error: any) {
     console.error("Paystack verify error:", error);
-    res.status(500).json({ error: "Failed to verify payment", details: error.message });
+    return res.status(500).json({
+      error: "Failed to verify payment",
+      details: error.message,
+    });
   }
 });
 
-// Callback endpoint for Paystack redirect after payment
 app.get("/api/payment/callback", async (req, res) => {
-  const { reference, trxref } = req.query;
-  const ref = reference || trxref;
-  
-  if (!ref) {
-    return res.status(400).json({ error: "Missing reference" });
+  const reference = req.query.reference || req.query.trxref;
+
+  if (!reference || typeof reference !== "string") {
+    return res.redirect("/?payment=error");
   }
 
   try {
-    const verification = await verifyPaystackTransaction(String(ref), "[Paystack Callback]");
-    
-    if ((verification.status && verification.data?.status === "success") || verification.data?.status === "success") {
-      const plan = verification.data?.metadata?.plan || "monthly";
-      const userId = verification.data?.metadata?.userId;
-      
-      // Calculate subscription end date
-      const endDate = new Date(Date.now() + (plan === "monthly" ? 30 : 365) * 24 * 60 * 60 * 1000).toISOString();
-      
-      if (userId && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-        await getSupabaseAdmin()
-          .from('users')
-          .update({ 
-            subscription_plan: plan,
-            subscription_status: "active",
-            subscription_end: endDate
-          })
-          .eq('user_id', userId);
-      }
-      
-      // Redirect to app with success status
-      res.redirect(`/?payment=success&plan=${encodeURIComponent(plan)}`);
-    } else {
-      // Redirect to app with failure status
-      res.redirect("/?payment=failed");
+    const result = await verifyAndActivatePayment({
+      reference,
+      logPrefix: "[Paystack Callback]",
+    });
+
+    if (!result.success) {
+      const status = encodeURIComponent(result.paystackStatus || "failed");
+      return res.redirect(`/?payment=failed&status=${status}&reference=${encodeURIComponent(reference)}`);
     }
+
+    return res.redirect(`/?payment=success&plan=${encodeURIComponent(result.plan)}&reference=${encodeURIComponent(reference)}`);
   } catch (error: any) {
     console.error("Paystack callback error:", error);
-    res.redirect("/?payment=error");
+    return res.redirect("/?payment=error");
   }
-});
-
-// Webhook for Paystack events (signature verification disabled - body already parsed by express.json)
-app.post("/api/webhook/paystack", async (req, res) => {
-  const signature = req.headers["x-paystack-signature"] as string;
-  const secret = process.env.PAYSTACK_SECRET_KEY || "";
-  
-  // Log for debugging - signature verification would need raw body middleware
-  if (signature && secret) {
-    console.log("[Paystack Webhook] Received signature:", signature.substring(0, 20) + "...");
-  }
-  
-  const { data } = req.body;
-  
-  console.log("[Paystack Webhook] Event data:", { status: data?.status, reference: data?.reference });
-  
-  if (data && data.status === "success" && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    const userId = data.metadata?.userId;
-    const plan = data.metadata?.plan;
-    
-    if (userId) {
-      const endDate = new Date(Date.now() + (plan === "monthly" ? 30 : 365) * 24 * 60 * 60 * 1000).toISOString();
-      await getSupabaseAdmin()
-        .from('users')
-        .update({ 
-          subscription_plan: plan,
-          subscription_status: "active",
-          subscription_end: endDate
-        })
-        .eq('user_id', userId);
-    }
-  }
-  
-  res.json({ received: true });
 });
 
 // 3. Mount Vite or serve static production folder

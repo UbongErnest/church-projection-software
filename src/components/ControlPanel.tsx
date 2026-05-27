@@ -136,52 +136,7 @@ customBrandingText,
       return false;
     };
 
-// Paystack checkout handler - uses inline popup
-    const verifyPaymentWithRetry = async (
-      reference: string,
-      userId: string,
-      plan: "monthly" | "yearly"
-    ) => {
-      const retryableStatuses = new Set(["pending", "processing", "ongoing", "queued"]);
-      const maxAttempts = 5;
-
-      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        const verifyResponse = await fetch("/api/payment/verify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            reference,
-            userId,
-            plan,
-          }),
-        });
-
-        const verifyData = await verifyResponse.json();
-        if (!verifyResponse.ok) {
-          throw new Error(verifyData?.details || verifyData?.error || "Payment verification request failed.");
-        }
-
-        if (verifyData.success) {
-          return verifyData;
-        }
-
-        const statusLabel = String(verifyData.paystackStatus || verifyData.status || "").toLowerCase();
-        const shouldRetry = attempt < maxAttempts && retryableStatuses.has(statusLabel);
-
-        if (!shouldRetry) {
-          return verifyData;
-        }
-
-        await new Promise(resolve => setTimeout(resolve, 3000));
-      }
-
-      return {
-        success: false,
-        status: "pending",
-        message: "Payment is still being confirmed. Please check again shortly.",
-      };
-    };
-
+// Paystack checkout handler - server initializes checkout, Paystack redirects back after payment
     const handlePaystackCheckout = async (plan: "monthly" | "yearly") => {
       if (!currentUser?.id) {
         alert("Please log in to upgrade your subscription.");
@@ -197,52 +152,23 @@ customBrandingText,
       setCheckoutLoading(true);
 
       try {
-        const amount = plan === "monthly" ? 10000 : 25000;
         const user_id = currentUser.id;
-        const reference = `chaver_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-
-        if (!(window as any).PaystackPop) {
-          throw new Error("Paystack payment system not available. Please refresh the page.");
-        }
-
-const handler = (window as any).PaystackPop.setup({
-          key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || "pk_test_1895ab6fa7f290a990101e6ed1756d35a75928e8",
-          email: userEmail,
-          amount: amount * 100,
-          currency: "NGN",
-          ref: reference,
-          metadata: {
-            plan: plan,
-            userId: user_id
-          },
-          callback: function(response: any) {
-            setCheckoutLoading(false);
-            (async () => {
-              try {
-                const verifyData = await verifyPaymentWithRetry(response.reference, user_id, plan);
-
-if (verifyData.success) {
-                    alert(`Payment successful! You are now on the ${plan === "yearly" ? "Premium Plan" : "Pro Monthly"} plan.`);
-                    if (onUpdateSubscription) {
-                      await onUpdateSubscription(plan);
-                    }
-                  } else {
-                    console.error("[Paystack Verify] Response:", verifyData);
-                    const statusLabel = verifyData.paystackStatus || verifyData.status || "unknown";
-                    alert(`Payment verification failed (${statusLabel}): ${verifyData.message || verifyData.details || "Please wait a few seconds and try again."}`);
-                  }
-              } catch (verifyError) {
-                console.error("Payment verification error:", verifyError);
-                alert("Payment verification failed. Please try again or contact support.");
-              }
-            })();
-          },
-          onClose: function() {
-            setCheckoutLoading(false);
-          }
+        const initializeResponse = await fetch("/api/payment/initialize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: userEmail,
+            plan,
+            userId: user_id,
+          }),
         });
 
-        handler.openIframe();
+        const initializeData = await initializeResponse.json();
+        if (!initializeResponse.ok || !initializeData?.success || !initializeData?.authorizationUrl) {
+          throw new Error(initializeData?.details || initializeData?.error || "Unable to start Paystack checkout.");
+        }
+
+        window.location.assign(initializeData.authorizationUrl);
       } catch (error: any) {
         console.error("Paystack checkout error:", error);
         setCheckoutLoading(false);

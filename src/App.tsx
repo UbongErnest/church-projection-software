@@ -771,36 +771,59 @@ export default function App() {
     }, [currentUser, viewMode]);
 
     // Handle payment success redirect from Paystack
-    useEffect(() => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const paymentStatus = urlParams.get("payment");
-      const plan = urlParams.get("plan");
-      
-      if (paymentStatus === "success" && plan && currentUser) {
-        // Show success message
-        alert(`Payment successful! You are now on the ${plan === "yearly" ? "Premium Plan" : "Pro Monthly"} plan.`);
-        // Clean up URL
-        window.history.replaceState({}, document.title, window.location.pathname);
-        // Refresh user profile to get updated subscription
-        (async () => {
-          try {
-            const { data: profile } = await supabase
-              .from('users')
-              .select('*')
-              .eq('user_id', currentUser.id)
-              .single();
-            if (profile) {
-              setUserProfile(mapProfileFromDB(profile));
-            }
-          } catch (err) {
-            console.warn("Failed to refresh profile after payment:", err);
-          }
-        })();
-      } else if (paymentStatus === "failed") {
-        alert("Payment failed. Please try again.");
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }
-    }, [currentUser]);
+     useEffect(() => {
+       const urlParams = new URLSearchParams(window.location.search);
+       const paymentStatus = urlParams.get("payment");
+       const plan = urlParams.get("plan");
+       const reference = urlParams.get("reference");
+       const callbackStatus = urlParams.get("status");
+       const normalizedPlan = plan === "monthly" || plan === "yearly" ? plan : null;
+       
+       if (paymentStatus === "success" && normalizedPlan && currentUser) {
+         (async () => {
+           try {
+             if (reference) {
+               const verifyResponse = await fetch("/api/payment/verify", {
+                 method: "POST",
+                 headers: { "Content-Type": "application/json" },
+                 body: JSON.stringify({
+                   reference,
+                   userId: currentUser.id,
+                   plan: normalizedPlan,
+                 }),
+               });
+               const verifyData = await verifyResponse.json();
+
+               if (!verifyResponse.ok || !verifyData?.success) {
+                 throw new Error(verifyData?.details || verifyData?.message || verifyData?.error || "Payment verification failed after redirect.");
+               }
+             }
+
+             const { data: profile } = await supabase
+               .from('users')
+               .select('*')
+               .eq('user_id', currentUser.id)
+               .single();
+             if (profile) {
+               setUserProfile(mapProfileFromDB(profile));
+             }
+
+             alert(`Payment successful! You are now on the ${normalizedPlan === "yearly" ? "Premium Plan" : "Pro Monthly"} plan.`);
+            } catch (err) {
+             console.warn("Failed to refresh profile after payment:", err);
+             alert("Payment went through, but the app could not finish syncing your subscription yet. Please refresh in a few seconds.");
+           } finally {
+             window.history.replaceState({}, document.title, window.location.pathname);
+           }
+         })();
+       } else if (paymentStatus === "failed") {
+         alert(`Payment failed${callbackStatus ? ` (${callbackStatus})` : ""}. Please try again.`);
+         window.history.replaceState({}, document.title, window.location.pathname);
+       } else if (paymentStatus === "error") {
+         alert("We could not complete payment verification. Please refresh and contact support if your subscription does not update.");
+         window.history.replaceState({}, document.title, window.location.pathname);
+       }
+     }, [currentUser]);
 
   const handleClearNotes = () => {
     setSermonNotes([]);
