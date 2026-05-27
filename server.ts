@@ -309,7 +309,7 @@ app.post("/api/payment/verify", async (req, res) => {
     
     console.log("[Paystack Verify] API response:", verification);
     
-    if (verification.status && verification.data?.status === "success") {
+    if ((verification.status && verification.data?.status === "success") || verification.data?.status === "success") {
       // Use plan from request body as fallback if metadata not available
       const planValue = plan || verification.data?.metadata?.plan || "monthly";
       
@@ -352,11 +352,19 @@ app.get("/api/payment/callback", async (req, res) => {
   }
 
   try {
-    const verification = await paystackRequest(`/transaction/verify/${ref}`, {}, "GET");
+    let verification = await paystackRequest(`/transaction/verify/${ref}`, {}, "GET");
     
     console.log("[Paystack Callback] API response:", verification);
     
-    if (verification.status && verification.data?.status === "success") {
+    // Retry logic for race condition - if verification.status is false but transaction might be settling
+    if (!verification.status && verification.message?.includes("API error")) {
+      console.log("[Paystack Callback] Retrying verification after 2 seconds...");
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      verification = await paystackRequest(`/transaction/verify/${ref}`, {}, "GET");
+      console.log("[Paystack Callback] Retry API response:", verification);
+    }
+    
+    if ((verification.status && verification.data?.status === "success") || verification.data?.status === "success") {
       const plan = verification.data?.metadata?.plan || "monthly";
       const userId = verification.data?.metadata?.userId;
       

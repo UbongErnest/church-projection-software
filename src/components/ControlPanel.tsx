@@ -186,13 +186,14 @@ const handler = (window as any).PaystackPop.setup({
                 const verifyData = await verifyResponse.json();
 
 if (verifyData.success) {
-                   alert(`Payment successful! You are now on the ${plan === "yearly" ? "Premium Plan" : "Pro Monthly"} plan.`);
-                   if (onUpdateSubscription) {
-                     await onUpdateSubscription(plan);
-                   }
-                 } else {
-                   alert(`Payment verification failed (${verifyData.status || 'unknown'}): ${verifyData.message || "Please contact support."}`);
-                 }
+                    alert(`Payment successful! You are now on the ${plan === "yearly" ? "Premium Plan" : "Pro Monthly"} plan.`);
+                    if (onUpdateSubscription) {
+                      await onUpdateSubscription(plan);
+                    }
+                  } else {
+                    console.error("[Paystack Verify] Response:", verifyData);
+                    alert(`Payment verification failed (${verifyData.status || 'unknown'}): ${verifyData.message || verifyData.details || "Please contact support."}`);
+                  }
               } catch (verifyError) {
                 console.error("Payment verification error:", verifyError);
                 alert("Payment verification failed. Please try again or contact support.");
