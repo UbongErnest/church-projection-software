@@ -80,11 +80,9 @@ export default function App() {
 // Auth monitoring listener and real-time Supabase profile sync
     useEffect(() => {
       let mounted = true;
+      let initialSessionHandled = false;
 
-      // Set authChecked immediately - auth check happens in background
-      setAuthChecked(true);
-
-      // Set up auth state listener for subsequent changes
+      // Set up auth state listener - fires immediately with current session
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
         console.log("Auth state changed:", event, session?.user?.id || "no user");
         if (!mounted) return;
@@ -94,32 +92,22 @@ export default function App() {
           // Fetch user profile in background (non-blocking)
           (async () => {
             try {
-              // Fetch user profile from users table with timeout wrapper
-              const profilePromise = supabase
+              const { data: profile, error } = await supabase
                 .from('users')
                 .select('*')
                 .eq('user_id', session.user.id)
                 .single();
 
-              const timeoutPromise = new Promise((_, reject) => {
-                setTimeout(() => reject(new Error("Profile fetch timeout")), 8000);
-              });
-
-              const { data: profile, error } = await Promise.race([profilePromise, timeoutPromise]) as any;
-
               if (error || !profile) {
                 console.warn("User profile fetch:", error?.message || "no profile");
                 if (mounted) setUserProfile(null);
               } else {
-                // Check if subscription has expired
                 const mappedProfile = mapProfileFromDB(profile);
                 if (mappedProfile?.subscriptionEnd) {
                   const endDate = new Date(mappedProfile.subscriptionEnd);
                   if (endDate < new Date()) {
-                    // Subscription expired - reset to free
                     mappedProfile.subscriptionPlan = "free";
                     mappedProfile.subscriptionStatus = "expired";
-                    // Update in database (fire and forget)
                     void supabase
                       .from('users')
                       .update({ subscription_plan: "free", subscription_status: "expired" })
@@ -136,49 +124,26 @@ export default function App() {
         } else {
           setUserProfile(null);
         }
-      });
-
-      // Check for existing session on load
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        console.log("Initial session check:", session?.user?.id || "no session");
-        if (session?.user && mounted) {
-          setCurrentUser(session.user);
-          // Fetch user profile
-          (async () => {
-            try {
-              const { data: profile, error } = await supabase
-                .from('users')
-                .select('*')
-                .eq('user_id', session.user.id)
-                .single();
-
-              if (profile && !error) {
-                const mappedProfile = mapProfileFromDB(profile);
-                if (mappedProfile?.subscriptionEnd) {
-                  const endDate = new Date(mappedProfile.subscriptionEnd);
-                  if (endDate < new Date()) {
-                    mappedProfile.subscriptionPlan = "free";
-                    mappedProfile.subscriptionStatus = "expired";
-                    void supabase
-                      .from('users')
-                      .update({ subscription_plan: "free", subscription_status: "expired" })
-                      .eq('user_id', session.user.id);
-                  }
-                }
-                if (mounted) setUserProfile(mappedProfile);
-              }
-            } catch (err) {
-              console.warn("Initial session profile fetch failed:", err);
-            }
-          })();
+        
+        // Mark auth as checked on first auth state event
+        if (!initialSessionHandled && mounted) {
+          initialSessionHandled = true;
+          setAuthChecked(true);
         }
-      }).catch((err) => {
-        console.error("getSession error:", err);
       });
+
+      // Fallback timeout in case auth state never fires
+      const timeoutId = setTimeout(() => {
+        if (!initialSessionHandled && mounted) {
+          initialSessionHandled = true;
+          setAuthChecked(true);
+        }
+      }, 3000);
 
       return () => {
         mounted = false;
         subscription.unsubscribe();
+        clearTimeout(timeoutId);
       };
     }, []);
 
@@ -798,12 +763,12 @@ export default function App() {
     triggerAiDetection(finalPhrase);
   };
 
-  // Synchronize viewMode with authentication state
-  useEffect(() => {
-    if (currentUser && viewMode === "loading") {
-      setViewMode("operator");
-    }
-  }, [currentUser, viewMode]);
+// Synchronize viewMode with authentication state
+   useEffect(() => {
+     if (currentUser && viewMode === "loading") {
+       setViewMode("operator");
+     }
+   }, [currentUser, viewMode]);
 
   const handleClearNotes = () => {
     setSermonNotes([]);
@@ -813,39 +778,40 @@ export default function App() {
     setDetectedVerses([]);
   };
 
-  if (!authChecked) {
-    return (
-      <div className="w-full h-screen bg-[#070b13] text-sky-400 flex flex-col justify-center items-center font-mono">
-        <Sparkles className="w-10 h-10 text-blue-500 animate-spin mb-4" />
-        <span className="tracking-widest text-[11px] uppercase">VERIFYING SANCTUARY CREDENTIALS...</span>
-      </div>
-    );
-  }
-
-// Unauthenticated visitors must register/login to access the pulpit studio
-   if (!currentUser) {
-    if (authView === "login") {
-      return <LoginPage onNavigate={setAuthView} onAuthSuccess={() => setViewMode("operator")} />;
+// Wait for auth to be checked before any routing logic
+    if (!authChecked) {
+      return (
+        <div className="w-full h-screen bg-[#070b13] text-sky-400 flex flex-col justify-center items-center font-mono">
+          <Sparkles className="w-10 h-10 text-blue-500 animate-spin mb-4" />
+          <span className="tracking-widest text-[11px] uppercase">VERIFYING SANCTUARY CREDENTIALS...</span>
+        </div>
+      );
     }
-    if (authView === "register") {
-      return <RegisterPage onNavigate={setAuthView} onAuthSuccess={() => setViewMode("operator")} />;
+
+    // Unauthenticated visitors must register/login to access the pulpit studio
+    if (!currentUser) {
+      if (authView === "login") {
+        return <LoginPage onNavigate={setAuthView} />;
+      }
+      if (authView === "register") {
+        return <RegisterPage onNavigate={setAuthView} />;
+      }
+      return <LandingPage onNavigate={setAuthView} />;
     }
-    return <LandingPage onNavigate={setAuthView} />;
-   }
 
-  if (viewMode === "loading") {
-    return (
-      <div className="w-full h-screen bg-[#070b13] text-sky-400 flex flex-col justify-center items-center font-mono">
-        <Sparkles className="w-10 h-10 text-sky-400 animate-spin mb-4" />
-        <span className="tracking-widest text-[10px] uppercase">SANCTUARY PROX SYSTEM CORE BOOTING...</span>
-      </div>
-    );
-  }
+    if (viewMode === "loading") {
+      return (
+        <div className="w-full h-screen bg-[#070b13] text-sky-400 flex flex-col justify-center items-center font-mono">
+          <Sparkles className="w-10 h-10 text-sky-400 animate-spin mb-4" />
+          <span className="tracking-widest text-[10px] uppercase">SANCTUARY PROX SYSTEM CORE BOOTING...</span>
+        </div>
+      );
+    }
 
-  // Dual View splitter
-  if (viewMode === "projector") {
-    return <ProjectorScreen syncedSlide={activeSlide} subscriptionPlan={userProfile?.subscriptionPlan || "free"} />;
-  }
+    // Dual View splitter
+    if (viewMode === "projector") {
+      return <ProjectorScreen syncedSlide={activeSlide} subscriptionPlan={userProfile?.subscriptionPlan || "free"} />;
+    }
 
   return (
     <div className="relative w-full min-h-screen bg-[#0C0D0F] text-[#E0E0E0] font-sans flex flex-col xl:flex-row">

@@ -20,10 +20,9 @@ import {
 
 interface RegisterPageProps {
   onNavigate: (view: "landing" | "login" | "register") => void;
-  onAuthSuccess: () => void;
 }
 
-export default function RegisterPage({ onNavigate, onAuthSuccess }: RegisterPageProps) {
+export default function RegisterPage({ onNavigate }: RegisterPageProps) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -149,8 +148,16 @@ if (signUpError) {
           console.error("Profile creation error:", profileError);
         }
         
-        // Success - redirect to login page
-        onNavigate("login");
+// Success - auth state listener will transition to app automatically
+        // The auth state listener fires immediately on successful signUp
+        // If there's a session (auto-login), the parent will show the app via useEffect
+        // If no session (email confirmation required), redirect to login
+        if (!data.session?.user) {
+          // Email confirmation required
+          alert("Registration successful! Please check your email to confirm your account, then sign in.");
+          onNavigate("login");
+        }
+        // If session exists, we don't navigate - the parent's auth listener will handle the transition
       } catch (err: any) {
         console.error("Auth register failed", err);
         setErrorText(err.message || "An unexpected error occurred during registration. Please try again.");

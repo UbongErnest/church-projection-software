@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, FormEvent } from "react";
-import { supabase, UserProfile } from "../supabase";
+ import { supabase, UserProfile } from "../supabase";
 import {
    Mic,
    MicOff,
@@ -41,22 +41,21 @@ import { DEFAULT_SONGS, DEFAULT_ANNOUNCEMENTS, THEME_PRESETS } from "../data";
 import { BIBLE_BOOKS, normalizeBookName, OFFLINE_BIBLE_DB, getKjvVerseText } from "../bibleDatabase";
 
 interface ControlPanelProps {
-  onCastSlide: (slide: ActiveSlide) => void;
-  activeProjectedSlide: ActiveSlide;
-  detectedVerses: DetectedVerse[];
-  onTriggerDetect: (transcript: string) => void;
-  isListening: boolean;
-  onToggleListening: () => void;
-  transcript: string;
-  sermonTopic: string;
-  sermonNotes: string[];
-  onClearNotes: () => void;
-userProfile?: UserProfile | null;
-  onUpdateSubscription?: (newPlan: "free" | "monthly" | "yearly") => Promise<void>;
+   onCastSlide: (slide: ActiveSlide) => void;
+   activeProjectedSlide: ActiveSlide;
+   detectedVerses: DetectedVerse[];
+   onTriggerDetect: (transcript: string) => void;
+   isListening: boolean;
+   onToggleListening: () => void;
+   transcript: string;
+   sermonTopic: string;
+   sermonNotes: string[];
+   onClearNotes: () => void;
+   userProfile?: UserProfile | null;
+   onUpdateSubscription?: (newPlan: "free" | "monthly" | "yearly") => Promise<void>;
 
-// Lifted customizer options:
    bibleVersion: "KJV";
-    onChangeBibleVersion: (version: "KJV") => void;
+   onChangeBibleVersion: (version: "KJV") => void;
    layoutMode: "fullscreen" | "lower-third" | "split-screen";
    onChangeLayoutMode: (mode: "fullscreen" | "lower-third" | "split-screen") => void;
    activeThemeId: string;
@@ -69,27 +68,27 @@ userProfile?: UserProfile | null;
    onChangeIsParallelEnabled: (enabled: boolean) => void;
    parallelVersion: "KJV";
    onChangeParallelVersion: (version: "KJV") => void;
-  customBrandingText: string;
-  onChangeCustomBrandingText: (text: string) => void;
-}
+   customBrandingText: string;
+   onChangeCustomBrandingText: (text: string) => void;
+  }
 
 export default function ControlPanel({
-  onCastSlide,
-  activeProjectedSlide,
-  detectedVerses,
-  onTriggerDetect,
-  isListening,
-  onToggleListening,
-  transcript,
-  sermonTopic,
-  sermonNotes,
-  onClearNotes,
-  userProfile,
-  onUpdateSubscription,
+   onCastSlide,
+   activeProjectedSlide,
+   detectedVerses,
+   onTriggerDetect,
+   isListening,
+   onToggleListening,
+   transcript,
+   sermonTopic,
+sermonNotes,
+   onClearNotes,
+   userProfile,
+   onUpdateSubscription,
 
-  bibleVersion,
-  onChangeBibleVersion,
-  layoutMode,
+   bibleVersion,
+   onChangeBibleVersion,
+   layoutMode,
   onChangeLayoutMode,
   activeThemeId,
   onChangeActiveThemeId,
@@ -138,9 +137,9 @@ export default function ControlPanel({
      return false;
    };
 
-   // Paystack checkout handler
-   const handlePaystackCheckout = async (plan: "monthly" | "yearly") => {
-     if (!userProfile?.email) return;
+// Paystack checkout handler
+    const handlePaystackCheckout = async (plan: "monthly" | "yearly") => {
+      if (!userProfile?.email || !userProfile?.uid) return;
      
      setCheckoutLoading(true);
      try {
@@ -752,27 +751,27 @@ function generateFallbackVerseText(book: string, chapter: number, verse: number)
            <div className="flex items-center gap-2">
              <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center font-bold text-xs italic text-white shadow-md">C</div>
              <span className="font-bold tracking-tight text-sm uppercase text-white">Chaver</span>
-             {userProfile && (
-               <div className="hidden sm:flex items-center gap-2 border-l border-white/10 pl-4">
-                 <div className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center">
-                   <User className="w-3" />
-                 </div>
-                 <span className="text-xs text-white/70 font-medium">
-                   {userProfile.displayName || userProfile.email?.split("@")[0]}
-                 </span>
-                 <button
-                   onClick={async () => {
-                     if (confirm("Are you sure you want to sign out?")) {
-                       await supabase.auth.signOut();
-                     }
-                   }}
-                   title="Sign Out"
-                   className="p-1 text-white/40 hover:text-red-400 transition-colors ml-1 cursor-pointer"
-                 >
-                   <LogOut className="w-3.5 h-3.5" />
-                 </button>
-               </div>
-             )}
+{userProfile && (
+                <div className="hidden sm:flex items-center gap-2 border-l border-white/10 pl-4">
+                  <div className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center">
+                    <User className="w-3" />
+                  </div>
+<span className="text-xs text-white/70 font-medium">
+                     {userProfile.displayName || userProfile.email?.split("@")[0]}
+                   </span>
+                  <button
+                    onClick={async () => {
+                      if (confirm("Are you sure you want to sign out?")) {
+                        await supabase.auth.signOut();
+                      }
+                    }}
+                    title="Sign Out"
+                    className="p-1 text-white/40 hover:text-red-400 transition-colors ml-1 cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
           </div>
           <nav className="flex gap-4 text-xs font-semibold text-white/50">
             <button

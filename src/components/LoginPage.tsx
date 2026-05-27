@@ -4,10 +4,9 @@ import { BookOpen, Mail, Lock, LogIn, Sparkles, UserPlus, ChevronLeft, Eye, EyeO
 
 interface LoginPageProps {
   onNavigate: (view: "landing" | "login" | "register") => void;
-  onAuthSuccess: () => void;
 }
 
-export default function LoginPage({ onNavigate, onAuthSuccess }: LoginPageProps) {
+export default function LoginPage({ onNavigate }: LoginPageProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -34,12 +33,11 @@ const handleLogin = async (e: FormEvent) => {
          password: passVal,
        });
        
-       if (error) {
-         throw error;
-       }
-       // Success Trigger
-       onAuthSuccess();
-     } catch (err: any) {
+if (error) {
+          throw error;
+        }
+        // Success - auth state listener will handle viewMode transition
+      } catch (err: any) {
        console.error("Auth login failed", err);
        let friendlyMessage = "Error signing in. Please verify your credentials and try again.";
        
