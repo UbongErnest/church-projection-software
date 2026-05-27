@@ -137,6 +137,19 @@ customBrandingText,
     };
 
 // Paystack checkout handler - server initializes checkout, Paystack redirects back after payment
+    const readApiResponse = async (response: Response) => {
+      const rawText = await response.text();
+
+      try {
+        return rawText ? JSON.parse(rawText) : {};
+      } catch {
+        return {
+          error: rawText || "Unexpected server response.",
+          details: rawText || "Unexpected server response.",
+        };
+      }
+    };
+
     const handlePaystackCheckout = async (plan: "monthly" | "yearly") => {
       if (!currentUser?.id) {
         alert("Please log in to upgrade your subscription.");
@@ -163,7 +176,7 @@ customBrandingText,
           }),
         });
 
-        const initializeData = await initializeResponse.json();
+        const initializeData = await readApiResponse(initializeResponse);
         if (!initializeResponse.ok || !initializeData?.success || !initializeData?.authorizationUrl) {
           throw new Error(initializeData?.details || initializeData?.error || "Unable to start Paystack checkout.");
         }

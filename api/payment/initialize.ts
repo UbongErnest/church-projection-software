@@ -2,7 +2,7 @@ import {
   initializePaystackTransaction,
   normalizeSubscriptionPlan,
   resolveAppUrlFromRequest,
-} from "../../src/server/payments";
+} from "../../src/server/payments.ts";
 
 function readJsonBody(body: unknown) {
   if (typeof body === "string") {

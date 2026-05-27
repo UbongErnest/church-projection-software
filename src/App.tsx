@@ -59,6 +59,19 @@ function getFallbackVerseText(book: string, chapter: number, verse: number): { K
   };
 }
 
+async function readApiResponse(response: Response) {
+  const rawText = await response.text();
+
+  try {
+    return rawText ? JSON.parse(rawText) : {};
+  } catch {
+    return {
+      error: rawText || "Unexpected server response.",
+      details: rawText || "Unexpected server response.",
+    };
+  }
+}
+
 // Fallback preach simulator sequences for seamless sandbox testing
 const PulPULP_SIMULATORS = [
   { label: "Matthew 6:9 (Pulpit Preach)", phrase: "Our Father in heaven, hallowed be Your name, let's open Matthew chapter 6 verse 9" },
@@ -792,7 +805,7 @@ export default function App() {
                    plan: normalizedPlan,
                  }),
                });
-               const verifyData = await verifyResponse.json();
+               const verifyData = await readApiResponse(verifyResponse);
 
                if (!verifyResponse.ok || !verifyData?.success) {
                  throw new Error(verifyData?.details || verifyData?.message || verifyData?.error || "Payment verification failed after redirect.");

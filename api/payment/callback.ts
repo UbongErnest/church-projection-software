@@ -1,6 +1,6 @@
 import {
   verifyAndActivatePayment,
-} from "../../src/server/payments";
+} from "../../src/server/payments.ts";
 
 function redirect(res: any, location: string) {
   if (typeof res.redirect === "function") {
