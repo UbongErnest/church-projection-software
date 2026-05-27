@@ -1,10 +1,19 @@
-import express from "express";
+﻿import express from "express";
 import path from "path";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, Type } from "@google/genai";
-import { OFFLINE_BIBLE_DB, normalizeBookName, parseSpokenNumbers, BIBLE_BOOKS } from "./src/bibleDatabase";
+import { GoogleGenAI } from "@google/genai";
+import { createClient } from "@supabase/supabase-js";
+import { normalizeBookName, parseSpokenNumbers } from "./src/bibleDatabase";
 import KJV_DATA from "./src/BibleData/kjv.json";
+
+dotenv.config();
+
+// Supabase client initialization
+const supabaseAdmin = createClient(
+  process.env.SUPABASE_URL || "",
+  process.env.SUPABASE_SERVICE_ROLE_KEY || ""
+);
 
 // Build optimized lookup index from KJV JSON data
 const KJV_VERSE_INDEX: Record<string, string> = {};
@@ -13,8 +22,6 @@ for (const key of Object.keys(KJV_DATA.verses)) {
   const lookupKey = `${verse.book_name.toLowerCase()} ${verse.chapter}:${verse.verse}`;
   KJV_VERSE_INDEX[lookupKey] = verse.text;
 }
-
-dotenv.config();
 
 const app = express();
 const PORT = 3000;
@@ -60,7 +67,7 @@ app.get("/api/bible/lookup", (req, res) => {
   const kjvText = KJV_VERSE_INDEX[kjvLookupKey];
 
   if (kjvText) {
-    const cleanKjvText = kjvText.trim().replace(/^¶\s*/, "");
+    const cleanKjvText = kjvText.trim().replace(/^Â¶\s*/, "");
     return res.json({
       book: normalizedBook,
       chapter: chNum,
@@ -214,11 +221,121 @@ app.post("/api/ai/copilot", async (req, res) => {
     console.error("AI Copilot error:", error);
     // Graceful fallback with premium placeholder
     return res.json({
-      outline: `### 📖 AI Copilot Structured Outline: ${topic || "Sunday Service"}\n\n* **I. Introduction & Central Focus**\n  * Hook: Connecting modern life challenges to divine truths.\n  * Central Scripture Recommendation: Focus on a key anchoring passage.\n\n* **II. Core Exegesis (Based on Sermon Notes)**\n  * Analysis of themes found in notes: *"${notesContent.substring(0, 150)}..."*\n  * Contextualizing historical and cultural elements of the references.\n\n* **III. Practical Spiritual Applications**\n  * How the congregation can apply this revelation during the week.\n  * Overcoming common barriers to living out these biblical principles.\n\n* **IV. Conclusion & Key Takeaway**\n  * Summarizing the sermon topic: *${topic}*.\n  * Final closing call to prayer and dedication.\n\n*(Note: Graceful local outline generator fallback triggered because Gemini API Key is offline or quota-limited)*`
+      outline: `### ðŸ“– AI Copilot Structured Outline: ${topic || "Sunday Service"}\n\n* **I. Introduction & Central Focus**\n  * Hook: Connecting modern life challenges to divine truths.\n  * Central Scripture Recommendation: Focus on a key anchoring passage.\n\n* **II. Core Exegesis (Based on Sermon Notes)**\n  * Analysis of themes found in notes: *"${notesContent.substring(0, 150)}..."*\n  * Contextualizing historical and cultural elements of the references.\n\n* **III. Practical Spiritual Applications**\n  * How the congregation can apply this revelation during the week.\n  * Overcoming common barriers to living out these biblical principles.\n\n* **IV. Conclusion & Key Takeaway**\n  * Summarizing the sermon topic: *${topic}*.\n  * Final closing call to prayer and dedication.\n\n*(Note: Graceful local outline generator fallback triggered because Gemini API Key is offline or quota-limited)*`
     });
   }
 });
 
+
+// Paystack payment endpoints
+const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || "";
+
+async function paystackRequest(endpoint: string, data: any) {
+  const response = await fetch(`https://api.paystack.co${endpoint}`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${PAYSTACK_SECRET_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(data)
+  });
+  return response.json();
+}
+
+// Initialize Paystack transaction
+app.post("/api/payment/initialize", async (req, res) => {
+  const { email, amount, plan, userId } = req.body;
+  
+  if (!email || !amount || !plan) {
+    return res.status(400).json({ error: "Missing required fields: email, amount, plan" });
+  }
+
+  try {
+    const transaction = await paystackRequest("/transaction/initialize", {
+      email,
+      amount: amount * 100, // Convert to kobo/pesewa
+      metadata: {
+        plan,
+        userId: userId || ""
+      }
+    });
+    
+    if (transaction.status) {
+      res.json({
+        success: true,
+        authorizationUrl: transaction.data.authorization_url,
+        reference: transaction.data.reference
+      });
+    } else {
+      res.status(500).json({ error: transaction.message || "Failed to initialize payment" });
+    }
+  } catch (error: any) {
+    console.error("Paystack initialize error:", error);
+    res.status(500).json({ error: "Failed to initialize payment" });
+  }
+});
+
+// Verify payment and update subscription
+app.post("/api/payment/verify", async (req, res) => {
+  const { reference, userId } = req.body;
+  
+  if (!reference) {
+    return res.status(400).json({ error: "Missing reference" });
+  }
+
+  try {
+    const verification = await paystackRequest(`/transaction/verify/${reference}`, {});
+    
+    if (verification.data?.status === "success") {
+      const plan = verification.data?.metadata?.plan || "monthly";
+      
+      if (userId && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        await supabaseAdmin
+          .from('users')
+          .update({ 
+            subscription_plan: plan,
+            subscription_status: "active"
+          })
+          .eq('user_id', userId);
+      }
+      
+      res.json({ 
+        success: true, 
+        status: "active",
+        plan
+      });
+    } else {
+      res.json({ success: false, status: "pending" });
+    }
+  } catch (error: any) {
+    console.error("Paystack verify error:", error);
+    res.status(500).json({ error: "Failed to verify payment" });
+  }
+});
+
+// Webhook for Paystack events
+app.post("/api/webhook/paystack", async (req, res) => {
+  const signature = req.headers["x-paystack-signature"] as string;
+  
+  const { data } = req.body;
+  
+  if (data && data.status === "success" && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    const userId = data.metadata?.userId;
+    const plan = data.metadata?.plan;
+    
+    if (userId) {
+      await supabaseAdmin
+        .from('users')
+        .update({ 
+          subscription_plan: plan,
+          subscription_status: "active"
+        })
+        .eq('user_id', userId);
+    }
+  }
+  
+  res.json({ received: true });
+});
 // 3. Mount Vite or serve static production folder
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
@@ -241,3 +358,4 @@ async function startServer() {
 }
 
 startServer();
+

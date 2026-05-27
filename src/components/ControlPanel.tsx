@@ -123,32 +123,98 @@ export default function ControlPanel({
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
   
-  // Checkout form inputs
-  const [cardHolder, setCardHolder] = useState("");
-  const [cardNumber, setCardNumber] = useState("");
-  const [cardExpiry, setCardExpiry] = useState("");
-  const [cardCvc, setCardCvc] = useState("");
+/* Selection states for Bible Search */
+   const [selectedBook, setSelectedBook] = useState<string>("John");
+   const [selectedChapter, setSelectedChapter] = useState<number>(3);
+   const [selectedVerse, setSelectedVerse] = useState<number>(16);
+   const [searchQuery, setSearchQuery] = useState<string>("");
 
-  // Selection states for Bible Search
-  const [selectedBook, setSelectedBook] = useState<string>("John");
-  const [selectedChapter, setSelectedChapter] = useState<number>(3);
-  const [selectedVerse, setSelectedVerse] = useState<number>(16);
-  const [searchQuery, setSearchQuery] = useState<string>("");
+   // Search results for manual lookup
+   const [lookupText, setLookupText] = useState<{ KJV: string } | null>(null);
+   const [isLoadingLookup, setIsLoadingLookup] = useState<boolean>(false);
+   const [lookupError, setLookupError] = useState<string | null>(null);
 
-  // Search results for manual lookup
-  const [lookupText, setLookupText] = useState<{ KJV: string } | null>(null);
-  const [isLoadingLookup, setIsLoadingLookup] = useState<boolean>(false);
-  const [lookupError, setLookupError] = useState<string | null>(null);
+   // Theme lock helper
+   const isThemeLocked = (themeId: string) => {
+     if (["nebula-dark", "emerald-sanctuary", "crimson-grace", "royal-gold", "sanctuary-aurora"].includes(themeId)) {
+       return userPlan !== "yearly"; // Premium (yearly) only
+     }
+     return false;
+   };
 
-  // Theme lock helper
-  const isThemeLocked = (themeId: string) => {
-    if (["nebula-dark", "emerald-sanctuary", "crimson-grace", "royal-gold", "sanctuary-aurora"].includes(themeId)) {
-      return userPlan !== "yearly"; // Premium (yearly) only
-    }
-    return false;
-  };
+   // Paystack checkout handler
+   const handlePaystackCheckout = async (plan: "monthly" | "yearly") => {
+     if (!userProfile?.email) return;
+     
+     setCheckoutLoading(true);
+     try {
+       const amount = plan === "monthly" ? 10000 : 25000;
+       const user_id = userProfile.uid;
+       
+       const initResponse = await fetch("/api/payment/initialize", {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify({
+           email: userProfile.email,
+           amount: amount,
+           plan: plan,
+           userId: user_id
+         }),
+       });
+       
+       const initData = await initResponse.json();
+       
+       if (initData.success && initData.authorizationUrl) {
+         setCheckoutPlan(plan);
+         
+// Redirect to Paystack inline checkout or popup
+          const handler = (window as any).PaystackPop?.setup({
+            key: (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_PAYSTACK_PUBLIC_KEY) || "pk_test_1895ab6fa7f290a990101e6ed1756d35a75928e8",
+            email: userProfile.email,
+           amount: amount * 100,
+           currency: "NGN",
+           ref: initData.reference,
+           metadata: {
+             plan: plan,
+             userId: user_id
+           },
+           callback: async (response: any) => {
+             const verifyResponse = await fetch("/api/payment/verify", {
+               method: "POST",
+               headers: { "Content-Type": "application/json" },
+               body: JSON.stringify({
+                 reference: response.reference,
+                 userId: user_id
+               }),
+             });
+             const verifyData = await verifyResponse.json();
+             if (verifyData.success) {
+               setCheckoutSuccess(true);
+               if (onUpdateSubscription) {
+                 await onUpdateSubscription(plan);
+               }
+             }
+           },
+           onClose: () => {
+             setCheckoutLoading(false);
+             setCheckoutPlan(null);
+           }
+         });
+         
+         if (handler) handler.openIframe();
+       } else {
+         console.error("Paystack initialization failed:", initData.error);
+         alert(`Payment initialization failed: ${initData.error || "Unable to initialize payment"}`);
+       }
+     } catch (error: any) {
+       console.error("Paystack checkout error:", error);
+       alert("Payment processing error. Please try again.");
+     } finally {
+       setCheckoutLoading(false);
+     }
+   };
 
-  // Song and announcements selection
+   // Song and announcements selection
   const [selectedSongId, setSelectedSongId] = useState<string>(DEFAULT_SONGS[0].id);
   const [selectedStanzaIndex, setSelectedStanzaIndex] = useState<number>(0);
 
@@ -1592,17 +1658,18 @@ onChange={(e) => {
                         <div className="text-lg font-bold text-white font-mono mt-1">₦10,000<span className="text-xs text-white/55">/mo</span></div>
                         <p className="text-[10px] text-white/50 mt-1 leading-normal">Unlocks AI-powered sermon live listening, automatic scripture projection, <strong>plus Media Projection</strong> for images and videos.</p>
                       </div>
-                      {userPlan !== "monthly" && (
-                        <button
-                          onClick={() => setCheckoutPlan("monthly")}
-                          className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs py-1.5 rounded-lg mt-3 transition cursor-pointer"
-                        >
-                          {userPlan === "yearly" ? "Switch to Pro Monthly" : "Upgrade to Pro Monthly (₦10,000)"}
-                        </button>
-                      )}
-                    </div>
+{userPlan !== "monthly" && (
+                         <button
+                           onClick={() => handlePaystackCheckout("monthly")}
+                           disabled={checkoutLoading}
+                           className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs py-1.5 rounded-lg mt-3 transition cursor-pointer"
+                         >
+                           {userPlan === "yearly" ? "Switch to Pro Monthly" : "Upgrade to Pro Monthly (₦10,000)"}
+                         </button>
+                       )}
+                     </div>
 
-                    {/* Premium Card */}
+                     {/* Premium Card */}
                     <div className={`p-4 rounded-xl border flex flex-col justify-between transition-all relative ${
                       userPlan === "yearly" ? "bg-white/5 border-amber-500/40" : "bg-gradient-to-tr from-amber-500/5 to-transparent border-white/5"
                     }`}>
@@ -1616,18 +1683,19 @@ onChange={(e) => {
                         <div className="text-lg font-bold text-white font-mono mt-1">₦25,000<span className="text-xs text-white/55">/mo</span></div>
                         <p className="text-[10px] text-white/50 mt-1 leading-normal">Unlocks the ENTIRE application: Hymnals, Announcements, Note cloud journal with Markdown exports, AI outline helper, custom church branding name, parallel dual translations, and advanced themes.</p>
                       </div>
-                      {userPlan !== "yearly" && (
-                        <button
-                          onClick={() => setCheckoutPlan("yearly")}
-                          className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-450 hover:to-amber-550 text-slate-950 font-extrabold text-xs py-1.5 rounded-lg mt-3 transition cursor-pointer"
-                        >
-                          Upgrade to Premium (₦25,000)
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
+{userPlan !== "yearly" && (
+                         <button
+                           onClick={() => handlePaystackCheckout("yearly")}
+                           disabled={checkoutLoading}
+                           className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-450 hover:to-amber-550 disabled:opacity-50 text-slate-950 font-extrabold text-xs py-1.5 rounded-lg mt-3 transition cursor-pointer"
+                         >
+                           Upgrade to Premium (₦25,000)
+                         </button>
+                       )}
+                     </div>
+                   </div>
+                 </div>
+               )}
 
             </div>
           </div>
@@ -1997,15 +2065,16 @@ onChange={(e) => {
                     <li>✓ Unlock KJV translation</li>
                   </ul>
                 </div>
-                <button
-                  onClick={() => {
-                    setCheckoutPlan("monthly");
-                    setShowUpgradePromptModal(false);
-                  }}
-                  className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs py-2 rounded-lg mt-5 transition cursor-pointer"
-                >
-                  Select Pro Monthly
-                </button>
+<button
+                   onClick={() => {
+                     handlePaystackCheckout("monthly");
+                     setShowUpgradePromptModal(false);
+                   }}
+                   disabled={checkoutLoading}
+                   className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs py-2 rounded-lg mt-5 transition cursor-pointer"
+                 >
+                   Select Pro Monthly
+                 </button>
               </div>
 
               {/* Yearly card */}
@@ -2028,15 +2097,16 @@ onChange={(e) => {
                     <li>✓ All Pro Monthly features</li>
                   </ul>
                 </div>
-                <button
-                  onClick={() => {
-                    setCheckoutPlan("yearly");
-                    setShowUpgradePromptModal(false);
-                  }}
-                  className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-450 hover:to-amber-550 text-slate-950 font-extrabold text-xs py-2 rounded-lg mt-5 transition cursor-pointer"
-                >
-                  Select Premium
-                </button>
+<button
+                   onClick={() => {
+                     handlePaystackCheckout("yearly");
+                     setShowUpgradePromptModal(false);
+                   }}
+                   disabled={checkoutLoading}
+                   className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-450 hover:to-amber-550 disabled:opacity-50 text-slate-950 font-extrabold text-xs py-2 rounded-lg mt-5 transition cursor-pointer"
+                 >
+                   Select Premium
+                 </button>
               </div>
             </div>
           </div>
@@ -2064,133 +2134,29 @@ onChange={(e) => {
                 </p>
                 <button
                   type="button"
-                  onClick={() => {
-                    setCheckoutPlan(null);
-                    setCheckoutSuccess(false);
-                    setCardHolder("");
-                    setCardNumber("");
-                    setCardExpiry("");
-                    setCardCvc("");
-                  }}
+onClick={() => {
+                     setCheckoutPlan(null);
+                     setCheckoutSuccess(false);
+                   }}
                   className="bg-green-600 hover:bg-green-500 text-white font-sans font-bold text-xs px-6 py-2.5 rounded-xl transition cursor-pointer shadow-md shadow-green-900/10"
                 >
                   Enter Studio Console
                 </button>
               </div>
-            ) : (
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  setCheckoutLoading(true);
-                  // Simulate network payment auth
-                  await new Promise((resolve) => setTimeout(resolve, 1550));
-                  setCheckoutLoading(false);
-                  setCheckoutSuccess(true);
-                  if (onUpdateSubscription) {
-                    await onUpdateSubscription(checkoutPlan);
-                  }
-                }}
-                className="space-y-4 text-left"
-              >
-                <div className="flex items-center justify-between pb-3 border-b border-white/5">
-                  <div className="flex items-center gap-2">
-                    <CreditCard className="w-5 h-5 text-blue-400" />
-                    <div>
-                      <h3 className="font-sans font-black text-sm uppercase text-white tracking-tight">Secured checkout</h3>
-                      <span className="text-[9px] font-mono text-stone-400 uppercase">Simulated Payment Gateway</span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setCheckoutPlan(null)}
-                    className="p-1 rounded-lg text-stone-400 hover:text-white hover:bg-white/5 transition cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="bg-blue-600/10 border border-blue-500/20 rounded-lg p-3 text-[10.5px] leading-relaxed text-blue-300">
-                  <span className="font-bold block mb-0.5">💳 Sandbox Simulation Mode</span>
-                  To simulate a successful upgrade, input any cardholder details below. Zero actual funds will be charged.
-                </div>
-
-                {/* Amount details */}
-                <div className="bg-black/30 p-3 rounded-lg border border-white/5 flex justify-between items-center">
-                  <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest">Upgrade Selection:</span>
-                  <span className="text-xs font-bold text-white uppercase tracking-wider">
-                    {checkoutPlan === "yearly" ? "★ Premium Plan (₦25,000/mo)" : "✓ Pro Monthly (₦10,000/mo)"}
-                  </span>
-                </div>
-
-                {/* Cardholder Name */}
-                <div className="space-y-1 text-left">
-                  <label className="text-[9px] font-mono text-white/40 uppercase tracking-widest block">Cardholder Full Name</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Pastor John Doe"
-                    value={cardHolder}
-                    onChange={(e) => setCardHolder(e.target.value)}
-                    className="w-full bg-[#181a1f] border border-white/10 focus:border-blue-500 focus:outline-none px-3 py-2 rounded-xl text-xs text-white placeholder-white/20"
-                  />
-                </div>
-
-                {/* Card Number */}
-                <div className="space-y-1 text-left">
-                  <label className="text-[9px] font-mono text-white/40 uppercase tracking-widest block">Credit Card Number</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="4000 1234 5678 9010"
-                    value={cardNumber}
-                    onChange={(e) => setCardNumber(e.target.value)}
-                    className="w-full bg-[#181a1f] border border-white/10 focus:border-blue-500 focus:outline-none px-3 py-2 rounded-xl text-xs text-white placeholder-white/20 font-mono"
-                  />
-                </div>
-
-                {/* Expiry and CVC */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1 text-left">
-                    <label className="text-[9px] font-mono text-white/40 uppercase tracking-widest block">Expiry Date</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="MM/YY"
-                      value={cardExpiry}
-                      onChange={(e) => setCardExpiry(e.target.value)}
-                      className="w-full bg-[#181a1f] border border-white/10 focus:border-blue-500 focus:outline-none px-3 py-2 rounded-xl text-xs text-white placeholder-white/20 font-mono text-center"
-                    />
-                  </div>
-                  <div className="space-y-1 text-left">
-                    <label className="text-[9px] font-mono text-white/40 uppercase tracking-widest block">CVC / CVV</label>
-                    <input
-                      type="password"
-                      required
-                      placeholder="•••"
-                      maxLength={3}
-                      value={cardCvc}
-                      onChange={(e) => setCardCvc(e.target.value)}
-                      className="w-full bg-[#181a1f] border border-white/10 focus:border-blue-500 focus:outline-none px-3 py-2 rounded-xl text-xs text-white placeholder-white/20 font-mono text-center"
-                    />
-                  </div>
-                </div>
-
-                {/* Submit */}
-                <button
-                  type="submit"
-                  disabled={checkoutLoading}
-                  className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-sans font-bold text-xs py-3 rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  {checkoutLoading ? (
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <>
-                      <CreditCard className="w-3.5 h-3.5" /> Authorize Upgrade
-                    </>
-                  )}
-                </button>
-              </form>
-            )}
+) : (
+               <div className="text-center py-8 flex flex-col items-center gap-4">
+                 <div className="w-16 h-16 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
+                 <div>
+                   <h3 className="font-sans font-black text-sm uppercase text-white tracking-tight">Processing Payment</h3>
+                   <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest block mt-1">
+                     {checkoutPlan === "yearly" ? "Premium Plan (₦25,000)" : "Pro Monthly (₦10,000)"}
+                   </span>
+                 </div>
+                 <p className="text-xs text-white/60 max-w-xs leading-relaxed font-sans">
+                   Complete your payment in the Paystack popup window. Your subscription will activate automatically after confirmation.
+                 </p>
+               </div>
+             )}
 
           </div>
         </div>
