@@ -147,13 +147,11 @@ const [userProfile, setUserProfile] = useState<{
         setAuthChecked(true);
       });
 
-      // Check for existing session on load
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (!mounted) return;
-        if (session) {
-          setAuthChecked(true);
-        }
-      });
+// Check for existing session on load
+       supabase.auth.getSession().then(({ data: { session } }) => {
+         if (!mounted) return;
+         setAuthChecked(true);
+       });
 
       return () => {
         mounted = false;
