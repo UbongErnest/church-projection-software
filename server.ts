@@ -238,14 +238,14 @@ app.post("/api/ai/copilot", async (req, res) => {
 // Paystack payment endpoints
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || "";
 
-async function paystackRequest(endpoint: string, data: any) {
+async function paystackRequest(endpoint: string, data: any, method: string = "POST") {
   const response = await fetch(`https://api.paystack.co${endpoint}`, {
-    method: "POST",
+    method,
     headers: {
       "Authorization": `Bearer ${PAYSTACK_SECRET_KEY}`,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify(data)
+    body: method === "POST" ? JSON.stringify(data) : undefined
   });
   return response.json();
 }
@@ -297,7 +297,7 @@ app.post("/api/payment/verify", async (req, res) => {
   }
 
   try {
-    const verification = await paystackRequest(`/transaction/verify/${reference}`, {});
+    const verification = await paystackRequest(`/transaction/verify/${reference}`, {}, "GET");
     
     if (verification.data?.status === "success") {
       // Use plan from request body as fallback if metadata not available
@@ -342,7 +342,7 @@ app.get("/api/payment/callback", async (req, res) => {
   }
 
   try {
-    const verification = await paystackRequest(`/transaction/verify/${ref}`, {});
+    const verification = await paystackRequest(`/transaction/verify/${ref}`, {}, "GET");
     
     if (verification.data?.status === "success") {
       const plan = verification.data?.metadata?.plan || "monthly";
