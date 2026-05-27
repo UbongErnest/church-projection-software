@@ -20,18 +20,18 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const body = readJsonBody(req.body) as {
-    email?: string;
-    plan?: string;
-    userId?: string;
-  };
-
-  const plan = normalizeSubscriptionPlan(body.plan);
-  if (!body.email || !body.userId || !plan) {
-    return res.status(400).json({ error: "Missing or invalid email, userId, or plan." });
-  }
-
   try {
+    const body = readJsonBody(req.body) as {
+      email?: string;
+      plan?: string;
+      userId?: string;
+    };
+
+    const plan = normalizeSubscriptionPlan(body.plan);
+    if (!body.email || !body.userId || !plan) {
+      return res.status(400).json({ error: "Missing or invalid email, userId, or plan." });
+    }
+
     const callbackUrl = `${resolveAppUrlFromRequest(req)}/api/payment/callback`;
     const transaction = await initializePaystackTransaction({
       email: body.email,
@@ -50,7 +50,7 @@ export default async function handler(req: any, res: any) {
     console.error("Paystack initialize error:", error);
     return res.status(500).json({
       error: "Failed to initialize payment",
-      details: error.message,
+      details: error.message || "Unknown error occurred",
     });
   }
 }

@@ -90,10 +90,11 @@ export function resolveAppUrlFromRequest(req: {
   const hostHeader = req.headers?.host;
   const forwardedProto = Array.isArray(forwardedProtoHeader) ? forwardedProtoHeader[0] : forwardedProtoHeader;
   const host = Array.isArray(hostHeader) ? hostHeader[0] : hostHeader;
-  const protocol = forwardedProto || req.protocol || "https";
+  const protocol = forwardedProto || req.protocol || "http";
 
+  // Fallback for serverless environments
   if (!host) {
-    throw new Error("Unable to determine application host for payment callback URL.");
+    return "http://localhost:3000";
   }
 
   return `${protocol}://${host}`;
@@ -152,8 +153,8 @@ export async function initializePaystackTransaction(args: {
 export async function verifyPaystackTransaction(
   reference: string,
   logPrefix: string,
-  maxAttempts = 5,
-  retryDelayMs = 2000
+  maxAttempts = 3,
+  retryDelayMs = 1500
 ): Promise<PaystackVerificationResponse | null> {
   let lastVerification: PaystackVerificationResponse | null = null;
 
@@ -217,12 +218,12 @@ export async function verifyAndActivatePayment(args: {
   fallbackUserId?: string;
   logPrefix: string;
 }) {
-  const maxAttempts = 5;
+  const maxAttempts = 3;
   const verification = await verifyPaystackTransaction(
     args.reference,
     args.logPrefix,
     maxAttempts,
-    2000
+    1500
   );
   const paystackStatus = verification?.data?.status || null;
 

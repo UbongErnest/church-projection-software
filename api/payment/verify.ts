@@ -19,17 +19,17 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const body = readJsonBody(req.body) as {
-    reference?: string;
-    userId?: string;
-    plan?: string;
-  };
-
-  if (!body.reference) {
-    return res.status(400).json({ error: "Missing reference." });
-  }
-
   try {
+    const body = readJsonBody(req.body) as {
+      reference?: string;
+      userId?: string;
+      plan?: string;
+    };
+
+    if (!body.reference) {
+      return res.status(400).json({ error: "Missing reference." });
+    }
+
     const result = await verifyAndActivatePayment({
       reference: body.reference,
       fallbackPlan: normalizeSubscriptionPlan(body.plan),
@@ -58,7 +58,7 @@ export default async function handler(req: any, res: any) {
     console.error("Paystack verify error:", error);
     return res.status(500).json({
       error: "Failed to verify payment",
-      details: error.message,
+      details: error.message || "Unknown error occurred",
     });
   }
 }
