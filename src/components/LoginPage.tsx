@@ -1,6 +1,6 @@
 import React, { useState, FormEvent } from "react";
 import { supabase } from "../supabase";
-import { BookOpen, Mail, Lock, LogIn, Sparkles, UserPlus, ChevronLeft } from "lucide-react";
+import { BookOpen, Mail, Lock, LogIn, Sparkles, UserPlus, ChevronLeft, Eye, EyeOff } from "lucide-react";
 
 interface LoginPageProps {
   onNavigate: (view: "landing" | "login" | "register") => void;
@@ -10,6 +10,7 @@ interface LoginPageProps {
 export default function LoginPage({ onNavigate, onAuthSuccess }: LoginPageProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState("");
 
@@ -122,14 +123,22 @@ const handleLogin = async (e: FormEvent) => {
             <div className="relative">
               <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 placeholder="••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-[#111317] border border-white/10 focus:border-blue-500 focus:outline-none pl-10 pr-4 py-2 rounded-xl text-xs text-white placeholder-white/25 transition-all"
+                className="w-full bg-[#111317] border border-white/10 focus:border-blue-500 focus:outline-none pl-10 pr-10 py-2 rounded-xl text-xs text-white placeholder-white/25 transition-all"
                 required
                 disabled={loading}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
             </div>
           </div>
 

@@ -16,6 +16,7 @@ export type UserProfile = {
   city: string;
   location: string;
   denomination: string;
+  phone?: string;
   subscription_plan: "free" | "monthly" | "yearly";
   subscription_status: string;
   subscription_end?: string;
@@ -44,6 +45,7 @@ export function mapProfileFromDB(dbProfile: any): any {
     city: dbProfile.city,
     location: dbProfile.location,
     denomination: dbProfile.denomination,
+    phone: dbProfile.phone || "",
     subscriptionPlan: dbProfile.subscription_plan,
     subscriptionStatus: dbProfile.subscription_status,
     subscriptionEnd: dbProfile.subscription_end,

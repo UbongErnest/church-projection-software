@@ -13,7 +13,9 @@ import {
   MapPin, 
   Landmark,
   FileText,
-  X
+  X,
+  Eye,
+  EyeOff
 } from "lucide-react";
 
 interface RegisterPageProps {
@@ -24,6 +26,7 @@ interface RegisterPageProps {
 export default function RegisterPage({ onNavigate, onAuthSuccess }: RegisterPageProps) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [churchName, setChurchName] = useState("");
   const [country, setCountry] = useState("");
   const [state, setState] = useState("");
@@ -33,6 +36,8 @@ export default function RegisterPage({ onNavigate, onAuthSuccess }: RegisterPage
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [agreeLegal, setAgreeLegal] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
   // Modals for legal popups inside register view for convenience
   const [showPrivacy, setShowPrivacy] = useState(false);
@@ -45,30 +50,31 @@ export default function RegisterPage({ onNavigate, onAuthSuccess }: RegisterPage
      e.preventDefault();
      setErrorText("");
 
-     const nameVal = fullName.trim();
-     const emailVal = email.trim();
-     const churchVal = churchName.trim();
-     const countryVal = country.trim();
-     const stateVal = state.trim();
-     const cityVal = city.trim();
-     const locationVal = location.trim();
-     const denomVal = denomination.trim();
-     const passVal = password;
+const nameVal = fullName.trim();
+      const emailVal = email.trim();
+      const phoneVal = phone.trim();
+      const churchVal = churchName.trim();
+      const countryVal = country.trim();
+      const stateVal = state.trim();
+      const cityVal = city.trim();
+      const locationVal = location.trim();
+      const denomVal = denomination.trim();
+      const passVal = password;
 
-     if (
-       !nameVal || 
-       !emailVal || 
-       !churchVal || 
-       !countryVal || 
-       !stateVal || 
-       !cityVal || 
-       !locationVal || 
-       !denomVal || 
-       !passVal
-     ) {
-       setErrorText("Please fill out all required fields.");
-       return;
-     }
+      if (
+        !nameVal || 
+        !emailVal ||
+        !churchVal || 
+        !countryVal || 
+        !stateVal || 
+        !cityVal || 
+        !locationVal || 
+        !denomVal || 
+        !passVal
+      ) {
+        setErrorText("Please fill out all required fields.");
+        return;
+      }
 
      if (!agreeLegal) {
        setErrorText("You must accept the Privacy Policy and Terms & Conditions before creating an account.");
@@ -87,7 +93,7 @@ export default function RegisterPage({ onNavigate, onAuthSuccess }: RegisterPage
 
 setLoading(true);
 
-      try {
+try {
         const { data, error: signUpError } = await supabase.auth.signUp({
           email: emailVal,
           password: passVal,
@@ -100,6 +106,7 @@ setLoading(true);
               city: cityVal,
               location: locationVal,
               denomination: denomVal,
+              phone: phoneVal,
             }
           }
         });
@@ -127,6 +134,7 @@ setLoading(true);
           city: cityVal,
           location: locationVal,
           denomination: denomVal,
+          phone: phoneVal,
           subscription_plan: "free" as const,
           subscription_status: "active",
           subscription_end: null
@@ -211,7 +219,7 @@ setLoading(true);
               </div>
             </div>
 
-            {/* Email */}
+{/* Email */}
             <div className="space-y-1">
               <label className="text-[9px] font-mono text-white/40 uppercase tracking-widest block font-semibold">
                 Email Address
@@ -225,6 +233,24 @@ setLoading(true);
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full bg-[#111317] border border-white/10 focus:border-blue-500 focus:outline-none pl-9 pr-3 py-2 rounded-xl text-xs text-white placeholder-white/25 transition-all"
                   required
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
+            {/* Phone Number */}
+            <div className="space-y-1">
+              <label className="text-[9px] font-mono text-white/40 uppercase tracking-widest block font-semibold">
+                Phone Number
+              </label>
+              <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/20" />
+                <input
+                  type="tel"
+                  placeholder="+1 (555) 123-4567"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full bg-[#111317] border border-white/10 focus:border-blue-500 focus:outline-none pl-9 pr-3 py-2 rounded-xl text-xs text-white placeholder-white/25 transition-all"
                   disabled={loading}
                 />
               </div>
@@ -344,7 +370,7 @@ setLoading(true);
               </div>
             </div>
 
-            {/* Password */}
+{/* Password */}
             <div className="space-y-1">
               <label className="text-[9px] font-mono text-white/40 uppercase tracking-widest block font-semibold">
                 Create Password
@@ -352,14 +378,22 @@ setLoading(true);
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/20" />
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   placeholder="••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-[#111317] border border-white/10 focus:border-blue-500 focus:outline-none pl-9 pr-3 py-2 rounded-xl text-xs text-white placeholder-white/25 transition-all"
+                  className="w-full bg-[#111317] border border-white/10 focus:border-blue-500 focus:outline-none pl-9 pr-10 py-2 rounded-xl text-xs text-white placeholder-white/25 transition-all"
                   required
                   disabled={loading}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
               </div>
             </div>
 
@@ -371,14 +405,22 @@ setLoading(true);
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/20" />
                 <input
-                  type="password"
+                  type={showConfirmPassword ? "text" : "password"}
                   placeholder="••••••"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full bg-[#111317] border border-white/10 focus:border-blue-500 focus:outline-none pl-9 pr-3 py-2 rounded-xl text-xs text-white placeholder-white/25 transition-all"
+                  className="w-full bg-[#111317] border border-white/10 focus:border-blue-500 focus:outline-none pl-9 pr-10 py-2 rounded-xl text-xs text-white placeholder-white/25 transition-all"
                   required
                   disabled={loading}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition"
+                  tabIndex={-1}
+                >
+                  {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
               </div>
             </div>
 

@@ -84,6 +84,7 @@ const [userProfile, setUserProfile] = useState<{
       city: string;
       location: string;
       denomination: string;
+      phone?: string;
       subscriptionPlan: "free" | "monthly" | "yearly";
       subscriptionStatus: string;
       subscriptionEnd?: string;
@@ -122,12 +123,8 @@ const [userProfile, setUserProfile] = useState<{
               const { data: profile, error } = await Promise.race([profilePromise, timeoutPromise]) as any;
 
               if (error || !profile) {
-                console.warn("User profile not found or error, clearing session:", error?.message);
-                // Clear invalid session when profile is missing
-                if (mounted) {
-                  void supabase.auth.signOut();
-                  setUserProfile(null);
-                }
+                console.warn("User profile fetch:", error?.message || "no profile");
+                if (mounted) setUserProfile(null);
               } else {
                 // Check if subscription has expired
                 const mappedProfile = mapProfileFromDB(profile);
@@ -148,10 +145,7 @@ const [userProfile, setUserProfile] = useState<{
               }
             } catch (err: any) {
               console.warn("Profile fetch failed:", err.message);
-              if (mounted) {
-                void supabase.auth.signOut();
-                setUserProfile(null);
-              }
+              if (mounted) setUserProfile(null);
             }
           })();
         } else {
@@ -787,6 +781,13 @@ const [userProfile, setUserProfile] = useState<{
     // Process text instantly with AI verse extraction endpoint
     triggerAiDetection(finalPhrase);
   };
+
+  // Synchronize viewMode with authentication state
+  useEffect(() => {
+    if (currentUser && viewMode === "loading") {
+      setViewMode("operator");
+    }
+  }, [currentUser, viewMode]);
 
   const handleClearNotes = () => {
     setSermonNotes([]);
