@@ -2,6 +2,7 @@ import React, { useState, FormEvent } from "react";
 import { supabase } from "../supabase";
 import { BookOpen, Mail, Lock, LogIn, Sparkles, UserPlus, ChevronLeft, Eye, EyeOff } from "lucide-react";
 
+
 interface LoginPageProps {
   onNavigate: (view: "landing" | "login" | "register") => void;
 }
