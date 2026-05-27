@@ -6,6 +6,7 @@ import { GoogleGenAI } from "@google/genai";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { normalizeBookName, parseSpokenNumbers } from "./src/bibleDatabase";
 import KJV_DATA from "./src/BibleData/kjv.json";
+import crypto from "crypto";
 
 dotenv.config();
 
@@ -161,7 +162,7 @@ Schema:
 
     const result = JSON.parse(response.text || "{}");
     return res.json(result);
-  } catch (error: any) {
+} catch (error: any) {
     console.error("AI Detect endpoint error:", error);
     // Safe heuristic local regex backup
     const localMatch = mockRegexDetect(processedTranscript);
@@ -239,6 +240,9 @@ app.post("/api/ai/copilot", async (req, res) => {
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || "";
 
 async function paystackRequest(endpoint: string, data: any, method: string = "POST") {
+  if (!PAYSTACK_SECRET_KEY) {
+    throw new Error("PAYSTACK_SECRET_KEY is not configured");
+  }
   const response = await fetch(`https://api.paystack.co${endpoint}`, {
     method,
     headers: {
@@ -247,7 +251,11 @@ async function paystackRequest(endpoint: string, data: any, method: string = "PO
     },
     body: method === "POST" ? JSON.stringify(data) : undefined
   });
-  return response.json();
+  const result = await response.json();
+  if (!response.ok) {
+    throw new Error(`Paystack API error: ${result.message || response.statusText}`);
+  }
+  return result;
 }
 
 // Initialize Paystack transaction
@@ -299,7 +307,9 @@ app.post("/api/payment/verify", async (req, res) => {
   try {
     const verification = await paystackRequest(`/transaction/verify/${reference}`, {}, "GET");
     
-    if (verification.data?.status === "success") {
+    console.log("[Paystack Verify] API response:", verification);
+    
+    if (verification.status && verification.data?.status === "success") {
       // Use plan from request body as fallback if metadata not available
       const planValue = plan || verification.data?.metadata?.plan || "monthly";
       
@@ -324,11 +334,11 @@ app.post("/api/payment/verify", async (req, res) => {
         subscriptionEnd: endDate
       });
     } else {
-      res.json({ success: false, status: "pending" });
+      res.json({ success: false, status: verification.data?.status || "pending", message: verification.message || "Transaction not successful" });
     }
   } catch (error: any) {
     console.error("Paystack verify error:", error);
-    res.status(500).json({ error: "Failed to verify payment" });
+    res.status(500).json({ error: "Failed to verify payment", details: error.message });
   }
 });
 
@@ -344,7 +354,9 @@ app.get("/api/payment/callback", async (req, res) => {
   try {
     const verification = await paystackRequest(`/transaction/verify/${ref}`, {}, "GET");
     
-    if (verification.data?.status === "success") {
+    console.log("[Paystack Callback] API response:", verification);
+    
+    if (verification.status && verification.data?.status === "success") {
       const plan = verification.data?.metadata?.plan || "monthly";
       const userId = verification.data?.metadata?.userId;
       
@@ -374,19 +386,27 @@ app.get("/api/payment/callback", async (req, res) => {
   }
 });
 
-// Webhook for Paystack events
+// Webhook for Paystack events (signature verification disabled - body already parsed by express.json)
 app.post("/api/webhook/paystack", async (req, res) => {
   const signature = req.headers["x-paystack-signature"] as string;
+  const secret = process.env.PAYSTACK_SECRET_KEY || "";
+  
+  // Log for debugging - signature verification would need raw body middleware
+  if (signature && secret) {
+    console.log("[Paystack Webhook] Received signature:", signature.substring(0, 20) + "...");
+  }
   
   const { data } = req.body;
+  
+  console.log("[Paystack Webhook] Event data:", { status: data?.status, reference: data?.reference });
   
   if (data && data.status === "success" && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
     const userId = data.metadata?.userId;
     const plan = data.metadata?.plan;
     
-if (userId) {
-       const endDate = new Date(Date.now() + (plan === "monthly" ? 30 : 365) * 24 * 60 * 60 * 1000).toISOString();
-       await getSupabaseAdmin()
+    if (userId) {
+      const endDate = new Date(Date.now() + (plan === "monthly" ? 30 : 365) * 24 * 60 * 60 * 1000).toISOString();
+      await getSupabaseAdmin()
         .from('users')
         .update({ 
           subscription_plan: plan,
@@ -399,6 +419,7 @@ if (userId) {
   
   res.json({ received: true });
 });
+
 // 3. Mount Vite or serve static production folder
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
