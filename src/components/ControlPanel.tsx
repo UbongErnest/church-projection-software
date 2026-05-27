@@ -112,15 +112,11 @@ customBrandingText,
   // Navigation sub-tabs (adding plans tab)
   const [activeTab, setActiveTab] = useState<"ai-feed" | "manual-bible" | "songs" | "announcements" | "media-library" | "plans">("plans");
 
-  // Upgrade prompt modal states
-  const [showUpgradePromptModal, setShowUpgradePromptModal] = useState(false);
-  const [upgradeTriggerSource, setUpgradeTriggerSource] = useState("");
+// Upgrade prompt modal states
+    const [showUpgradePromptModal, setShowUpgradePromptModal] = useState(false);
+    const [upgradeTriggerSource, setUpgradeTriggerSource] = useState("");
+    const [checkoutLoading, setCheckoutLoading] = useState(false);
 
-  // Simulated Checkout Modal state
-  const [checkoutPlan, setCheckoutPlan] = useState<"monthly" | "yearly" | null>(null);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [checkoutSuccess, setCheckoutSuccess] = useState(false);
-  
 /* Selection states for Bible Search */
    const [selectedBook, setSelectedBook] = useState<string>("John");
    const [selectedChapter, setSelectedChapter] = useState<number>(3);
@@ -132,99 +128,59 @@ customBrandingText,
    const [isLoadingLookup, setIsLoadingLookup] = useState<boolean>(false);
    const [lookupError, setLookupError] = useState<string | null>(null);
 
-   // Theme lock helper
-   const isThemeLocked = (themeId: string) => {
-     if (["nebula-dark", "emerald-sanctuary", "crimson-grace", "royal-gold", "sanctuary-aurora"].includes(themeId)) {
-       return userPlan !== "yearly"; // Premium (yearly) only
-     }
-     return false;
-   };
+// Theme lock helper
+    const isThemeLocked = (themeId: string) => {
+      if (["nebula-dark", "emerald-sanctuary", "crimson-grace", "royal-gold", "sanctuary-aurora"].includes(themeId)) {
+        return userPlan !== "yearly"; // Premium (yearly) only
+      }
+      return false;
+    };
 
 // Paystack checkout handler
-    const handlePaystackCheckout = async (plan: "monthly" | "yearly") => {
-      if (!currentUser?.id) {
-        alert("Please log in to upgrade your subscription.");
-        return;
-      }
+     const handlePaystackCheckout = async (plan: "monthly" | "yearly") => {
+       if (!currentUser?.id) {
+         alert("Please log in to upgrade your subscription.");
+         return;
+       }
 
-      const userEmail = userProfile?.email || currentUser.email;
-      if (!userEmail) {
-        alert("Unable to proceed with payment - no email found.");
-        return;
-      }
-     
-setCheckoutLoading(true);
-      try {
-        const amount = plan === "monthly" ? 10000 : 25000;
-        const user_id = currentUser.id;
+       const userEmail = userProfile?.email || currentUser.email;
+       if (!userEmail) {
+         alert("Unable to proceed with payment - no email found.");
+         return;
+       }
+      
+      setCheckoutLoading(true);
+       try {
+         const amount = plan === "monthly" ? 10000 : 25000;
+         const user_id = currentUser.id;
 
-        const initResponse = await fetch("/api/payment/initialize", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: userEmail,
-            amount: amount,
-            plan: plan,
-            userId: user_id
-          }),
-        });
+         const initResponse = await fetch("/api/payment/initialize", {
+           method: "POST",
+           headers: { "Content-Type": "application/json" },
+           body: JSON.stringify({
+             email: userEmail,
+             amount: amount,
+             plan: plan,
+             userId: user_id
+           }),
+         });
 
-        const initData = await initResponse.json();
+         const initData = await initResponse.json();
 
-if (initData.success && initData.authorizationUrl) {
-           setCheckoutPlan(plan);
-
-           if (!(window as any).PaystackPop) {
-             alert("Payment system not loaded. Please refresh the page and try again.");
-             setCheckoutLoading(false);
-             return;
-           }
-
-           const handler = (window as any).PaystackPop.setup({
-            key: (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_PAYSTACK_PUBLIC_KEY) || "pk_test_1895ab6fa7f290a990101e6ed1756d35a75928e8",
-            email: userEmail,
-            amount: amount * 100,
-            currency: "NGN",
-            ref: initData.reference,
-            metadata: {
-              plan: plan,
-              userId: user_id
-            },
-            callback: async (response: any) => {
-              const verifyResponse = await fetch("/api/payment/verify", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  reference: response.reference,
-                  userId: user_id
-                }),
-              });
-              const verifyData = await verifyResponse.json();
-              if (verifyData.success) {
-                setCheckoutSuccess(true);
-                if (onUpdateSubscription) {
-                  await onUpdateSubscription(plan);
-                }
-              }
-            },
-            onClose: () => {
-              setCheckoutLoading(false);
-              setCheckoutPlan(null);
-            }
-          });
-
-          if (handler) handler.openIframe();
-        } else {
-          console.error("Paystack initialization failed:", initData.error);
-          alert(`Payment initialization failed: ${initData.error || "Unable to initialize payment"}`);
-        }
-      } catch (error: any) {
-        console.error("Paystack checkout error:", error);
-        alert("Payment processing error. Please try again.");
-      } finally {
-        setCheckoutLoading(false);
-      }
-    };
+         if (initData.success && initData.authorizationUrl) {
+           // Redirect to Paystack authorization URL
+           window.location.href = initData.authorizationUrl;
+         } else {
+           console.error("Paystack initialization failed:", initData.error);
+           alert(`Payment initialization failed: ${initData.error || "Unable to initialize payment"}`);
+         }
+       } catch (error: any) {
+         console.error("Paystack checkout error:", error);
+         alert("Payment processing error. Please try again.");
+       } finally {
+         setCheckoutLoading(false);
+       }
+     };
 
    // Song and announcements selection
   const [selectedSongId, setSelectedSongId] = useState<string>(DEFAULT_SONGS[0].id);
@@ -2121,56 +2077,7 @@ onChange={(e) => {
                  </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* 5. SIMULATED CHECKOUT DIALOG */}
-      {checkoutPlan && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 select-none animate-fade-in text-left">
-          <div className="w-full max-w-md bg-[#111317] border border-white/10 rounded-2xl p-6 md:p-8 flex flex-col shadow-2xl relative">
-            
-            {checkoutSuccess ? (
-              <div className="text-center py-6 flex flex-col items-center gap-4 animate-scale-in">
-                <div className="w-12 h-12 bg-green-500/20 text-green-400 border border-green-400/30 rounded-full flex items-center justify-center shadow-lg animate-bounce">
-                  <Award className="w-6 h-6 text-green-400" />
-                </div>
-                <div>
-                  <h3 className="font-sans font-black text-lg text-white uppercase tracking-wider">Payment Authorized!</h3>
-                  <span className="text-[10px] font-mono text-green-400 uppercase tracking-widest block font-bold mt-0.5">
-                    Welcome to {checkoutPlan === "yearly" ? "Premium Plan" : "Pro Monthly"}
-                  </span>
-                </div>
-                <p className="text-xs text-white/60 max-w-xs leading-relaxed font-sans">
-                  Ecclesiastical upgrade completed successfully. All locked features are now fully mapped to your sanctuary account.
-                </p>
-                <button
-                  type="button"
-onClick={() => {
-                     setCheckoutPlan(null);
-                     setCheckoutSuccess(false);
-                   }}
-                  className="bg-green-600 hover:bg-green-500 text-white font-sans font-bold text-xs px-6 py-2.5 rounded-xl transition cursor-pointer shadow-md shadow-green-900/10"
-                >
-                  Enter Studio Console
-                </button>
-              </div>
-) : (
-               <div className="text-center py-8 flex flex-col items-center gap-4">
-                 <div className="w-16 h-16 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin"></div>
-                 <div>
-                   <h3 className="font-sans font-black text-sm uppercase text-white tracking-tight">Processing Payment</h3>
-                   <span className="text-[10px] font-mono text-white/40 uppercase tracking-widest block mt-1">
-                     {checkoutPlan === "yearly" ? "Premium Plan (₦25,000)" : "Pro Monthly (₦10,000)"}
-                   </span>
-                 </div>
-                 <p className="text-xs text-white/60 max-w-xs leading-relaxed font-sans">
-                   Complete your payment in the Paystack popup window. Your subscription will activate automatically after confirmation.
-                 </p>
-               </div>
-             )}
-
-          </div>
+</div>
         </div>
       )}
     </div>

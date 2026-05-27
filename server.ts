@@ -259,9 +259,14 @@ app.post("/api/payment/initialize", async (req, res) => {
   }
 
   try {
+    const callbackUrl = process.env.APP_URL 
+      ? `${process.env.APP_URL}/api/payment/callback` 
+      : `${req.protocol}://${req.get("host")}/api/payment/callback`;
+    
     const transaction = await paystackRequest("/transaction/initialize", {
       email,
       amount: amount * 100, // Convert to kobo/pesewa
+      callback_url: callbackUrl,
       metadata: {
         plan,
         userId: userId || ""
@@ -300,8 +305,8 @@ app.post("/api/payment/verify", async (req, res) => {
       // Calculate subscription end date
       const endDate = new Date(Date.now() + (plan === "monthly" ? 30 : 365) * 24 * 60 * 60 * 1000).toISOString();
       
-if (userId && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-         await getSupabaseAdmin()
+      if (userId && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        await getSupabaseAdmin()
           .from('users')
           .update({ 
             subscription_plan: plan,
@@ -323,6 +328,48 @@ if (userId && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
   } catch (error: any) {
     console.error("Paystack verify error:", error);
     res.status(500).json({ error: "Failed to verify payment" });
+  }
+});
+
+// Callback endpoint for Paystack redirect after payment
+app.get("/api/payment/callback", async (req, res) => {
+  const { reference, trxref } = req.query;
+  const ref = reference || trxref;
+  
+  if (!ref) {
+    return res.status(400).json({ error: "Missing reference" });
+  }
+
+  try {
+    const verification = await paystackRequest(`/transaction/verify/${ref}`, {});
+    
+    if (verification.data?.status === "success") {
+      const plan = verification.data?.metadata?.plan || "monthly";
+      const userId = verification.data?.metadata?.userId;
+      
+      // Calculate subscription end date
+      const endDate = new Date(Date.now() + (plan === "monthly" ? 30 : 365) * 24 * 60 * 60 * 1000).toISOString();
+      
+      if (userId && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        await getSupabaseAdmin()
+          .from('users')
+          .update({ 
+            subscription_plan: plan,
+            subscription_status: "active",
+            subscription_end: endDate
+          })
+          .eq('user_id', userId);
+      }
+      
+      // Redirect to app with success status
+      res.redirect(`/?payment=success&plan=${encodeURIComponent(plan)}`);
+    } else {
+      // Redirect to app with failure status
+      res.redirect("/?payment=failed");
+    }
+  } catch (error: any) {
+    console.error("Paystack callback error:", error);
+    res.redirect("/?payment=error");
   }
 });
 

@@ -764,11 +764,43 @@ export default function App() {
   };
 
 // Synchronize viewMode with authentication state
-   useEffect(() => {
-     if (currentUser && viewMode === "loading") {
-       setViewMode("operator");
-     }
-   }, [currentUser, viewMode]);
+    useEffect(() => {
+      if (currentUser && viewMode === "loading") {
+        setViewMode("operator");
+      }
+    }, [currentUser, viewMode]);
+
+    // Handle payment success redirect from Paystack
+    useEffect(() => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const paymentStatus = urlParams.get("payment");
+      const plan = urlParams.get("plan");
+      
+      if (paymentStatus === "success" && plan && currentUser) {
+        // Show success message
+        alert(`Payment successful! You are now on the ${plan === "yearly" ? "Premium Plan" : "Pro Monthly"} plan.`);
+        // Clean up URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+        // Refresh user profile to get updated subscription
+        (async () => {
+          try {
+            const { data: profile } = await supabase
+              .from('users')
+              .select('*')
+              .eq('user_id', currentUser.id)
+              .single();
+            if (profile) {
+              setUserProfile(mapProfileFromDB(profile));
+            }
+          } catch (err) {
+            console.warn("Failed to refresh profile after payment:", err);
+          }
+        })();
+      } else if (paymentStatus === "failed") {
+        alert("Payment failed. Please try again.");
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }, [currentUser]);
 
   const handleClearNotes = () => {
     setSermonNotes([]);
