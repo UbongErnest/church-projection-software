@@ -40,7 +40,7 @@ export default function SermonNotepad({
    const userPlan = userProfile?.subscriptionPlan || "free";
    const subscriptionStatus = userProfile?.subscriptionStatus;
    const isPremium = userPlan === "yearly";
-   const hasExpired = subscriptionStatus === "expired" || userPlan === "free";
+   const hasExpired = subscriptionStatus === "expired" && userPlan !== "free";
 
    // Notepad form state
   const [noteTitle, setNoteTitle] = useState("");
@@ -366,25 +366,22 @@ System Source: Chaver AI Automatic Pulpit Monitor
 
 return (
     <div className="flex flex-col gap-3 font-sans w-full select-none text-[#E0E0E0] animate-fade-in">
-      {userPlan === "free" || hasExpired ? (
+      {userPlan === "free" ? (
         <div className="flex flex-col items-center justify-center text-center p-6 bg-white/5 border border-white/10 rounded-2xl min-h-[380px] gap-4">
           <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center animate-pulse">
             <Crown className="w-6 h-6 text-amber-400" />
           </div>
           <h3 className="font-sans font-black text-xs uppercase text-white tracking-wider">
-            {userPlan === "free" ? "Upgrade Required" : "Subscription Expired"}
+            Upgrade Required
           </h3>
           <p className="text-white/50 text-[11px] leading-relaxed max-w-[240px]">
-            {userPlan === "free"
-              ? `Upgrade to the <span class="text-amber-400 font-bold">Monthly Plan</span> to unlock sermon journaling, cloud saves, and upgrade to Yearly for AI Copilot.`
-              : "Your subscription has expired. Renew to continue using premium features including sermon journaling, cloud saves, and AI Copilot."
-            }
+            Upgrade to the <span class="text-amber-400 font-bold">Monthly Plan</span> to unlock sermon journaling, cloud saves, and upgrade to Yearly for AI Copilot.
           </p>
           <div className="w-full text-center py-2 px-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 font-sans font-bold text-[10px] uppercase">
-            {userPlan === "free" ? "🔒 PREMIUM EXCLUSIVE FEATURE" : "⚠️ RENEWAL REQUIRED"}
+            🔒 PREMIUM EXCLUSIVE FEATURE
           </div>
 <p className="text-white/30 text-[9px] leading-tight">
-             Please switch to the 💳 PLANS & BILLING tab in the Control Panel to {userPlan === "free" ? "upgrade" : "renew"}!
+             Please switch to the 💳 PLANS & BILLING tab in the Control Panel to upgrade!
            </p>
           </div>
         ) : (
