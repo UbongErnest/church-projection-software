@@ -92,66 +92,79 @@ const [userProfile, setUserProfile] = useState<{
   const [authView, setAuthView] = useState<"landing" | "login" | "register">("landing");
 
 // Auth monitoring listener and real-time Supabase profile sync
-   useEffect(() => {
+    useEffect(() => {
       let mounted = true;
 
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Set authChecked immediately - auth check happens in background
+      setAuthChecked(true);
+
+      // Set up auth state listener for subsequent changes
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        console.log("Auth state changed:", event, session?.user?.id || "no user");
         if (!mounted) return;
-        
+
         setCurrentUser(session?.user || null);
         if (session?.user) {
-          // Fetch user profile from users table
-          const { data: profile, error } = await supabase
-            .from('users')
-            .select('*')
-            .eq('user_id', session.user.id)
-            .single();
-          
-          if (error) {
-            console.error("Supabase user profile fetch error:", error);
-            setUserProfile({
-              uid: session.user.id,
-              email: session.user.email || "",
-              displayName: session.user.user_metadata?.display_name || "",
-              createdAt: new Date().toISOString(),
-              churchName: "My Congregation",
-              country: "",
-              state: "",
-              city: "",
-              location: "",
-              denomination: "",
-              subscriptionPlan: "free",
-              subscriptionStatus: "active"
-            });
-          } else {
-            // Check if subscription has expired
-            const mappedProfile = mapProfileFromDB(profile);
-            if (mappedProfile?.subscriptionEnd) {
-              const endDate = new Date(mappedProfile.subscriptionEnd);
-              if (endDate < new Date()) {
-                // Subscription expired - reset to free
-                mappedProfile.subscriptionPlan = "free";
-                mappedProfile.subscriptionStatus = "expired";
-                // Update in database
-                await supabase
-                  .from('users')
-                  .update({ subscription_plan: "free", subscription_status: "expired" })
-                  .eq('user_id', session.user.id);
+          // Fetch user profile in background (non-blocking)
+          (async () => {
+            try {
+              // Fetch user profile from users table with timeout wrapper
+              const profilePromise = supabase
+                .from('users')
+                .select('*')
+                .eq('user_id', session.user.id)
+                .single();
+
+              const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error("Profile fetch timeout")), 8000);
+              });
+
+              const { data: profile, error } = await Promise.race([profilePromise, timeoutPromise]) as any;
+
+              if (error || !profile) {
+                console.warn("User profile not found or error, clearing session:", error?.message);
+                // Clear invalid session when profile is missing
+                if (mounted) {
+                  void supabase.auth.signOut();
+                  setUserProfile(null);
+                }
+              } else {
+                // Check if subscription has expired
+                const mappedProfile = mapProfileFromDB(profile);
+                if (mappedProfile?.subscriptionEnd) {
+                  const endDate = new Date(mappedProfile.subscriptionEnd);
+                  if (endDate < new Date()) {
+                    // Subscription expired - reset to free
+                    mappedProfile.subscriptionPlan = "free";
+                    mappedProfile.subscriptionStatus = "expired";
+                    // Update in database (fire and forget)
+                    void supabase
+                      .from('users')
+                      .update({ subscription_plan: "free", subscription_status: "expired" })
+                      .eq('user_id', session.user.id);
+                  }
+                }
+                if (mounted) setUserProfile(mappedProfile);
+              }
+            } catch (err: any) {
+              console.warn("Profile fetch failed:", err.message);
+              if (mounted) {
+                void supabase.auth.signOut();
+                setUserProfile(null);
               }
             }
-            setUserProfile(mappedProfile);
-          }
+          })();
         } else {
           setUserProfile(null);
         }
-        setAuthChecked(true);
       });
 
-// Check for existing session on load
-       supabase.auth.getSession().then(({ data: { session } }) => {
-         if (!mounted) return;
-         setAuthChecked(true);
-       });
+      // Check for existing session on load
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        console.log("Initial session check:", session?.user?.id || "no session");
+      }).catch((err) => {
+        console.error("getSession error:", err);
+      });
 
       return () => {
         mounted = false;
