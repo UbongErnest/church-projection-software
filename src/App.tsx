@@ -6,7 +6,7 @@ import SermonNotepad from "./components/SermonNotepad";
 import LandingPage from "./components/LandingPage";
 import RegisterPage from "./components/RegisterPage";
 import LoginPage from "./components/LoginPage";
-import { supabase, mapProfileFromDB } from "./supabase";
+import { supabase, mapProfileFromDB, UserProfile } from "./supabase";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { Sparkles, CornerDownRight, Volume2, Notebook } from "lucide-react";
 import { BIBLE_BOOKS, parseSpokenNumbers, getKjvVerseText } from "./bibleDatabase";
@@ -72,23 +72,8 @@ export default function App() {
   const [viewMode, setViewMode] = useState<"operator" | "projector" | "loading">("loading");
 
 // Supabase Authenticated Session State Tracking
-   const [currentUser, setCurrentUser] = useState<SupabaseUser | null>(null);
-const [userProfile, setUserProfile] = useState<{
-      uid: string;
-      email: string;
-      displayName: string;
-      createdAt: string;
-      churchName: string;
-      country: string;
-      state: string;
-      city: string;
-      location: string;
-      denomination: string;
-      phone?: string;
-      subscriptionPlan: "free" | "monthly" | "yearly";
-      subscriptionStatus: string;
-      subscriptionEnd?: string;
-    } | null>(null);
+    const [currentUser, setCurrentUser] = useState<SupabaseUser | null>(null);
+    const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [authChecked, setAuthChecked] = useState<boolean>(false);
   const [authView, setAuthView] = useState<"landing" | "login" | "register">("landing");
 
@@ -156,6 +141,37 @@ const [userProfile, setUserProfile] = useState<{
       // Check for existing session on load
       supabase.auth.getSession().then(({ data: { session } }) => {
         console.log("Initial session check:", session?.user?.id || "no session");
+        if (session?.user && mounted) {
+          setCurrentUser(session.user);
+          // Fetch user profile
+          (async () => {
+            try {
+              const { data: profile, error } = await supabase
+                .from('users')
+                .select('*')
+                .eq('user_id', session.user.id)
+                .single();
+
+              if (profile && !error) {
+                const mappedProfile = mapProfileFromDB(profile);
+                if (mappedProfile?.subscriptionEnd) {
+                  const endDate = new Date(mappedProfile.subscriptionEnd);
+                  if (endDate < new Date()) {
+                    mappedProfile.subscriptionPlan = "free";
+                    mappedProfile.subscriptionStatus = "expired";
+                    void supabase
+                      .from('users')
+                      .update({ subscription_plan: "free", subscription_status: "expired" })
+                      .eq('user_id', session.user.id);
+                  }
+                }
+                if (mounted) setUserProfile(mappedProfile);
+              }
+            } catch (err) {
+              console.warn("Initial session profile fetch failed:", err);
+            }
+          })();
+        }
       }).catch((err) => {
         console.error("getSession error:", err);
       });
@@ -806,16 +822,16 @@ const [userProfile, setUserProfile] = useState<{
     );
   }
 
-  // Unauthenticated visitors must register/login to access the pulpit studio
-  if (!currentUser) {
+// Unauthenticated visitors must register/login to access the pulpit studio
+   if (!currentUser) {
     if (authView === "login") {
-      return <LoginPage onNavigate={setAuthView} onAuthSuccess={() => {}} />;
+      return <LoginPage onNavigate={setAuthView} onAuthSuccess={() => setViewMode("operator")} />;
     }
     if (authView === "register") {
-      return <RegisterPage onNavigate={setAuthView} onAuthSuccess={() => {}} />;
+      return <RegisterPage onNavigate={setAuthView} onAuthSuccess={() => setViewMode("operator")} />;
     }
     return <LandingPage onNavigate={setAuthView} />;
-  }
+   }
 
   if (viewMode === "loading") {
     return (

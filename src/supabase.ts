@@ -6,20 +6,20 @@ const supabaseAnonKey = "sb_publishable_ro9MOv6_fIdjaNL5xPXgtA_PuMzu2ZQ";
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export type UserProfile = {
-  user_id: string;
+  uid: string;
   email: string;
-  display_name: string;
-  created_at: string;
-  church_name: string;
+  displayName: string;
+  createdAt: string;
+  churchName: string;
   country: string;
   state: string;
   city: string;
   location: string;
   denomination: string;
   phone?: string;
-  subscription_plan: "free" | "monthly" | "yearly";
-  subscription_status: string;
-  subscription_end?: string;
+  subscriptionPlan: "free" | "monthly" | "yearly";
+  subscriptionStatus: string;
+  subscriptionEnd?: string;
 };
 
 export type SavedSermonNote = {
@@ -32,7 +32,7 @@ export type SavedSermonNote = {
   raw_date: number;
 };
 
-export function mapProfileFromDB(dbProfile: any): any {
+export function mapProfileFromDB(dbProfile: any): UserProfile | null {
   if (!dbProfile) return null;
   return {
     uid: dbProfile.user_id,
@@ -45,7 +45,7 @@ export function mapProfileFromDB(dbProfile: any): any {
     city: dbProfile.city,
     location: dbProfile.location,
     denomination: dbProfile.denomination,
-    phone: dbProfile.phone || "",
+    phone: dbProfile.phone,
     subscriptionPlan: dbProfile.subscription_plan,
     subscriptionStatus: dbProfile.subscription_status,
     subscriptionEnd: dbProfile.subscription_end,

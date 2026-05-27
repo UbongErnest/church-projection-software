@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, FormEvent } from "react";
-import { supabase } from "../supabase";
+import { supabase, UserProfile } from "../supabase";
 import {
    Mic,
    MicOff,
@@ -51,11 +51,7 @@ interface ControlPanelProps {
   sermonTopic: string;
   sermonNotes: string[];
   onClearNotes: () => void;
-  userProfile?: {
-    subscriptionPlan: "free" | "monthly" | "yearly";
-    subscriptionStatus: string;
-    [key: string]: any;
-  } | null;
+userProfile?: UserProfile | null;
   onUpdateSubscription?: (newPlan: "free" | "monthly" | "yearly") => Promise<void>;
 
 // Lifted customizer options:

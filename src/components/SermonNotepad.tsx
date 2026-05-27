@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, FormEvent } from "react";
 import { ActiveSlide } from "../types";
-import { supabase } from "../supabase";
+import { supabase, UserProfile, SavedSermonNote } from "../supabase";
 import { 
    Notebook, 
    Save, 
@@ -23,26 +23,12 @@ import {
    X
  } from "lucide-react";
 
-interface SavedSermonNote {
-   id: string;
-   user_id: string;
-   title: string;
-   content: string;
-   created_at: string;
-   timestamp: string;
-   raw_date: number;
- }
-
 interface SermonNotepadProps {
-  sermonTopic: string;
-  activeProjectedSlide: ActiveSlide;
-  transcript: string;
-  userProfile?: {
-    subscriptionPlan: "free" | "monthly" | "yearly";
-    subscriptionStatus: string;
-    [key: string]: any;
-  } | null;
-}
+   sermonTopic: string;
+   activeProjectedSlide: ActiveSlide;
+   transcript: string;
+   userProfile?: UserProfile | null;
+ }
 
 export default function SermonNotepad({
   sermonTopic,

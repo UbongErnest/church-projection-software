@@ -111,7 +111,7 @@ try {
           }
         });
         
-        if (signUpError) {
+if (signUpError) {
           throw signUpError;
         }
         
@@ -149,8 +149,8 @@ try {
           console.error("Profile creation error:", profileError);
         }
         
-        // Success - user will need to confirm email if required
-        onAuthSuccess();
+        // Success - redirect to login page
+        onNavigate("login");
       } catch (err: any) {
         console.error("Auth register failed", err);
         setErrorText(err.message || "An unexpected error occurred during registration. Please try again.");
