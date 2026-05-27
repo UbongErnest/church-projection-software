@@ -160,7 +160,7 @@ customBrandingText,
           throw new Error("Paystack payment system not available. Please refresh the page.");
         }
 
-        const handler = (window as any).PaystackPop.setup({
+const handler = (window as any).PaystackPop.setup({
           key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || "pk_test_1895ab6fa7f290a990101e6ed1756d35a75928e8",
           email: userEmail,
           amount: amount * 100,
@@ -170,33 +170,34 @@ customBrandingText,
             plan: plan,
             userId: user_id
           },
-          callback: async function(response: any) {
-            try {
-              const verifyResponse = await fetch("/api/payment/verify", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  reference: response.reference,
-                  userId: user_id,
-                  plan: plan
-                }),
-              });
-              const verifyData = await verifyResponse.json();
+          callback: function(response: any) {
+            setCheckoutLoading(false);
+            (async () => {
+              try {
+                const verifyResponse = await fetch("/api/payment/verify", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    reference: response.reference,
+                    userId: user_id,
+                    plan: plan
+                  }),
+                });
+                const verifyData = await verifyResponse.json();
 
-              if (verifyData.success) {
-                alert(`Payment successful! You are now on the ${plan === "yearly" ? "Premium Plan" : "Pro Monthly"} plan.`);
-                if (onUpdateSubscription) {
-                  await onUpdateSubscription(plan);
+                if (verifyData.success) {
+                  alert(`Payment successful! You are now on the ${plan === "yearly" ? "Premium Plan" : "Pro Monthly"} plan.`);
+                  if (onUpdateSubscription) {
+                    await onUpdateSubscription(plan);
+                  }
+                } else {
+                  alert("Payment verification failed. Please contact support.");
                 }
-              } else {
-                alert("Payment verification failed. Please contact support.");
+              } catch (verifyError) {
+                console.error("Payment verification error:", verifyError);
+                alert("Payment verification failed. Please try again or contact support.");
               }
-            } catch (verifyError) {
-              console.error("Payment verification error:", verifyError);
-              alert("Payment verification failed. Please try again or contact support.");
-            } finally {
-              setCheckoutLoading(false);
-            }
+            })();
           },
           onClose: function() {
             setCheckoutLoading(false);
