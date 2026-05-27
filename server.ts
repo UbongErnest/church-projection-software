@@ -267,7 +267,8 @@ async function paystackRequest(endpoint: string, data: any, method: string = "PO
 }
 
 async function verifyPaystackTransaction(reference: string, logPrefix: string) {
-  const maxAttempts = 4;
+  const maxAttempts = 8;
+  const retryDelayMs = 3000;
   let lastVerification: any = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -296,7 +297,7 @@ async function verifyPaystackTransaction(reference: string, logPrefix: string) {
       return lastVerification;
     }
 
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise(resolve => setTimeout(resolve, retryDelayMs));
   }
 
   return lastVerification;

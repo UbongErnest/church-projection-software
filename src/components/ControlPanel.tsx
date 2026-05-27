@@ -137,6 +137,51 @@ customBrandingText,
     };
 
 // Paystack checkout handler - uses inline popup
+    const verifyPaymentWithRetry = async (
+      reference: string,
+      userId: string,
+      plan: "monthly" | "yearly"
+    ) => {
+      const retryableStatuses = new Set(["pending", "processing", "ongoing", "queued"]);
+      const maxAttempts = 5;
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const verifyResponse = await fetch("/api/payment/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            reference,
+            userId,
+            plan,
+          }),
+        });
+
+        const verifyData = await verifyResponse.json();
+        if (!verifyResponse.ok) {
+          throw new Error(verifyData?.details || verifyData?.error || "Payment verification request failed.");
+        }
+
+        if (verifyData.success) {
+          return verifyData;
+        }
+
+        const statusLabel = String(verifyData.paystackStatus || verifyData.status || "").toLowerCase();
+        const shouldRetry = attempt < maxAttempts && retryableStatuses.has(statusLabel);
+
+        if (!shouldRetry) {
+          return verifyData;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+
+      return {
+        success: false,
+        status: "pending",
+        message: "Payment is still being confirmed. Please check again shortly.",
+      };
+    };
+
     const handlePaystackCheckout = async (plan: "monthly" | "yearly") => {
       if (!currentUser?.id) {
         alert("Please log in to upgrade your subscription.");
@@ -174,19 +219,7 @@ const handler = (window as any).PaystackPop.setup({
             setCheckoutLoading(false);
             (async () => {
               try {
-                const verifyResponse = await fetch("/api/payment/verify", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    reference: response.reference,
-                    userId: user_id,
-                    plan: plan
-                  }),
-                });
-                const verifyData = await verifyResponse.json();
-                if (!verifyResponse.ok) {
-                  throw new Error(verifyData?.details || verifyData?.error || "Payment verification request failed.");
-                }
+                const verifyData = await verifyPaymentWithRetry(response.reference, user_id, plan);
 
 if (verifyData.success) {
                     alert(`Payment successful! You are now on the ${plan === "yearly" ? "Premium Plan" : "Pro Monthly"} plan.`);
@@ -196,7 +229,7 @@ if (verifyData.success) {
                   } else {
                     console.error("[Paystack Verify] Response:", verifyData);
                     const statusLabel = verifyData.paystackStatus || verifyData.status || "unknown";
-                    alert(`Payment verification failed (${statusLabel}): ${verifyData.message || verifyData.details || "Please contact support."}`);
+                    alert(`Payment verification failed (${statusLabel}): ${verifyData.message || verifyData.details || "Please wait a few seconds and try again."}`);
                   }
               } catch (verifyError) {
                 console.error("Payment verification error:", verifyError);
