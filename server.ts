@@ -11,6 +11,10 @@ import {
   resolveAppUrlFromRequest,
   verifyAndActivatePayment,
 } from "./src/server/payments";
+import {
+  RequestAuthError,
+  getAuthenticatedUserProfileFromRequest,
+} from "./src/server/userProfiles";
 
 dotenv.config();
 
@@ -34,6 +38,26 @@ const app = express();
 const PORT = 3000;
 
 app.use(express.json());
+
+app.get("/api/profile", async (req, res) => {
+  try {
+    const { profile } = await getAuthenticatedUserProfileFromRequest(req);
+    return res.json({ profile });
+  } catch (error: any) {
+    if (error instanceof RequestAuthError) {
+      return res.status(401).json({
+        error: "Unauthorized",
+        details: error.message,
+      });
+    }
+
+    console.error("Profile fetch error:", error);
+    return res.status(500).json({
+      error: "Failed to fetch profile",
+      details: error.message,
+    });
+  }
+});
 
 // Lazy-loaded Gemini API Client initialization
 let aiClient: GoogleGenAI | null = null;
@@ -315,22 +339,7 @@ app.get("/api/payment/callback", async (req, res) => {
     return res.redirect("/?payment=error");
   }
 
-  try {
-    const result = await verifyAndActivatePayment({
-      reference,
-      logPrefix: "[Paystack Callback]",
-    });
-
-    if (!result.success) {
-      const status = encodeURIComponent(result.paystackStatus || "failed");
-      return res.redirect(`/?payment=failed&status=${status}&reference=${encodeURIComponent(reference)}`);
-    }
-
-    return res.redirect(`/?payment=success&plan=${encodeURIComponent(result.plan)}&reference=${encodeURIComponent(reference)}`);
-  } catch (error: any) {
-    console.error("Paystack callback error:", error);
-    return res.redirect("/?payment=error");
-  }
+  return res.redirect(`/?payment=verify&reference=${encodeURIComponent(reference)}`);
 });
 
 // 3. Mount Vite or serve static production folder

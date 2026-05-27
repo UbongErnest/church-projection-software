@@ -72,6 +72,21 @@ async function readApiResponse(response: Response) {
   }
 }
 
+async function fetchServerProfile(accessToken: string) {
+  const response = await fetch("/api/profile", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  const data = await readApiResponse(response);
+
+  if (!response.ok) {
+    throw new Error(data?.details || data?.error || "Failed to fetch profile.");
+  }
+
+  return data?.profile ?? null;
+}
+
 // Fallback preach simulator sequences for seamless sandbox testing
 const PulPULP_SIMULATORS = [
   { label: "Matthew 6:9 (Pulpit Preach)", phrase: "Our Father in heaven, hallowed be Your name, let's open Matthew chapter 6 verse 9" },
@@ -105,29 +120,13 @@ export default function App() {
           // Fetch user profile in background (non-blocking)
           (async () => {
             try {
-              const { data: profile, error } = await supabase
-                .from('users')
-                .select('*')
-                .eq('user_id', session.user.id)
-                .single();
+              const profile = await fetchServerProfile(session.access_token);
 
-              if (error || !profile) {
-                console.warn("User profile fetch:", error?.message || "no profile");
+              if (!profile) {
+                console.warn("User profile fetch: no profile");
                 if (mounted) setUserProfile(null);
               } else {
-                const mappedProfile = mapProfileFromDB(profile);
-                if (mappedProfile?.subscriptionEnd) {
-                  const endDate = new Date(mappedProfile.subscriptionEnd);
-                  if (endDate < new Date()) {
-                    mappedProfile.subscriptionPlan = "free";
-                    mappedProfile.subscriptionStatus = "expired";
-                    void supabase
-                      .from('users')
-                      .update({ subscription_plan: "free", subscription_status: "expired" })
-                      .eq('user_id', session.user.id);
-                  }
-                }
-                if (mounted) setUserProfile(mappedProfile);
+                if (mounted) setUserProfile(mapProfileFromDB(profile));
               }
             } catch (err: any) {
               console.warn("Profile fetch failed:", err.message);
@@ -159,6 +158,40 @@ export default function App() {
         clearTimeout(timeoutId);
       };
     }, []);
+
+    useEffect(() => {
+      if (!currentUser) {
+        return;
+      }
+
+      let cancelled = false;
+
+      const refreshProfile = async () => {
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const accessToken = sessionData.session?.access_token;
+          if (!accessToken) {
+            return;
+          }
+
+          const profile = await fetchServerProfile(accessToken);
+          if (!cancelled) {
+            setUserProfile(profile ? mapProfileFromDB(profile) : null);
+          }
+        } catch (err: any) {
+          console.warn("Periodic profile refresh failed:", err.message);
+        }
+      };
+
+      const intervalId = window.setInterval(() => {
+        void refreshProfile();
+      }, 10 * 60 * 1000);
+
+      return () => {
+        cancelled = true;
+        window.clearInterval(intervalId);
+      };
+    }, [currentUser]);
 
 // Update user subscription plan helper function
     const handleUpdateSubscription = async (newPlan: "free" | "monthly" | "yearly") => {
@@ -783,7 +816,7 @@ export default function App() {
       }
     }, [currentUser, viewMode]);
 
-    // Handle payment success redirect from Paystack
+    // Handle payment redirect from Paystack
      useEffect(() => {
        const urlParams = new URLSearchParams(window.location.search);
        const paymentStatus = urlParams.get("payment");
@@ -792,39 +825,72 @@ export default function App() {
        const callbackStatus = urlParams.get("status");
        const normalizedPlan = plan === "monthly" || plan === "yearly" ? plan : null;
        
-       if (paymentStatus === "success" && normalizedPlan && currentUser) {
+       if ((paymentStatus === "verify" || paymentStatus === "success") && currentUser) {
          (async () => {
            try {
+             let verifiedPlan = normalizedPlan;
+
              if (reference) {
-               const verifyResponse = await fetch("/api/payment/verify", {
-                 method: "POST",
-                 headers: { "Content-Type": "application/json" },
-                 body: JSON.stringify({
-                   reference,
-                   userId: currentUser.id,
-                   plan: normalizedPlan,
-                 }),
-               });
-               const verifyData = await readApiResponse(verifyResponse);
+               let verifyData: any = null;
 
-               if (!verifyResponse.ok || !verifyData?.success) {
-                 throw new Error(verifyData?.details || verifyData?.message || verifyData?.error || "Payment verification failed after redirect.");
+               for (let attempt = 1; attempt <= 5; attempt++) {
+                 const verifyResponse = await fetch("/api/payment/verify", {
+                   method: "POST",
+                   headers: { "Content-Type": "application/json" },
+                   body: JSON.stringify({
+                     reference,
+                     userId: currentUser.id,
+                     plan: normalizedPlan,
+                   }),
+                 });
+                 verifyData = await readApiResponse(verifyResponse);
+
+                 if (verifyResponse.ok && verifyData?.success) {
+                   verifiedPlan = verifyData.plan === "monthly" || verifyData.plan === "yearly"
+                     ? verifyData.plan
+                     : verifiedPlan;
+                   break;
+                 }
+
+                 const paystackState = String(verifyData?.paystackStatus || verifyData?.status || "").toLowerCase();
+                 const shouldRetry =
+                   verifyResponse.ok &&
+                   attempt < 5 &&
+                   ["pending", "processing", "ongoing", "queued"].includes(paystackState);
+
+                 if (!shouldRetry) {
+                   throw new Error(
+                     verifyData?.details ||
+                     verifyData?.message ||
+                     verifyData?.error ||
+                     `Payment verification failed${paystackState ? ` (${paystackState})` : ""}.`
+                   );
+                 }
+
+                 await new Promise(resolve => setTimeout(resolve, 2000));
                }
-             }
 
-             const { data: profile } = await supabase
-               .from('users')
-               .select('*')
-               .eq('user_id', currentUser.id)
-               .single();
-             if (profile) {
-               setUserProfile(mapProfileFromDB(profile));
-             }
+               if (!verifyData?.success) {
+                 throw new Error("Payment is still being confirmed. Please refresh in a few seconds.");
+               }
+              }
 
-             alert(`Payment successful! You are now on the ${normalizedPlan === "yearly" ? "Premium Plan" : "Pro Monthly"} plan.`);
+              const { data: sessionData } = await supabase.auth.getSession();
+              const accessToken = sessionData.session?.access_token;
+              if (!accessToken) {
+                throw new Error("Missing active session token for profile refresh.");
+              }
+
+              const profile = await fetchServerProfile(accessToken);
+              if (profile) {
+                setUserProfile(mapProfileFromDB(profile));
+              }
+
+             const resolvedPlan = verifiedPlan || "monthly";
+             alert(`Payment successful! You are now on the ${resolvedPlan === "yearly" ? "Premium Plan" : "Pro Monthly"} plan.`);
             } catch (err) {
-             console.warn("Failed to refresh profile after payment:", err);
-             alert("Payment went through, but the app could not finish syncing your subscription yet. Please refresh in a few seconds.");
+              console.warn("Failed to refresh profile after payment:", err);
+              alert("Payment went through, but the app could not finish syncing your subscription yet. Please refresh in a few seconds.");
            } finally {
              window.history.replaceState({}, document.title, window.location.pathname);
            }

@@ -1,7 +1,3 @@
-import {
-  verifyAndActivatePayment,
-} from "../../src/server/payments.ts";
-
 function redirect(res: any, location: string) {
   if (typeof res.redirect === "function") {
     return res.redirect(302, location);
@@ -22,22 +18,5 @@ export default async function handler(req: any, res: any) {
     return redirect(res, "/?payment=error");
   }
 
-  try {
-    const result = await verifyAndActivatePayment({
-      reference,
-      logPrefix: "[Paystack Callback]",
-    });
-
-    if (!result.success) {
-      const status = encodeURIComponent(result.paystackStatus || "failed");
-      return redirect(res, `/?payment=failed&status=${status}&reference=${encodeURIComponent(reference)}`);
-    }
-
-    const plan = encodeURIComponent(result.plan);
-    const encodedReference = encodeURIComponent(reference);
-    return redirect(res, `/?payment=success&plan=${plan}&reference=${encodedReference}`);
-  } catch (error: any) {
-    console.error("Paystack callback error:", error);
-    return redirect(res, "/?payment=error");
-  }
+  return redirect(res, `/?payment=verify&reference=${encodeURIComponent(reference)}`);
 }

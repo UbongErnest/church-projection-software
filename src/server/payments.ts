@@ -2,6 +2,11 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 export type SubscriptionPlan = "monthly" | "yearly";
 
+type VerificationOptions = {
+  maxAttempts: number;
+  retryDelayMs: number;
+};
+
 type PaystackInitializeResponse = {
   status: boolean;
   message?: string;
@@ -149,9 +154,13 @@ export async function initializePaystackTransaction(args: {
   };
 }
 
-export async function verifyPaystackTransaction(reference: string, logPrefix: string) {
-  const maxAttempts = 6;
-  const retryDelayMs = 2500;
+export async function verifyPaystackTransaction(
+  reference: string,
+  logPrefix: string,
+  options?: Partial<VerificationOptions>
+) {
+  const maxAttempts = options?.maxAttempts ?? 2;
+  const retryDelayMs = options?.retryDelayMs ?? 1000;
   let lastVerification: PaystackVerificationResponse | null = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -212,8 +221,13 @@ export async function verifyAndActivatePayment(args: {
   fallbackPlan?: SubscriptionPlan | null;
   fallbackUserId?: string;
   logPrefix: string;
+  verificationOptions?: Partial<VerificationOptions>;
 }) {
-  const verification = await verifyPaystackTransaction(args.reference, args.logPrefix);
+  const verification = await verifyPaystackTransaction(
+    args.reference,
+    args.logPrefix,
+    args.verificationOptions
+  );
   const paystackStatus = verification?.data?.status || null;
 
   if (paystackStatus !== "success") {
