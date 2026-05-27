@@ -137,79 +137,79 @@ customBrandingText,
     };
 
 // Paystack checkout handler - uses inline popup
-      const handlePaystackCheckout = async (plan: "monthly" | "yearly") => {
-        if (!currentUser?.id) {
-          alert("Please log in to upgrade your subscription.");
-          return;
+    const handlePaystackCheckout = async (plan: "monthly" | "yearly") => {
+      if (!currentUser?.id) {
+        alert("Please log in to upgrade your subscription.");
+        return;
+      }
+
+      const userEmail = userProfile?.email || currentUser.email;
+      if (!userEmail) {
+        alert("Unable to proceed with payment - no email found.");
+        return;
+      }
+
+      setCheckoutLoading(true);
+
+      try {
+        const amount = plan === "monthly" ? 10000 : 25000;
+        const user_id = currentUser.id;
+        const reference = `chaver_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+
+        if (!(window as any).PaystackPop) {
+          throw new Error("Paystack payment system not available. Please refresh the page.");
         }
 
-        const userEmail = userProfile?.email || currentUser.email;
-        if (!userEmail) {
-          alert("Unable to proceed with payment - no email found.");
-          return;
-        }
+        const handler = (window as any).PaystackPop.setup({
+          key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || "pk_test_1895ab6fa7f290a990101e6ed1756d35a75928e8",
+          email: userEmail,
+          amount: amount * 100,
+          currency: "NGN",
+          ref: reference,
+          metadata: {
+            plan: plan,
+            userId: user_id
+          },
+          callback: async function(response: any) {
+            try {
+              const verifyResponse = await fetch("/api/payment/verify", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  reference: response.reference,
+                  userId: user_id,
+                  plan: plan
+                }),
+              });
+              const verifyData = await verifyResponse.json();
 
-        setCheckoutLoading(true);
-
-        try {
-          const amount = plan === "monthly" ? 10000 : 25000;
-          const user_id = currentUser.id;
-          const reference = `chaver_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-
-          if (!(window as any).PaystackPop) {
-            throw new Error("Paystack payment system not available. Please refresh the page.");
-          }
-
-          const handler = (window as any).PaystackPop.setup({
-            key: "pk_test_1895ab6fa7f290a990101e6ed1756d35a75928e8",
-            email: userEmail,
-            amount: amount * 100,
-            currency: "NGN",
-            ref: reference,
-            metadata: {
-              plan: plan,
-              userId: user_id
-            },
-            callback: async function(response: any) {
-              try {
-                const verifyResponse = await fetch("/api/payment/verify", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    reference: response.reference,
-                    userId: user_id,
-                    plan: plan
-                  }),
-                });
-                const verifyData = await verifyResponse.json();
-
-                if (verifyData.success) {
-                  alert(`Payment successful! You are now on the ${plan === "yearly" ? "Premium Plan" : "Pro Monthly"} plan.`);
-                  if (onUpdateSubscription) {
-                    await onUpdateSubscription(plan);
-                  }
-                } else {
-                  alert("Payment verification failed. Please contact support.");
+              if (verifyData.success) {
+                alert(`Payment successful! You are now on the ${plan === "yearly" ? "Premium Plan" : "Pro Monthly"} plan.`);
+                if (onUpdateSubscription) {
+                  await onUpdateSubscription(plan);
                 }
-              } catch (verifyError) {
-                console.error("Payment verification error:", verifyError);
-                alert("Payment verification failed. Please try again or contact support.");
-              } finally {
-                setCheckoutLoading(false);
+              } else {
+                alert("Payment verification failed. Please contact support.");
               }
-            },
-            onClose: function() {
+            } catch (verifyError) {
+              console.error("Payment verification error:", verifyError);
+              alert("Payment verification failed. Please try again or contact support.");
+            } finally {
               setCheckoutLoading(false);
             }
-          });
+          },
+          onClose: function() {
+            setCheckoutLoading(false);
+          }
+        });
 
-          handler.openIframe();
-        } catch (error: any) {
-          console.error("Paystack checkout error:", error);
-          setCheckoutLoading(false);
-          alert(`Payment processing error: ${error.message || String(error) || "Please try again."}`);
-        }
-      };
+        handler.openIframe();
+      } catch (error: any) {
+        console.error("Paystack checkout error:", error);
+        setCheckoutLoading(false);
+        alert(`Payment processing error: ${error.message || String(error) || "Please try again."}`);
+      }
+    };
 
    // Song and announcements selection
   const [selectedSongId, setSelectedSongId] = useState<string>(DEFAULT_SONGS[0].id);
