@@ -18,6 +18,7 @@ export type UserProfile = {
   denomination: string;
   subscription_plan: "free" | "monthly" | "yearly";
   subscription_status: string;
+  subscription_end?: string;
 };
 
 export type SavedSermonNote = {
@@ -45,5 +46,6 @@ export function mapProfileFromDB(dbProfile: any): any {
     denomination: dbProfile.denomination,
     subscriptionPlan: dbProfile.subscription_plan,
     subscriptionStatus: dbProfile.subscription_status,
+    subscriptionEnd: dbProfile.subscription_end,
   };
 }

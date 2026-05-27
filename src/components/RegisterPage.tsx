@@ -128,7 +128,8 @@ setLoading(true);
           location: locationVal,
           denomination: denomVal,
           subscription_plan: "free" as const,
-          subscription_status: "active"
+          subscription_status: "active",
+          subscription_end: null
         };
 
         const { error: profileError } = await supabase

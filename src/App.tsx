@@ -73,114 +73,138 @@ export default function App() {
 
 // Supabase Authenticated Session State Tracking
    const [currentUser, setCurrentUser] = useState<SupabaseUser | null>(null);
-   const [userProfile, setUserProfile] = useState<{
-     uid: string;
-     email: string;
-     displayName: string;
-     createdAt: string;
-     churchName: string;
-     country: string;
-     state: string;
-     city: string;
-     location: string;
-     denomination: string;
-     subscriptionPlan: "free" | "monthly" | "yearly";
-     subscriptionStatus: string;
-   } | null>(null);
+const [userProfile, setUserProfile] = useState<{
+      uid: string;
+      email: string;
+      displayName: string;
+      createdAt: string;
+      churchName: string;
+      country: string;
+      state: string;
+      city: string;
+      location: string;
+      denomination: string;
+      subscriptionPlan: "free" | "monthly" | "yearly";
+      subscriptionStatus: string;
+      subscriptionEnd?: string;
+    } | null>(null);
   const [authChecked, setAuthChecked] = useState<boolean>(false);
   const [authView, setAuthView] = useState<"landing" | "login" | "register">("landing");
 
 // Auth monitoring listener and real-time Supabase profile sync
    useEffect(() => {
-     let mounted = true;
+      let mounted = true;
 
-     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-       if (!mounted) return;
-       
-       setCurrentUser(session?.user || null);
-       if (session?.user) {
-         // Fetch user profile from users table
-         const { data: profile, error } = await supabase
-           .from('users')
-           .select('*')
-           .eq('user_id', session.user.id)
-           .single();
-         
-         if (error) {
-           console.error("Supabase user profile fetch error:", error);
-           setUserProfile({
-             uid: session.user.id,
-             email: session.user.email || "",
-             displayName: session.user.user_metadata?.display_name || "",
-             createdAt: new Date().toISOString(),
-             churchName: "My Congregation",
-             country: "",
-             state: "",
-             city: "",
-             location: "",
-             denomination: "",
-             subscriptionPlan: "free",
-             subscriptionStatus: "active"
-           });
-         } else {
-           setUserProfile(mapProfileFromDB(profile));
-         }
-       } else {
-         setUserProfile(null);
-       }
-       setAuthChecked(true);
-     });
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (!mounted) return;
+        
+        setCurrentUser(session?.user || null);
+        if (session?.user) {
+          // Fetch user profile from users table
+          const { data: profile, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('user_id', session.user.id)
+            .single();
+          
+          if (error) {
+            console.error("Supabase user profile fetch error:", error);
+            setUserProfile({
+              uid: session.user.id,
+              email: session.user.email || "",
+              displayName: session.user.user_metadata?.display_name || "",
+              createdAt: new Date().toISOString(),
+              churchName: "My Congregation",
+              country: "",
+              state: "",
+              city: "",
+              location: "",
+              denomination: "",
+              subscriptionPlan: "free",
+              subscriptionStatus: "active"
+            });
+          } else {
+            // Check if subscription has expired
+            const mappedProfile = mapProfileFromDB(profile);
+            if (mappedProfile?.subscriptionEnd) {
+              const endDate = new Date(mappedProfile.subscriptionEnd);
+              if (endDate < new Date()) {
+                // Subscription expired - reset to free
+                mappedProfile.subscriptionPlan = "free";
+                mappedProfile.subscriptionStatus = "expired";
+                // Update in database
+                await supabase
+                  .from('users')
+                  .update({ subscription_plan: "free", subscription_status: "expired" })
+                  .eq('user_id', session.user.id);
+              }
+            }
+            setUserProfile(mappedProfile);
+          }
+        } else {
+          setUserProfile(null);
+        }
+        setAuthChecked(true);
+      });
 
-     // Check for existing session on load
-     supabase.auth.getSession().then(({ data: { session } }) => {
-       if (!mounted) return;
-       if (session) {
-         setAuthChecked(true);
-       }
-     });
+      // Check for existing session on load
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!mounted) return;
+        if (session) {
+          setAuthChecked(true);
+        }
+      });
 
-     return () => {
-       mounted = false;
-       subscription.unsubscribe();
-     };
-   }, []);
+      return () => {
+        mounted = false;
+        subscription.unsubscribe();
+      };
+    }, []);
 
 // Update user subscription plan helper function
-   const handleUpdateSubscription = async (newPlan: "free" | "monthly" | "yearly") => {
-     if (!currentUser || !userProfile) return;
-     const updatedPayload = {
-       ...userProfile,
-       subscriptionPlan: newPlan,
-       subscriptionStatus: "active"
-     };
-     try {
-       const { error } = await supabase
-         .from('users')
-         .upsert({
-           user_id: currentUser.id,
-           email: userProfile.email,
-           display_name: userProfile.displayName,
-           created_at: userProfile.createdAt,
-           church_name: userProfile.churchName,
-           country: userProfile.country,
-           state: userProfile.state,
-           city: userProfile.city,
-           location: userProfile.location,
-           denomination: userProfile.denomination,
-           subscription_plan: newPlan,
-           subscription_status: "active"
-         });
-       if (error) {
-         console.error("Failed to update subscription profile in Supabase:", error);
-         setUserProfile((prev: any) => prev ? { ...prev, subscriptionPlan: newPlan } : null);
-       } else {
-         setUserProfile((prev: any) => prev ? { ...prev, subscriptionPlan: newPlan, subscriptionStatus: "active" } : null);
-       }
-     } catch (err) {
-       console.error("Failed to update subscription profile:", err);
-       setUserProfile((prev: any) => prev ? { ...prev, subscriptionPlan: newPlan } : null);
-     }
-   };
+    const handleUpdateSubscription = async (newPlan: "free" | "monthly" | "yearly") => {
+      if (!currentUser || !userProfile) return;
+      
+      // Calculate subscription end date (monthly = 30 days, yearly = 365 days)
+      const endDate = newPlan !== "free" 
+        ? new Date(Date.now() + (newPlan === "monthly" ? 30 : 365) * 24 * 60 * 60 * 1000).toISOString()
+        : undefined;
+      
+      const updatedPayload = {
+        ...userProfile,
+        subscriptionPlan: newPlan,
+        subscriptionStatus: "active",
+        subscriptionEnd: endDate
+      };
+      try {
+        const { error } = await supabase
+          .from('users')
+          .upsert({
+            user_id: currentUser.id,
+            email: userProfile.email,
+            display_name: userProfile.displayName,
+            created_at: userProfile.createdAt,
+            church_name: userProfile.churchName,
+            country: userProfile.country,
+            state: userProfile.state,
+            city: userProfile.city,
+            location: userProfile.location,
+            denomination: userProfile.denomination,
+            subscription_plan: newPlan,
+            subscription_status: "active",
+            subscription_end: endDate
+          });
+        if (error) {
+          console.error("Failed to update subscription profile in Supabase:", error);
+          setUserProfile((prev: any) => prev ? { ...prev, subscriptionPlan: newPlan } : null);
+        } else {
+          setUserProfile((prev: any) => prev ? { ...prev, subscriptionPlan: newPlan, subscriptionStatus: "active", subscriptionEnd: endDate } : null);
+        }
+      } catch (err) {
+        console.error("Failed to update subscription profile:", err);
+        setUserProfile((prev: any) => prev ? { ...prev, subscriptionPlan: newPlan } : null);
+      }
+    };
 
   // Main system active slide
   const [activeSlide, setActiveSlide] = useState<ActiveSlide>({
@@ -505,7 +529,8 @@ export default function App() {
   // Launch AI speech detection endpoint with dual hybrid execution pipelines (micro-latency local regex + fallback deep Gemini NLP)
   const triggerAiDetection = async (transcriptText: string) => {
     const userPlan = userProfile?.subscriptionPlan || "free";
-    if (userPlan === "free") return;
+    const subscriptionStatus = userProfile?.subscriptionStatus;
+    if (userPlan === "free" || subscriptionStatus === "expired") return;
 
     if (!transcriptText || transcriptText.trim().length < 8) return;
 
@@ -712,8 +737,9 @@ export default function App() {
 
   const toggleListening = () => {
     const userPlan = userProfile?.subscriptionPlan || "free";
-    if (userPlan === "free") {
-      alert("⚠️ Live AI Sermon Listening requires a Pro Monthly or Premium subscription!");
+    const subscriptionStatus = userProfile?.subscriptionStatus;
+    if (userPlan === "free" || subscriptionStatus === "expired") {
+      alert("⚠️ Live AI Sermon Listening requires an active Pro Monthly or Premium subscription!");
       return;
     }
     const nextState = !isListening;
@@ -737,8 +763,9 @@ export default function App() {
   // Preaching simulation injection trigger
   const triggerPreachSimulator = (phrase: string) => {
     const userPlan = userProfile?.subscriptionPlan || "free";
-    if (userPlan === "free") {
-      alert("⚠️ AI Sermon features require a Pro Monthly or Premium subscription!");
+    const subscriptionStatus = userProfile?.subscriptionStatus;
+    if (userPlan === "free" || subscriptionStatus === "expired") {
+      alert("⚠️ AI Sermon features require an active Pro Monthly or Premium subscription!");
       return;
     }
     // Append phrase to simulated input

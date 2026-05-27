@@ -289,12 +289,16 @@ app.post("/api/payment/verify", async (req, res) => {
     if (verification.data?.status === "success") {
       const plan = verification.data?.metadata?.plan || "monthly";
       
+      // Calculate subscription end date
+      const endDate = new Date(Date.now() + (plan === "monthly" ? 30 : 365) * 24 * 60 * 60 * 1000).toISOString();
+      
       if (userId && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
         await supabaseAdmin
           .from('users')
           .update({ 
             subscription_plan: plan,
-            subscription_status: "active"
+            subscription_status: "active",
+            subscription_end: endDate
           })
           .eq('user_id', userId);
       }
@@ -302,7 +306,8 @@ app.post("/api/payment/verify", async (req, res) => {
       res.json({ 
         success: true, 
         status: "active",
-        plan
+        plan,
+        subscriptionEnd: endDate
       });
     } else {
       res.json({ success: false, status: "pending" });
@@ -324,11 +329,13 @@ app.post("/api/webhook/paystack", async (req, res) => {
     const plan = data.metadata?.plan;
     
     if (userId) {
+      const endDate = new Date(Date.now() + (plan === "monthly" ? 30 : 365) * 24 * 60 * 60 * 1000).toISOString();
       await supabaseAdmin
         .from('users')
         .update({ 
           subscription_plan: plan,
-          subscription_status: "active"
+          subscription_status: "active",
+          subscription_end: endDate
         })
         .eq('user_id', userId);
     }

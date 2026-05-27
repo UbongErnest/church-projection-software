@@ -50,10 +50,12 @@ export default function SermonNotepad({
   transcript,
   userProfile
 }: SermonNotepadProps) {
-  // User level plan state mapping
-  const userPlan = userProfile?.subscriptionPlan || "free";
+// User level plan state mapping
+   const userPlan = userProfile?.subscriptionPlan || "free";
+   const subscriptionStatus = userProfile?.subscriptionStatus;
+   const hasExpired = subscriptionStatus === "expired";
 
-  // Notepad form state
+   // Notepad form state
   const [noteTitle, setNoteTitle] = useState("");
   const [noteContent, setNoteContent] = useState("");
   
@@ -77,8 +79,8 @@ export default function SermonNotepad({
 
   // AI Outline generator handler
   const handleTriggerAiOutline = async () => {
-    if (userPlan !== "yearly") {
-      triggerSuccessFeedback("⚠️ AI Copilot Outline requires Yearly Premium!");
+    if (hasExpired || userPlan !== "yearly") {
+      triggerSuccessFeedback(hasExpired ? "⚠️ Subscription Expired! Renew to use AI Copilot." : "⚠️ AI Copilot Outline requires Yearly Premium!");
       return;
     }
     if (!noteContent.trim()) {
@@ -377,23 +379,28 @@ System Source: Chaver AI Automatic Pulpit Monitor
 
   return (
     <div className="flex flex-col gap-3 font-sans w-full select-none text-[#E0E0E0] animate-fade-in">
-      {userPlan !== "yearly" ? (
+      {hasExpired || userPlan !== "yearly" ? (
         <div className="flex flex-col items-center justify-center text-center p-6 bg-white/5 border border-white/10 rounded-2xl min-h-[380px] gap-4">
           <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center animate-pulse">
             <Crown className="w-6 h-6 text-amber-400" />
           </div>
-          <h3 className="font-sans font-black text-xs uppercase text-white tracking-wider">Notes Journal Locked</h3>
+          <h3 className="font-sans font-black text-xs uppercase text-white tracking-wider">
+            {hasExpired ? "Subscription Expired" : "Notes Journal Locked"}
+          </h3>
           <p className="text-white/50 text-[11px] leading-relaxed max-w-[240px]">
-            Upgrade to the <span className="text-amber-400 font-bold">Premium Plan (₦25,000/mo)</span> to unlock the full sermon diary, sermon auto-saves, direct PDF/Markdown exports, and our AI Copilot outline builder.
+            {hasExpired 
+              ? "Your subscription has expired. Renew to continue using premium features including sermon journaling, cloud saves, and AI Copilot."
+              : `Upgrade to the <span className="text-amber-400 font-bold">Premium Plan (₦25,000/mo)</span> to unlock the full sermon diary, sermon auto-saves, direct PDF/Markdown exports, and our AI Copilot outline builder.`
+            }
           </p>
           <div className="w-full text-center py-2 px-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 font-sans font-bold text-[10px] uppercase">
-            🔒 PREMIUM EXCLUSIVE FEATURE
+            {hasExpired ? "⚠️ RENEWAL REQUIRED" : "🔒 PREMIUM EXCLUSIVE FEATURE"}
           </div>
-          <p className="text-white/30 text-[9px] leading-tight">
-            Please switch to the 💳 PLANS & BILLING tab in the Control Panel to upgrade!
-          </p>
-        </div>
-      ) : (
+<p className="text-white/30 text-[9px] leading-tight">
+             Please switch to the 💳 PLANS & BILLING tab in the Control Panel to {hasExpired ? "renew" : "upgrade"}!
+           </p>
+         </div>
+       ) : (
         <>
           {/* Tiny active notification channel */}
           {isSuccessAction && (
