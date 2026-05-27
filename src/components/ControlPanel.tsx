@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, FormEvent } from "react";
  import { supabase, UserProfile } from "../supabase";
+ import { User as SupabaseUser } from "@supabase/supabase-js";
 import {
    Mic,
    MicOff,
@@ -52,6 +53,7 @@ interface ControlPanelProps {
    sermonNotes: string[];
    onClearNotes: () => void;
    userProfile?: UserProfile | null;
+   currentUser?: SupabaseUser | null;
    onUpdateSubscription?: (newPlan: "free" | "monthly" | "yearly") => Promise<void>;
 
    bibleVersion: "KJV";
@@ -100,9 +102,10 @@ sermonNotes,
   onChangeIsParallelEnabled,
   parallelVersion,
   onChangeParallelVersion,
-  customBrandingText,
-  onChangeCustomBrandingText
-}: ControlPanelProps) {
+customBrandingText,
+   onChangeCustomBrandingText,
+   currentUser,
+ }: ControlPanelProps) {
   // User level plan and restrictions state mapping
   const userPlan = userProfile?.subscriptionPlan || "free";
 
@@ -139,75 +142,89 @@ sermonNotes,
 
 // Paystack checkout handler
     const handlePaystackCheckout = async (plan: "monthly" | "yearly") => {
-      if (!userProfile?.email || !userProfile?.uid) return;
+      if (!currentUser?.id) {
+        alert("Please log in to upgrade your subscription.");
+        return;
+      }
+
+      const userEmail = userProfile?.email || currentUser.email;
+      if (!userEmail) {
+        alert("Unable to proceed with payment - no email found.");
+        return;
+      }
      
-     setCheckoutLoading(true);
-     try {
-       const amount = plan === "monthly" ? 10000 : 25000;
-       const user_id = userProfile.uid;
-       
-       const initResponse = await fetch("/api/payment/initialize", {
-         method: "POST",
-         headers: { "Content-Type": "application/json" },
-         body: JSON.stringify({
-           email: userProfile.email,
-           amount: amount,
-           plan: plan,
-           userId: user_id
-         }),
-       });
-       
-       const initData = await initResponse.json();
-       
-       if (initData.success && initData.authorizationUrl) {
-         setCheckoutPlan(plan);
-         
-// Redirect to Paystack inline checkout or popup
-          const handler = (window as any).PaystackPop?.setup({
-            key: (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_PAYSTACK_PUBLIC_KEY) || "pk_test_1895ab6fa7f290a990101e6ed1756d35a75928e8",
-            email: userProfile.email,
-           amount: amount * 100,
-           currency: "NGN",
-           ref: initData.reference,
-           metadata: {
-             plan: plan,
-             userId: user_id
-           },
-           callback: async (response: any) => {
-             const verifyResponse = await fetch("/api/payment/verify", {
-               method: "POST",
-               headers: { "Content-Type": "application/json" },
-               body: JSON.stringify({
-                 reference: response.reference,
-                 userId: user_id
-               }),
-             });
-             const verifyData = await verifyResponse.json();
-             if (verifyData.success) {
-               setCheckoutSuccess(true);
-               if (onUpdateSubscription) {
-                 await onUpdateSubscription(plan);
-               }
-             }
-           },
-           onClose: () => {
+setCheckoutLoading(true);
+      try {
+        const amount = plan === "monthly" ? 10000 : 25000;
+        const user_id = currentUser.id;
+
+        const initResponse = await fetch("/api/payment/initialize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: userEmail,
+            amount: amount,
+            plan: plan,
+            userId: user_id
+          }),
+        });
+
+        const initData = await initResponse.json();
+
+if (initData.success && initData.authorizationUrl) {
+           setCheckoutPlan(plan);
+
+           if (!(window as any).PaystackPop) {
+             alert("Payment system not loaded. Please refresh the page and try again.");
              setCheckoutLoading(false);
-             setCheckoutPlan(null);
+             return;
            }
-         });
-         
-         if (handler) handler.openIframe();
-       } else {
-         console.error("Paystack initialization failed:", initData.error);
-         alert(`Payment initialization failed: ${initData.error || "Unable to initialize payment"}`);
-       }
-     } catch (error: any) {
-       console.error("Paystack checkout error:", error);
-       alert("Payment processing error. Please try again.");
-     } finally {
-       setCheckoutLoading(false);
-     }
-   };
+
+           const handler = (window as any).PaystackPop.setup({
+            key: (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_PAYSTACK_PUBLIC_KEY) || "pk_test_1895ab6fa7f290a990101e6ed1756d35a75928e8",
+            email: userEmail,
+            amount: amount * 100,
+            currency: "NGN",
+            ref: initData.reference,
+            metadata: {
+              plan: plan,
+              userId: user_id
+            },
+            callback: async (response: any) => {
+              const verifyResponse = await fetch("/api/payment/verify", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  reference: response.reference,
+                  userId: user_id
+                }),
+              });
+              const verifyData = await verifyResponse.json();
+              if (verifyData.success) {
+                setCheckoutSuccess(true);
+                if (onUpdateSubscription) {
+                  await onUpdateSubscription(plan);
+                }
+              }
+            },
+            onClose: () => {
+              setCheckoutLoading(false);
+              setCheckoutPlan(null);
+            }
+          });
+
+          if (handler) handler.openIframe();
+        } else {
+          console.error("Paystack initialization failed:", initData.error);
+          alert(`Payment initialization failed: ${initData.error || "Unable to initialize payment"}`);
+        }
+      } catch (error: any) {
+        console.error("Paystack checkout error:", error);
+        alert("Payment processing error. Please try again.");
+      } finally {
+        setCheckoutLoading(false);
+      }
+    };
 
    // Song and announcements selection
   const [selectedSongId, setSelectedSongId] = useState<string>(DEFAULT_SONGS[0].id);
@@ -751,14 +768,14 @@ function generateFallbackVerseText(book: string, chapter: number, verse: number)
            <div className="flex items-center gap-2">
              <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center font-bold text-xs italic text-white shadow-md">C</div>
              <span className="font-bold tracking-tight text-sm uppercase text-white">Chaver</span>
-{userProfile && (
-                <div className="hidden sm:flex items-center gap-2 border-l border-white/10 pl-4">
+{currentUser && (
+                <div className="flex items-center gap-2 border-l border-white/10 pl-4">
                   <div className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center justify-center">
                     <User className="w-3" />
                   </div>
-<span className="text-xs text-white/70 font-medium">
-                     {userProfile.displayName || userProfile.email?.split("@")[0]}
-                   </span>
+                  <span className="text-xs text-white/70 font-medium">
+                    {userProfile?.displayName || currentUser.email?.split("@")[0] || "User"}
+                  </span>
                   <button
                     onClick={async () => {
                       if (confirm("Are you sure you want to sign out?")) {

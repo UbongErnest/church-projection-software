@@ -819,18 +819,19 @@ export default function App() {
       {/* Primary Workspace Control panel layout */}
       <div className="flex-1 flex flex-col">
 <ControlPanel
-           onCastSlide={castSlide}
-           activeProjectedSlide={activeSlide}
-           detectedVerses={detectedVerses}
-           onTriggerDetect={triggerAiDetection}
-           isListening={isListening}
-          onToggleListening={toggleListening}
-          transcript={transcript}
-          sermonTopic={sermonTopic}
-          sermonNotes={sermonNotes}
-          onClearNotes={handleClearNotes}
-          userProfile={userProfile}
-          onUpdateSubscription={handleUpdateSubscription}
+            onCastSlide={castSlide}
+            activeProjectedSlide={activeSlide}
+            detectedVerses={detectedVerses}
+            onTriggerDetect={triggerAiDetection}
+            isListening={isListening}
+            onToggleListening={toggleListening}
+            transcript={transcript}
+            sermonTopic={sermonTopic}
+            sermonNotes={sermonNotes}
+            onClearNotes={handleClearNotes}
+            userProfile={userProfile}
+            currentUser={currentUser}
+            onUpdateSubscription={handleUpdateSubscription}
 bibleVersion={bibleVersion}
            onChangeBibleVersion={() => {}}
            layoutMode={layoutMode}
