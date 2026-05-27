@@ -136,77 +136,80 @@ customBrandingText,
       return false;
     };
 
-// Paystack checkout handler
-     const handlePaystackCheckout = async (plan: "monthly" | "yearly") => {
-       if (!currentUser?.id) {
-         alert("Please log in to upgrade your subscription.");
-         return;
-       }
+// Paystack checkout handler - uses inline popup
+      const handlePaystackCheckout = async (plan: "monthly" | "yearly") => {
+        if (!currentUser?.id) {
+          alert("Please log in to upgrade your subscription.");
+          return;
+        }
 
-       const userEmail = userProfile?.email || currentUser.email;
-       if (!userEmail) {
-         alert("Unable to proceed with payment - no email found.");
-         return;
-       }
+        const userEmail = userProfile?.email || currentUser.email;
+        if (!userEmail) {
+          alert("Unable to proceed with payment - no email found.");
+          return;
+        }
 
-       setCheckoutLoading(true);
+        setCheckoutLoading(true);
 
-       try {
-         // Use inline Paystack popup directly - server not required for client-side
-         const amount = plan === "monthly" ? 10000 : 25000; // Amount in kobo already (NGN 10,000 = 1,000,000 kobo)
-         const user_id = currentUser.id;
+        try {
+          const amount = plan === "monthly" ? 10000 : 25000;
+          const user_id = currentUser.id;
+          const reference = `chaver_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 
-         // Generate a unique reference for this transaction
-         const reference = `chaver_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          if (!(window as any).PaystackPop) {
+            throw new Error("Paystack payment system not available. Please refresh the page.");
+          }
 
-         if (!(window as any).PaystackPop) {
-           alert("Payment system not loaded. Please refresh the page and try again.");
-           setCheckoutLoading(false);
-           return;
-         }
+          const handler = (window as any).PaystackPop.setup({
+            key: "pk_test_1895ab6fa7f290a990101e6ed1756d35a75928e8",
+            email: userEmail,
+            amount: amount * 100,
+            currency: "NGN",
+            ref: reference,
+            metadata: {
+              plan: plan,
+              userId: user_id
+            },
+            callback: async function(response: any) {
+              try {
+                const verifyResponse = await fetch("/api/payment/verify", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    reference: response.reference,
+                    userId: user_id,
+                    plan: plan
+                  }),
+                });
+                const verifyData = await verifyResponse.json();
 
-         const handler = (window as any).PaystackPop.setup({
-           key: "pk_live_4b02decf4aca3a5d8b752813887682e8fdab9b7a",
-           email: userEmail,
-           amount: amount * 100, // Convert to kobo/pesewa for Paystack inline
-           currency: "NGN",
-           ref: reference,
-           metadata: {
-             plan: plan,
-             userId: user_id
-           },
-           callback: async (response: any) => {
-             // After successful payment, try to update subscription via API
-             try {
-               await fetch("/api/payment/verify", {
-                 method: "POST",
-                 headers: { "Content-Type": "application/json" },
-                 body: JSON.stringify({
-                   reference: response.reference,
-                   userId: user_id
-                 }),
-               });
-             } catch (verifyErr) {
-               console.warn("Could not verify payment on server:", verifyErr);
-             }
-             // Update subscription locally
-             if (onUpdateSubscription) {
-               await onUpdateSubscription(plan);
-             }
-           },
-           onClose: () => {
-             setCheckoutLoading(false);
-           }
-         });
+                if (verifyData.success) {
+                  alert(`Payment successful! You are now on the ${plan === "yearly" ? "Premium Plan" : "Pro Monthly"} plan.`);
+                  if (onUpdateSubscription) {
+                    await onUpdateSubscription(plan);
+                  }
+                } else {
+                  alert("Payment verification failed. Please contact support.");
+                }
+              } catch (verifyError) {
+                console.error("Payment verification error:", verifyError);
+                alert("Payment verification failed. Please try again or contact support.");
+              } finally {
+                setCheckoutLoading(false);
+              }
+            },
+            onClose: function() {
+              setCheckoutLoading(false);
+            }
+          });
 
-         handler.openIframe();
-       } catch (error: any) {
-         console.error("Paystack checkout error:", error);
-         alert(`Payment processing error: ${error.message || "Please try again."}`);
-       } finally {
-         setCheckoutLoading(false);
-       }
-     };
+          handler.openIframe();
+        } catch (error: any) {
+          console.error("Paystack checkout error:", error);
+          setCheckoutLoading(false);
+          alert(`Payment processing error: ${error.message || String(error) || "Please try again."}`);
+        }
+      };
 
    // Song and announcements selection
   const [selectedSongId, setSelectedSongId] = useState<string>(DEFAULT_SONGS[0].id);

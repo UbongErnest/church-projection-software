@@ -290,7 +290,7 @@ app.post("/api/payment/initialize", async (req, res) => {
 
 // Verify payment and update subscription
 app.post("/api/payment/verify", async (req, res) => {
-  const { reference, userId } = req.body;
+  const { reference, userId, plan } = req.body;
   
   if (!reference) {
     return res.status(400).json({ error: "Missing reference" });
@@ -300,16 +300,17 @@ app.post("/api/payment/verify", async (req, res) => {
     const verification = await paystackRequest(`/transaction/verify/${reference}`, {});
     
     if (verification.data?.status === "success") {
-      const plan = verification.data?.metadata?.plan || "monthly";
+      // Use plan from request body as fallback if metadata not available
+      const planValue = plan || verification.data?.metadata?.plan || "monthly";
       
       // Calculate subscription end date
-      const endDate = new Date(Date.now() + (plan === "monthly" ? 30 : 365) * 24 * 60 * 60 * 1000).toISOString();
+      const endDate = new Date(Date.now() + (planValue === "monthly" ? 30 : 365) * 24 * 60 * 60 * 1000).toISOString();
       
       if (userId && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
         await getSupabaseAdmin()
           .from('users')
           .update({ 
-            subscription_plan: plan,
+            subscription_plan: planValue,
             subscription_status: "active",
             subscription_end: endDate
           })
@@ -319,7 +320,7 @@ app.post("/api/payment/verify", async (req, res) => {
       res.json({ 
         success: true, 
         status: "active",
-        plan,
+        plan: planValue,
         subscriptionEnd: endDate
       });
     } else {
