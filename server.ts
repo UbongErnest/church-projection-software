@@ -3,17 +3,25 @@ import path from "path";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { normalizeBookName, parseSpokenNumbers } from "./src/bibleDatabase";
 import KJV_DATA from "./src/BibleData/kjv.json";
 
 dotenv.config();
 
-// Supabase client initialization
-const supabaseAdmin = createClient(
-  process.env.SUPABASE_URL || "",
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ""
-);
+// Supabase client - lazy initialized when needed
+let supabaseAdmin: SupabaseClient | null = null;
+function getSupabaseAdmin(): SupabaseClient {
+  if (!supabaseAdmin) {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for payment features.");
+    }
+    supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+  }
+  return supabaseAdmin;
+}
 
 // Build optimized lookup index from KJV JSON data
 const KJV_VERSE_INDEX: Record<string, string> = {};
@@ -292,8 +300,8 @@ app.post("/api/payment/verify", async (req, res) => {
       // Calculate subscription end date
       const endDate = new Date(Date.now() + (plan === "monthly" ? 30 : 365) * 24 * 60 * 60 * 1000).toISOString();
       
-      if (userId && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-        await supabaseAdmin
+if (userId && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+         await getSupabaseAdmin()
           .from('users')
           .update({ 
             subscription_plan: plan,
@@ -328,9 +336,9 @@ app.post("/api/webhook/paystack", async (req, res) => {
     const userId = data.metadata?.userId;
     const plan = data.metadata?.plan;
     
-    if (userId) {
-      const endDate = new Date(Date.now() + (plan === "monthly" ? 30 : 365) * 24 * 60 * 60 * 1000).toISOString();
-      await supabaseAdmin
+if (userId) {
+       const endDate = new Date(Date.now() + (plan === "monthly" ? 30 : 365) * 24 * 60 * 60 * 1000).toISOString();
+       await getSupabaseAdmin()
         .from('users')
         .update({ 
           subscription_plan: plan,
