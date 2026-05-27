@@ -10,6 +10,15 @@ import crypto from "crypto";
 
 dotenv.config();
 
+type KjvVerse = {
+  book_name: string;
+  chapter: number;
+  verse: number;
+  text: string;
+};
+
+const KJV_VERSES = (KJV_DATA as { verses: KjvVerse[] }).verses;
+
 // Supabase client - lazy initialized when needed
 let supabaseAdmin: SupabaseClient | null = null;
 function getSupabaseAdmin(): SupabaseClient {
@@ -26,8 +35,7 @@ function getSupabaseAdmin(): SupabaseClient {
 
 // Build optimized lookup index from KJV JSON data
 const KJV_VERSE_INDEX: Record<string, string> = {};
-for (const key of Object.keys(KJV_DATA.verses)) {
-  const verse = KJV_DATA.verses[key];
+for (const verse of KJV_VERSES) {
   const lookupKey = `${verse.book_name.toLowerCase()} ${verse.chapter}:${verse.verse}`;
   KJV_VERSE_INDEX[lookupKey] = verse.text;
 }
@@ -258,6 +266,42 @@ async function paystackRequest(endpoint: string, data: any, method: string = "PO
   return result;
 }
 
+async function verifyPaystackTransaction(reference: string, logPrefix: string) {
+  const maxAttempts = 4;
+  let lastVerification: any = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    lastVerification = await paystackRequest(`/transaction/verify/${reference}`, {}, "GET");
+    const paystackStatus = lastVerification?.data?.status;
+
+    console.log(`${logPrefix} Attempt ${attempt}/${maxAttempts}:`, {
+      status: lastVerification?.status,
+      message: lastVerification?.message,
+      paystackStatus,
+      reference,
+    });
+
+    if (lastVerification?.data?.status === "success") {
+      return lastVerification;
+    }
+
+    const shouldRetry =
+      attempt < maxAttempts &&
+      (
+        !lastVerification?.status ||
+        ["pending", "ongoing", "processing", "queued"].includes(paystackStatus)
+      );
+
+    if (!shouldRetry) {
+      return lastVerification;
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+
+  return lastVerification;
+}
+
 // Initialize Paystack transaction
 app.post("/api/payment/initialize", async (req, res) => {
   const { email, amount, plan, userId } = req.body;
@@ -305,9 +349,7 @@ app.post("/api/payment/verify", async (req, res) => {
   }
 
   try {
-    const verification = await paystackRequest(`/transaction/verify/${reference}`, {}, "GET");
-    
-    console.log("[Paystack Verify] API response:", verification);
+    const verification = await verifyPaystackTransaction(reference, "[Paystack Verify]");
     
     if ((verification.status && verification.data?.status === "success") || verification.data?.status === "success") {
       // Use plan from request body as fallback if metadata not available
@@ -330,11 +372,17 @@ app.post("/api/payment/verify", async (req, res) => {
       res.json({ 
         success: true, 
         status: "active",
+        paystackStatus: verification.data?.status,
         plan: planValue,
         subscriptionEnd: endDate
       });
     } else {
-      res.json({ success: false, status: verification.data?.status || "pending", message: verification.message || "Transaction not successful" });
+      res.json({
+        success: false,
+        status: verification.data?.status || "pending",
+        paystackStatus: verification.data?.status || null,
+        message: verification.message || "Transaction not successful",
+      });
     }
   } catch (error: any) {
     console.error("Paystack verify error:", error);
@@ -352,17 +400,7 @@ app.get("/api/payment/callback", async (req, res) => {
   }
 
   try {
-    let verification = await paystackRequest(`/transaction/verify/${ref}`, {}, "GET");
-    
-    console.log("[Paystack Callback] API response:", verification);
-    
-    // Retry logic for race condition - if verification.status is false but transaction might be settling
-    if (!verification.status && verification.message?.includes("API error")) {
-      console.log("[Paystack Callback] Retrying verification after 2 seconds...");
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      verification = await paystackRequest(`/transaction/verify/${ref}`, {}, "GET");
-      console.log("[Paystack Callback] Retry API response:", verification);
-    }
+    const verification = await verifyPaystackTransaction(String(ref), "[Paystack Callback]");
     
     if ((verification.status && verification.data?.status === "success") || verification.data?.status === "success") {
       const plan = verification.data?.metadata?.plan || "monthly";
