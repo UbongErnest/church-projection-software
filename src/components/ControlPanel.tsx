@@ -148,35 +148,61 @@ customBrandingText,
          alert("Unable to proceed with payment - no email found.");
          return;
        }
-      
-      setCheckoutLoading(true);
+
+       setCheckoutLoading(true);
+
        try {
-         const amount = plan === "monthly" ? 10000 : 25000;
+         // Use inline Paystack popup directly - server not required for client-side
+         const amount = plan === "monthly" ? 10000 : 25000; // Amount in kobo already (NGN 10,000 = 1,000,000 kobo)
          const user_id = currentUser.id;
 
-         const initResponse = await fetch("/api/payment/initialize", {
-           method: "POST",
-           headers: { "Content-Type": "application/json" },
-           body: JSON.stringify({
-             email: userEmail,
-             amount: amount,
+         // Generate a unique reference for this transaction
+         const reference = `chaver_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+         if (!(window as any).PaystackPop) {
+           alert("Payment system not loaded. Please refresh the page and try again.");
+           setCheckoutLoading(false);
+           return;
+         }
+
+         const handler = (window as any).PaystackPop.setup({
+           key: "pk_live_4b02decf4aca3a5d8b752813887682e8fdab9b7a",
+           email: userEmail,
+           amount: amount * 100, // Convert to kobo/pesewa for Paystack inline
+           currency: "NGN",
+           ref: reference,
+           metadata: {
              plan: plan,
              userId: user_id
-           }),
+           },
+           callback: async (response: any) => {
+             // After successful payment, try to update subscription via API
+             try {
+               await fetch("/api/payment/verify", {
+                 method: "POST",
+                 headers: { "Content-Type": "application/json" },
+                 body: JSON.stringify({
+                   reference: response.reference,
+                   userId: user_id
+                 }),
+               });
+             } catch (verifyErr) {
+               console.warn("Could not verify payment on server:", verifyErr);
+             }
+             // Update subscription locally
+             if (onUpdateSubscription) {
+               await onUpdateSubscription(plan);
+             }
+           },
+           onClose: () => {
+             setCheckoutLoading(false);
+           }
          });
 
-         const initData = await initResponse.json();
-
-         if (initData.success && initData.authorizationUrl) {
-           // Redirect to Paystack authorization URL
-           window.location.href = initData.authorizationUrl;
-         } else {
-           console.error("Paystack initialization failed:", initData.error);
-           alert(`Payment initialization failed: ${initData.error || "Unable to initialize payment"}`);
-         }
+         handler.openIframe();
        } catch (error: any) {
          console.error("Paystack checkout error:", error);
-         alert("Payment processing error. Please try again.");
+         alert(`Payment processing error: ${error.message || "Please try again."}`);
        } finally {
          setCheckoutLoading(false);
        }
