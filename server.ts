@@ -10,6 +10,7 @@ import {
   normalizeSubscriptionPlan,
   resolveAppUrlFromRequest,
   verifyAndActivatePayment,
+  activateSubscriptionForUser,
 } from "./src/server/payments";
 import {
   RequestAuthError,
@@ -340,6 +341,36 @@ app.get("/api/payment/callback", async (req, res) => {
   }
 
   return res.redirect(`/?payment=verify&reference=${encodeURIComponent(reference)}`);
+});
+
+// Paystack webhook for async payment confirmation
+app.post("/api/webhook/paystack", async (req, res) => {
+  const signature = req.headers["x-paystack-signature"] as string;
+  const secret = process.env.PAYSTACK_SECRET_KEY || "";
+
+  if (signature && secret) {
+    console.log("[Paystack Webhook] Received signature:", signature.substring(0, 20) + "...");
+  }
+
+  const { data } = req.body || {};
+
+  console.log("[Paystack Webhook] Event data:", { status: data?.status, reference: data?.reference });
+
+  if (data && data.status === "success" && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    const userId = data.metadata?.userId;
+    const plan = normalizeSubscriptionPlan(data.metadata?.plan);
+
+    if (userId && plan) {
+      try {
+        const { subscriptionEnd } = await activateSubscriptionForUser(userId, plan);
+        console.log("[Paystack Webhook] Activated subscription for user:", userId, "plan:", plan, "ends:", subscriptionEnd);
+      } catch (error: any) {
+        console.error("[Paystack Webhook] Failed to activate subscription:", error.message);
+      }
+    }
+  }
+
+  return res.status(200).json({ received: true });
 });
 
 // 3. Mount Vite or serve static production folder

@@ -2,11 +2,6 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 export type SubscriptionPlan = "monthly" | "yearly";
 
-type VerificationOptions = {
-  maxAttempts: number;
-  retryDelayMs: number;
-};
-
 type PaystackInitializeResponse = {
   status: boolean;
   message?: string;
@@ -104,7 +99,7 @@ export function resolveAppUrlFromRequest(req: {
   return `${protocol}://${host}`;
 }
 
-export async function paystackRequest<TResponse>(
+async function paystackRequest<TResponse>(
   endpoint: string,
   method: "GET" | "POST" = "POST",
   data?: unknown
@@ -157,10 +152,9 @@ export async function initializePaystackTransaction(args: {
 export async function verifyPaystackTransaction(
   reference: string,
   logPrefix: string,
-  options?: Partial<VerificationOptions>
-) {
-  const maxAttempts = options?.maxAttempts ?? 2;
-  const retryDelayMs = options?.retryDelayMs ?? 1000;
+  maxAttempts = 5,
+  retryDelayMs = 2000
+): Promise<PaystackVerificationResponse | null> {
   let lastVerification: PaystackVerificationResponse | null = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -182,7 +176,8 @@ export async function verifyPaystackTransaction(
       attempt < maxAttempts &&
       (
         !lastVerification.status ||
-        ["pending", "ongoing", "processing", "queued"].includes(paystackStatus || "")
+        ["pending", "ongoing", "processing", "queued", "failed", "abandoned"].includes(paystackStatus || "") ||
+        lastVerification.message?.toLowerCase().includes("api error")
       );
 
     if (!shouldRetry) {
@@ -221,12 +216,13 @@ export async function verifyAndActivatePayment(args: {
   fallbackPlan?: SubscriptionPlan | null;
   fallbackUserId?: string;
   logPrefix: string;
-  verificationOptions?: Partial<VerificationOptions>;
 }) {
+  const maxAttempts = 5;
   const verification = await verifyPaystackTransaction(
     args.reference,
     args.logPrefix,
-    args.verificationOptions
+    maxAttempts,
+    2000
   );
   const paystackStatus = verification?.data?.status || null;
 

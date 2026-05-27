@@ -80,6 +80,7 @@ export async function getNormalizedUserProfileById(userId: string) {
   const expiredPayload = {
     subscription_plan: "free",
     subscription_status: "expired",
+    subscription_end: null,
   };
 
   const { data: updatedProfile, error: updateError } = await getSupabaseAdmin()
