@@ -84,7 +84,11 @@ function getPaystackSecretKey(): string {
 }
 
 export function getPaystackSecretKeySafe(): string | null {
-  return process.env.PAYSTACK_SECRET_KEY || null;
+  const key = process.env.PAYSTACK_SECRET_KEY || null;
+  if (key && !key.startsWith("sk_")) {
+    return null;
+  }
+  return key;
 }
 
 export function getSupabaseAdminSafe(): SupabaseClient | null {
@@ -93,12 +97,20 @@ export function getSupabaseAdminSafe(): SupabaseClient | null {
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!supabaseUrl || !supabaseKey) {
+  if (!supabaseUrl || !supabaseUrl.includes("supabase.co")) {
+    return null;
+  }
+  
+  if (!supabaseKey || !supabaseKey.startsWith("eyJ")) {
     return null;
   }
 
-  supabaseAdmin = createClient(supabaseUrl, supabaseKey);
-  return supabaseAdmin;
+  try {
+    supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+    return supabaseAdmin;
+  } catch {
+    return null;
+  }
 }
 
 export function normalizeSubscriptionPlan(value: unknown): SubscriptionPlan | null {
