@@ -184,8 +184,11 @@ export async function initializeFlutterwaveTransaction(args: {
       tx_ref: reference,
       amount: getPlanAmount(args.plan),
       currency: "NGN",
+      payment_options: "card, ussd, mobilemoney",
       customer: {
         email: args.email,
+        phone_number: "08000000000",
+        name: args.email.split("@")[0] || "User",
       },
       meta: {
         plan: args.plan,

@@ -151,54 +151,59 @@ customBrandingText,
     };
 
 const handleFlutterwaveCheckout = async (plan: "monthly" | "yearly") => {
-       if (!currentUser?.id) {
-         alert("Please log in to upgrade your subscription.");
-         return;
-       }
- 
-       const userEmail = userProfile?.email || currentUser.email;
-       if (!userEmail) {
-         alert("Unable to proceed with payment - no email found.");
-         return;
-       }
- 
-       setCheckoutLoading(true);
- 
-       try {
-         const user_id = currentUser.id;
-         const initializeResponse = await fetch("/api/payment/initialize", {
-           method: "POST",
-           headers: { "Content-Type": "application/json" },
-           body: JSON.stringify({
-             email: userEmail,
-             plan,
-             userId: user_id,
-           }),
-         });
- 
-         const initializeData = await readApiResponse(initializeResponse);
-         
-         if (!initializeResponse.ok) {
-           const errorMsg = initializeData?.details || initializeData?.error || "Unable to start Flutterwave checkout.";
-           throw new Error(errorMsg);
-         }
-         
-         if (!initializeData?.success) {
-           throw new Error(initializeData?.details || initializeData?.error || "Payment initialization failed.");
-         }
- 
-         const paymentLink = initializeData.paymentLink;
-         if (!paymentLink) {
-           throw new Error("Payment link not returned from server.");
-         }
- 
-         window.location.assign(paymentLink);
-       } catch (error: any) {
-         console.error("Flutterwave checkout error:", error);
-         setCheckoutLoading(false);
-         alert(`Payment processing error: ${error.message || "Please try again."}`);
-       }
-     };
+        if (!currentUser?.id) {
+          alert("Please log in to upgrade your subscription.");
+          return;
+        }
+
+        const userEmail = userProfile?.email || currentUser.email;
+        if (!userEmail) {
+          alert("Unable to proceed with payment - no email found.");
+          return;
+        }
+
+        setCheckoutLoading(true);
+
+        try {
+          const user_id = currentUser.id;
+          const initializeResponse = await fetch("/api/payment/initialize", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: userEmail,
+              plan,
+              userId: user_id,
+            }),
+          });
+
+          const initializeData = await readApiResponse(initializeResponse);
+
+          if (!initializeResponse.ok) {
+            const errorMsg = initializeData?.details || initializeData?.error || "Unable to start Flutterwave checkout.";
+            throw new Error(errorMsg);
+          }
+
+          if (!initializeData?.success) {
+            throw new Error(initializeData?.details || initializeData?.error || "Payment initialization failed.");
+          }
+
+          const paymentLink = initializeData.paymentLink;
+          if (!paymentLink) {
+            throw new Error("Payment link not returned from server.");
+          }
+
+          window.location.assign(paymentLink);
+        } catch (error: any) {
+          console.error("Flutterwave checkout error:", error);
+          setCheckoutLoading(false);
+          const errorMessage = error.message || "Please try again.";
+          if (errorMessage.includes("FLUTTERWAVE_SECRET_KEY") || errorMessage.includes("configuration")) {
+            alert(`Payment configuration error. Please configure FLUTTERWAVE_SECRET_KEY in your environment.`);
+          } else {
+            alert(`Payment processing error: ${errorMessage}`);
+          }
+        }
+      };
 
    // Song and announcements selection
   const [selectedSongId, setSelectedSongId] = useState<string>(DEFAULT_SONGS[0].id);

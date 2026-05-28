@@ -305,9 +305,11 @@ app.post("/api/payment/initialize", async (req, res) => {
     });
   } catch (error: any) {
     console.error("[API Initialize] Error:", error);
+    const errorMessage = error.message || "Unknown error occurred";
+    const isFlutterwaveError = errorMessage.includes("Flutterwave") || errorMessage.includes("API error");
     return res.status(500).json({
       error: "Failed to initialize payment",
-      details: error.message || "Unknown error occurred",
+      details: isFlutterwaveError ? `Flutterwave API error: ${errorMessage}` : errorMessage,
     });
   }
 });

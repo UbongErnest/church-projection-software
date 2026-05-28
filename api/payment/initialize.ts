@@ -6,7 +6,7 @@ import {
   getSupabaseAdminSafe,
 } from "../../src/server/payments";
 
-async function parseBody(req: any): Promise<Record<string, unknown>> {
+function parseBody(req: any): Record<string, unknown> {
   if (typeof req.body === "string") {
     try {
       return JSON.parse(req.body);
@@ -42,7 +42,7 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const body = await parseBody(req) as { email?: string; plan?: string; userId?: string };
+    const body = parseBody(req) as { email?: string; plan?: string; userId?: string };
     const plan = normalizeSubscriptionPlan(body.plan);
     if (!body.email || !body.userId || !plan) {
       return res.status(400).json({ error: "Missing or invalid email, userId, or plan." });
@@ -62,6 +62,7 @@ export default async function handler(req: any, res: any) {
       reference: transaction.reference,
     });
   } catch (error: any) {
+    console.error("[API Initialize] Error:", error);
     return res.status(500).json({
       error: "Failed to initialize payment",
       details: error.message || "Unknown error occurred",
