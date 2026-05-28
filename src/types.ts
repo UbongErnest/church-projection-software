@@ -65,3 +65,26 @@ export interface SermonSession {
   notes: string[];
   transcripts: string[];
 }
+
+// Payment types
+export interface TransactionRecord {
+  id?: string;
+  reference: string;
+  user_id: string;
+  plan: "monthly" | "yearly";
+  amount: number;
+  currency: string;
+  status: "pending" | "success" | "failed" | "abandoned";
+  paystack_status?: string;
+  email: string;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+  verified_at?: string;
+  webhook_received_at?: string;
+}
+
+export interface PaymentState {
+  status: "idle" | "loading" | "verifying" | "success" | "error";
+  message: string;
+  reference?: string;
+}

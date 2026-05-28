@@ -2,6 +2,14 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 export type SubscriptionPlan = "monthly" | "yearly";
 
+export interface PaystackReference {
+  message: string;
+  reference: string;
+  status: string;
+  transactionReference: string;
+  trace: string;
+}
+
 type PaystackInitializeResponse = {
   status: boolean;
   message?: string;
@@ -12,7 +20,7 @@ type PaystackInitializeResponse = {
   };
 };
 
-type PaystackVerificationResponse = {
+export type PaystackVerificationResponse = {
   status: boolean;
   message?: string;
   data?: {
@@ -21,14 +29,25 @@ type PaystackVerificationResponse = {
     currency?: string;
     reference?: string;
     paid_at?: string;
-    metadata?: {
+    email?: string;
+    metadata?: Record<string, unknown> & {
       plan?: string;
       userId?: string;
     };
   };
 };
 
-const PLAN_CONFIG: Record<SubscriptionPlan, { amount: number; durationDays: number }> = {
+export type PaymentVerificationResult = {
+  success: boolean;
+  message?: string;
+  paystackStatus?: string | null;
+  verification?: PaystackVerificationResponse | null;
+  userId?: string;
+  plan?: SubscriptionPlan | null;
+  subscriptionEnd?: string;
+};
+
+export const PLAN_CONFIG: Record<SubscriptionPlan, { amount: number; durationDays: number }> = {
   monthly: {
     amount: 10000,
     durationDays: 30,
@@ -56,7 +75,7 @@ function getSupabaseAdmin(): SupabaseClient {
   return supabaseAdmin;
 }
 
-function getPaystackSecretKey() {
+function getPaystackSecretKey(): string {
   const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
   if (!paystackSecretKey) {
     throw new Error("PAYSTACK_SECRET_KEY is not configured");
@@ -65,14 +84,17 @@ function getPaystackSecretKey() {
 }
 
 export function normalizeSubscriptionPlan(value: unknown): SubscriptionPlan | null {
-  return value === "monthly" || value === "yearly" ? value : null;
+  if (value === "monthly" || value === "yearly") {
+    return value;
+  }
+  return null;
 }
 
-export function getPlanAmount(plan: SubscriptionPlan) {
+export function getPlanAmount(plan: SubscriptionPlan): number {
   return PLAN_CONFIG[plan].amount;
 }
 
-export function calculateSubscriptionEnd(plan: SubscriptionPlan) {
+export function calculateSubscriptionEnd(plan: SubscriptionPlan): string {
   const durationDays = PLAN_CONFIG[plan].durationDays;
   return new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
 }
@@ -80,8 +102,7 @@ export function calculateSubscriptionEnd(plan: SubscriptionPlan) {
 export function resolveAppUrlFromRequest(req: {
   headers?: Record<string, string | string[] | undefined>;
   protocol?: string;
-  get?: (name: string) => string | undefined;
-}) {
+}): string {
   if (process.env.APP_URL) {
     return process.env.APP_URL.replace(/\/+$/, "");
   }
@@ -92,7 +113,6 @@ export function resolveAppUrlFromRequest(req: {
   const host = Array.isArray(hostHeader) ? hostHeader[0] : hostHeader;
   const protocol = forwardedProto || req.protocol || "http";
 
-  // Fallback for serverless environments
   if (!host) {
     return "http://localhost:3000";
   }
@@ -103,7 +123,7 @@ export function resolveAppUrlFromRequest(req: {
 async function paystackRequest<TResponse>(
   endpoint: string,
   method: "GET" | "POST" = "POST",
-  data?: unknown
+  data?: unknown,
 ): Promise<TResponse> {
   const response = await fetch(`https://api.paystack.co${endpoint}`, {
     method,
@@ -127,25 +147,24 @@ export async function initializePaystackTransaction(args: {
   email: string;
   plan: SubscriptionPlan;
   userId: string;
-  callbackUrl: string;
-}) {
+}): Promise<{ reference: string }> {
+  const reference = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+  
   const transaction = await paystackRequest<PaystackInitializeResponse>("/transaction/initialize", "POST", {
     email: args.email,
     amount: getPlanAmount(args.plan) * 100,
-    callback_url: args.callbackUrl,
+    reference,
     metadata: {
       plan: args.plan,
       userId: args.userId,
     },
   });
 
-  if (!transaction.status || !transaction.data?.authorization_url || !transaction.data.reference) {
+  if (!transaction.status || !transaction.data?.reference) {
     throw new Error(transaction.message || "Failed to initialize payment");
   }
 
   return {
-    authorizationUrl: transaction.data.authorization_url,
-    accessCode: transaction.data.access_code || "",
     reference: transaction.data.reference,
   };
 }
@@ -154,7 +173,7 @@ export async function verifyPaystackTransaction(
   reference: string,
   logPrefix: string,
   maxAttempts = 3,
-  retryDelayMs = 1500
+  retryDelayMs = 1500,
 ): Promise<PaystackVerificationResponse | null> {
   let lastVerification: PaystackVerificationResponse | null = null;
 
@@ -191,9 +210,60 @@ export async function verifyPaystackTransaction(
   return lastVerification;
 }
 
+export async function recordTransaction(transaction: {
+  reference: string;
+  userId: string;
+  plan: SubscriptionPlan;
+  amount: number;
+  currency?: string;
+  email: string;
+}) {
+  const supabase = getSupabaseAdmin();
+  
+  const { error } = await supabase
+    .from("transactions")
+    .upsert({
+      reference: transaction.reference,
+      user_id: transaction.userId,
+      plan: transaction.plan,
+      amount: transaction.amount,
+      currency: transaction.currency || "NGN",
+      email: transaction.email,
+      status: "pending",
+      created_at: new Date().toISOString(),
+    }, {
+      onConflict: "reference",
+      ignoreDuplicates: false,
+    });
+
+  if (error) {
+    console.error("Failed to record transaction:", error);
+  }
+}
+
+export async function updateTransactionStatus(reference: string, updates: {
+  status?: string;
+  paystack_status?: string;
+  verified_at?: string;
+  webhook_received_at?: string;
+}) {
+  const supabase = getSupabaseAdmin();
+  
+  const { error } = await supabase
+    .from("transactions")
+    .update(updates)
+    .eq("reference", reference);
+
+  if (error) {
+    console.error("Failed to update transaction status:", error);
+  }
+}
+
 export async function activateSubscriptionForUser(userId: string, plan: SubscriptionPlan) {
   const subscriptionEnd = calculateSubscriptionEnd(plan);
-  const { error } = await getSupabaseAdmin()
+  const supabase = getSupabaseAdmin();
+  
+  const { error } = await supabase
     .from("users")
     .update({
       subscription_plan: plan,
@@ -217,8 +287,9 @@ export async function verifyAndActivatePayment(args: {
   fallbackPlan?: SubscriptionPlan | null;
   fallbackUserId?: string;
   logPrefix: string;
-}) {
-  const maxAttempts = 3;
+  email?: string;
+}): Promise<PaymentVerificationResult> {
+  const maxAttempts = 5;
   const verification = await verifyPaystackTransaction(
     args.reference,
     args.logPrefix,
@@ -228,6 +299,10 @@ export async function verifyAndActivatePayment(args: {
   const paystackStatus = verification?.data?.status || null;
 
   if (paystackStatus !== "success") {
+    await updateTransactionStatus(args.reference, {
+      paystack_status: paystackStatus || "failed",
+    });
+    
     return {
       success: false as const,
       message: verification?.message || "Transaction not successful",
@@ -251,6 +326,17 @@ export async function verifyAndActivatePayment(args: {
   if (typeof verification?.data?.amount === "number" && verification.data.amount !== expectedAmount) {
     throw new Error(`Transaction amount mismatch. Expected ${expectedAmount}, received ${verification.data.amount}.`);
   }
+
+  const email = verification?.data?.email || args.email;
+  if (!email) {
+    throw new Error("Verified transaction is missing a customer email.");
+  }
+
+  await updateTransactionStatus(args.reference, {
+    status: "success",
+    paystack_status: "success",
+    verified_at: new Date().toISOString(),
+  });
 
   const { subscriptionEnd } = await activateSubscriptionForUser(resolvedUserId, resolvedPlan);
 
