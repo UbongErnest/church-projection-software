@@ -816,7 +816,7 @@ export default function App() {
       }
     }, [currentUser, viewMode]);
 
-    // Handle payment redirect from Paystack
+    // Handle payment redirect from Flutterwave
      useEffect(() => {
        const urlParams = new URLSearchParams(window.location.search);
        const paymentStatus = urlParams.get("payment");
@@ -852,20 +852,20 @@ export default function App() {
                    break;
                  }
 
-                 const paystackState = String(verifyData?.paystackStatus || verifyData?.status || "").toLowerCase();
-                 const shouldRetry =
-                   verifyResponse.ok &&
-                   attempt < 5 &&
-                   ["pending", "processing", "ongoing", "queued"].includes(paystackState);
+const flutterwaveState = String(verifyData?.flutterwaveStatus || verifyData?.status || "").toLowerCase();
+                  const shouldRetry =
+                    verifyResponse.ok &&
+                    attempt < 5 &&
+                    ["pending", "processing"].includes(flutterwaveState);
 
-                 if (!shouldRetry) {
-                   throw new Error(
-                     verifyData?.details ||
-                     verifyData?.message ||
-                     verifyData?.error ||
-                     `Payment verification failed${paystackState ? ` (${paystackState})` : ""}.`
-                   );
-                 }
+                  if (!shouldRetry) {
+                    throw new Error(
+                      verifyData?.details ||
+                      verifyData?.message ||
+                      verifyData?.error ||
+                      `Payment verification failed${flutterwaveState ? ` (${flutterwaveState})` : ""}.`
+                    );
+                  }
 
                  await new Promise(resolve => setTimeout(resolve, 2000));
                }

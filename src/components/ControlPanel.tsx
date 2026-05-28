@@ -136,7 +136,7 @@ customBrandingText,
       return false;
     };
 
-// Paystack checkout handler - server initializes checkout, Paystack redirects back after payment
+// Flutterwave checkout handler - server initializes checkout, Flutterwave redirects back after payment
     const readApiResponse = async (response: Response) => {
       const rawText = await response.text();
 
@@ -150,20 +150,20 @@ customBrandingText,
       }
     };
 
-const handlePaystackCheckout = async (plan: "monthly" | "yearly") => {
+const handleFlutterwaveCheckout = async (plan: "monthly" | "yearly") => {
        if (!currentUser?.id) {
          alert("Please log in to upgrade your subscription.");
          return;
        }
-
+ 
        const userEmail = userProfile?.email || currentUser.email;
        if (!userEmail) {
          alert("Unable to proceed with payment - no email found.");
          return;
        }
-
+ 
        setCheckoutLoading(true);
-
+ 
        try {
          const user_id = currentUser.id;
          const initializeResponse = await fetch("/api/payment/initialize", {
@@ -175,26 +175,26 @@ const handlePaystackCheckout = async (plan: "monthly" | "yearly") => {
              userId: user_id,
            }),
          });
-
+ 
          const initializeData = await readApiResponse(initializeResponse);
          
          if (!initializeResponse.ok) {
-           const errorMsg = initializeData?.details || initializeData?.error || "Unable to start Paystack checkout.";
+           const errorMsg = initializeData?.details || initializeData?.error || "Unable to start Flutterwave checkout.";
            throw new Error(errorMsg);
          }
          
          if (!initializeData?.success) {
            throw new Error(initializeData?.details || initializeData?.error || "Payment initialization failed.");
          }
-
-         const authorizationUrl = initializeData.authorizationUrl;
-         if (!authorizationUrl) {
-           throw new Error("Authorization URL not returned from server.");
+ 
+         const paymentLink = initializeData.paymentLink;
+         if (!paymentLink) {
+           throw new Error("Payment link not returned from server.");
          }
-
-         window.location.assign(authorizationUrl);
+ 
+         window.location.assign(paymentLink);
        } catch (error: any) {
-         console.error("Paystack checkout error:", error);
+         console.error("Flutterwave checkout error:", error);
          setCheckoutLoading(false);
          alert(`Payment processing error: ${error.message || "Please try again."}`);
        }
@@ -1646,7 +1646,7 @@ onChange={(e) => {
                       </div>
 {userPlan !== "monthly" && (
                          <button
-                           onClick={() => handlePaystackCheckout("monthly")}
+                           onClick={() => handleFlutterwaveCheckout("monthly")}
                            disabled={checkoutLoading}
                            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs py-1.5 rounded-lg mt-3 transition cursor-pointer"
                          >
@@ -1671,7 +1671,7 @@ onChange={(e) => {
                       </div>
 {userPlan !== "yearly" && (
                          <button
-                           onClick={() => handlePaystackCheckout("yearly")}
+                           onClick={() => handleFlutterwaveCheckout("yearly")}
                            disabled={checkoutLoading}
                            className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-450 hover:to-amber-550 disabled:opacity-50 text-slate-950 font-extrabold text-xs py-1.5 rounded-lg mt-3 transition cursor-pointer"
                          >
@@ -2053,7 +2053,7 @@ onChange={(e) => {
                 </div>
 <button
                    onClick={() => {
-                     handlePaystackCheckout("monthly");
+                     handleFlutterwaveCheckout("monthly");
                      setShowUpgradePromptModal(false);
                    }}
                    disabled={checkoutLoading}
@@ -2085,7 +2085,7 @@ onChange={(e) => {
                 </div>
 <button
                    onClick={() => {
-                     handlePaystackCheckout("yearly");
+                     handleFlutterwaveCheckout("yearly");
                      setShowUpgradePromptModal(false);
                    }}
                    disabled={checkoutLoading}

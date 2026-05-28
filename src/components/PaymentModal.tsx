@@ -1,6 +1,5 @@
 import { useState, useCallback, useMemo } from "react";
 import { Check, AlertTriangle, RefreshCw, CreditCard } from "lucide-react";
-import { usePaystackPayment } from "react-paystack";
 import { SubscriptionPlan } from "../server/payments";
 import { PaymentState } from "../types";
 
@@ -20,25 +19,11 @@ export default function PaymentModal({ isOpen, onClose, plan, email, userId, onS
   });
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const config = useMemo(() => ({
-    reference: `${Date.now()}_${Math.random().toString(36).substring(2, 10)}`,
-    email,
-    amount: plan === "monthly" ? 1000000 : 2500000,
-    publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || "",
-    metadata: {
-      plan,
-      userId,
-    },
-    currency: "NGN" as const,
-  }), [email, plan, userId]);
-
-  const initializePayment = usePaystackPayment(config);
-
-  const handlePayment = useCallback(() => {
-    if (!import.meta.env.VITE_PAYSTACK_PUBLIC_KEY) {
+  const handlePayment = useCallback(async () => {
+    if (!import.meta.env.VITE_FLUTTERWAVE_PUBLIC_KEY) {
       setPaymentState({
         status: "error",
-        message: "Paystack public key not configured. Please contact support.",
+        message: "Flutterwave public key not configured. Please contact support.",
       });
       return;
     }
@@ -46,20 +31,33 @@ export default function PaymentModal({ isOpen, onClose, plan, email, userId, onS
     setIsProcessing(true);
     setPaymentState({ status: "loading", message: "Initializing payment..." });
 
-    initializePayment({
-      onSuccess: (reference) => {
-        console.log("Paystack payment successful:", reference);
-        setPaymentState({ status: "verifying", message: "Verifying payment..." });
-        handleVerifyPayment(reference.reference);
-      },
-      onClose: () => {
-        console.log("Paystack payment closed");
-        setIsProcessing(false);
-        setPaymentState({ status: "idle", message: "Payment cancelled" });
-        onClose();
-      },
-    });
-  }, [initializePayment, onClose, plan, userId]);
+    try {
+      const response = await fetch("/api/payment/initialize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, plan, userId }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.details || data?.error || "Failed to initialize payment");
+      }
+
+      const paymentLink = data.paymentLink;
+      if (paymentLink) {
+        window.location.assign(paymentLink);
+      } else {
+        throw new Error("Payment link not returned from server");
+      }
+    } catch (error: any) {
+      setPaymentState({ 
+        status: "error", 
+        message: error.message || "Payment initialization failed" 
+      });
+      setIsProcessing(false);
+    }
+  }, [email, plan, userId, onClose]);
 
   const handleVerifyPayment = async (reference: string) => {
     try {
@@ -81,7 +79,7 @@ export default function PaymentModal({ isOpen, onClose, plan, email, userId, onS
           onSuccess();
           onClose();
         }, 1500);
-      } else if (data?.paystackStatus === "pending" || data?.status === "pending") {
+      } else if (data?.flutterwaveStatus === "pending" || data?.status === "pending") {
         setPaymentState({ 
           status: "verifying", 
           message: "Payment is being processed. This may take a few seconds..." 
@@ -159,7 +157,7 @@ export default function PaymentModal({ isOpen, onClose, plan, email, userId, onS
             {paymentState.status === "loading" && (
               <div className="flex items-center gap-2 text-blue-400">
                 <RefreshCw className="w-4 h-4 animate-spin" />
-                <span className="text-sm">Opening Paystack...</span>
+                <span className="text-sm">Opening Flutterwave...</span>
               </div>
             )}
             {paymentState.status === "verifying" && (
@@ -203,7 +201,7 @@ export default function PaymentModal({ isOpen, onClose, plan, email, userId, onS
           </button>
           <button
             onClick={handlePayment}
-            disabled={isProcessing || !import.meta.env.VITE_PAYSTACK_PUBLIC_KEY}
+            disabled={isProcessing || !import.meta.env.VITE_FLUTTERWAVE_PUBLIC_KEY}
             className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold rounded-lg transition cursor-pointer flex items-center justify-center gap-2"
           >
             {isProcessing && paymentState.status !== "success" ? (

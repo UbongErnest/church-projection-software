@@ -2,46 +2,41 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 export type SubscriptionPlan = "monthly" | "yearly";
 
-export interface PaystackReference {
-  message: string;
-  reference: string;
+export interface FlutterwaveTransactionResponse {
   status: string;
-  transactionReference: string;
-  trace: string;
-}
-
-type PaystackInitializeResponse = {
-  status: boolean;
   message?: string;
   data?: {
-    authorization_url?: string;
-    access_code?: string;
+    link?: string;
     reference?: string;
+    id?: string;
   };
-};
+}
 
-export type PaystackVerificationResponse = {
-  status: boolean;
+export interface FlutterwaveVerificationResponse {
+  status: string;
   message?: string;
   data?: {
     status?: string;
     amount?: number;
     currency?: string;
+    tx_ref?: string;
     reference?: string;
-    paid_at?: string;
-    email?: string;
-    metadata?: Record<string, unknown> & {
+    created_at?: string;
+    customer?: {
+      email?: string;
+    };
+    meta?: Record<string, unknown> & {
       plan?: string;
       userId?: string;
     };
   };
-};
+}
 
 export type PaymentVerificationResult = {
   success: boolean;
   message?: string;
-  paystackStatus?: string | null;
-  verification?: PaystackVerificationResponse | null;
+  flutterwaveStatus?: string | null;
+  verification?: FlutterwaveVerificationResponse | null;
   userId?: string;
   plan?: SubscriptionPlan | null;
   subscriptionEnd?: string;
@@ -75,17 +70,17 @@ function getSupabaseAdmin(): SupabaseClient {
   return supabaseAdmin;
 }
 
-function getPaystackSecretKey(): string {
-  const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
-  if (!paystackSecretKey) {
-    throw new Error("SERVER_CONFIG_ERROR: PAYSTACK_SECRET_KEY is not configured");
+function getFlutterwaveSecretKey(): string {
+  const flutterwaveSecretKey = process.env.FLUTTERWAVE_SECRET_KEY;
+  if (!flutterwaveSecretKey) {
+    throw new Error("SERVER_CONFIG_ERROR: FLUTTERWAVE_SECRET_KEY is not configured");
   }
-  return paystackSecretKey;
+  return flutterwaveSecretKey;
 }
 
-export function getPaystackSecretKeySafe(): string | null {
-  const key = process.env.PAYSTACK_SECRET_KEY || null;
-  if (key && !key.startsWith("sk_")) {
+export function getFlutterwaveSecretKeySafe(): string | null {
+  const key = process.env.FLUTTERWAVE_SECRET_KEY || null;
+  if (key && !key.startsWith("FLW")) {
     return null;
   }
   return key;
@@ -150,15 +145,15 @@ export function resolveAppUrlFromRequest(req: {
   return `${protocol}://${host}`;
 }
 
-async function paystackRequest<TResponse>(
+async function flutterwaveRequest<TResponse>(
   endpoint: string,
   method: "GET" | "POST" = "POST",
   data?: unknown,
 ): Promise<TResponse> {
-  const response = await fetch(`https://api.paystack.co${endpoint}`, {
+  const response = await fetch(`https://api.flutterwave.com/v3${endpoint}`, {
     method,
     headers: {
-      Authorization: `Bearer ${getPaystackSecretKey()}`,
+      Authorization: `Bearer ${getFlutterwaveSecretKey()}`,
       "Content-Type": "application/json",
     },
     body: method === "POST" ? JSON.stringify(data ?? {}) : undefined,
@@ -167,65 +162,64 @@ async function paystackRequest<TResponse>(
   const result = await response.json();
 
   if (!response.ok) {
-    throw new Error(`Paystack API error: ${result.message || response.statusText}`);
+    throw new Error(`Flutterwave API error: ${result.message || result.error || response.statusText}`);
   }
 
   return result as TResponse;
 }
 
-export async function initializePaystackTransaction(args: {
+export async function initializeFlutterwaveTransaction(args: {
   email: string;
   plan: SubscriptionPlan;
   userId: string;
   callbackUrl?: string;
-}): Promise<{ reference: string; authorizationUrl: string; accessCode: string }> {
+}): Promise<{ reference: string; link: string }> {
   try {
     const reference = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 
-    const paystackPayload: Record<string, unknown> = {
-      email: args.email,
-      amount: getPlanAmount(args.plan) * 100,
-      reference,
-      metadata: {
+    const flutterwavePayload: Record<string, unknown> = {
+      tx_ref: reference,
+      amount: getPlanAmount(args.plan),
+      currency: "NGN",
+      payment_type: "card",
+      customer: {
+        email: args.email,
+        name: args.email.split("@")[0],
+      },
+      meta: {
         plan: args.plan,
         userId: args.userId,
       },
+      redirect_url: args.callbackUrl,
     };
 
-    if (args.callbackUrl) {
-      paystackPayload.callback_url = args.callbackUrl;
+    const transaction = await flutterwaveRequest<FlutterwaveTransactionResponse>("/payments", "POST", flutterwavePayload);
+
+    if (transaction.status !== "success") {
+      throw new Error(transaction.message || "Flutterwave transaction initialization failed");
     }
 
-    const transaction = await paystackRequest<PaystackInitializeResponse>("/transaction/initialize", "POST", paystackPayload);
+    const link = transaction.data?.link;
+    const returnedReference = transaction.data?.reference || reference;
 
-    if (!transaction.status) {
-      throw new Error(transaction.message || "Paystack transaction initialization failed");
+    if (!link) {
+      throw new Error("Flutterwave did not return a payment link");
     }
 
-    const authorizationUrl = transaction.data?.authorization_url;
-    const accessCode = transaction.data?.access_code || "";
-    const returnedReference = transaction.data?.reference;
-
-    if (!returnedReference) {
-      throw new Error("Paystack did not return a transaction reference");
-    }
-
-    console.log("[Paystack Initialize] Transaction initialized:", {
+    console.log("[Flutterwave Initialize] Transaction initialized:", {
       reference: returnedReference,
-      authorizationUrl,
-      accessCode: accessCode ? "***" : "(none)",
+      link,
       userId: args.userId,
       plan: args.plan,
     });
 
     return {
       reference: returnedReference,
-      authorizationUrl: authorizationUrl || "",
-      accessCode,
+      link,
     };
   } catch (error: any) {
     const errorMessage = error.message || "Unknown error";
-    console.error("[Paystack Initialize] Error:", {
+    console.error("[Flutterwave Initialize] Error:", {
       message: errorMessage,
       email: args.email,
       plan: args.plan,
@@ -235,26 +229,27 @@ export async function initializePaystackTransaction(args: {
   }
 }
 
-export async function verifyPaystackTransaction(
+export async function verifyFlutterwaveTransaction(
   reference: string,
   logPrefix: string,
   maxAttempts = 3,
   retryDelayMs = 1500,
-): Promise<PaystackVerificationResponse | null> {
-  let lastVerification: PaystackVerificationResponse | null = null;
+): Promise<FlutterwaveVerificationResponse | null> {
+  let lastVerification: FlutterwaveVerificationResponse | null = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    lastVerification = await paystackRequest<PaystackVerificationResponse>(`/transaction/verify/${reference}`, "GET");
-    const paystackStatus = lastVerification.data?.status || null;
+    lastVerification = await flutterwaveRequest<FlutterwaveVerificationResponse>(`/transactions?tx_ref=${reference}`, "GET");
+
+    const flutterwaveStatus = lastVerification.data?.status || null;
 
     console.log(`${logPrefix} Attempt ${attempt}/${maxAttempts}:`, {
       status: lastVerification.status,
       message: lastVerification.message,
-      paystackStatus,
+      flutterwaveStatus,
       reference,
     });
 
-    if (paystackStatus === "success") {
+    if (flutterwaveStatus === "successful") {
       return lastVerification;
     }
 
@@ -262,7 +257,7 @@ export async function verifyPaystackTransaction(
       attempt < maxAttempts &&
       (
         !lastVerification.status ||
-        ["pending", "ongoing", "processing", "queued", "failed", "abandoned"].includes(paystackStatus || "") ||
+        ["pending", "processing"].includes(flutterwaveStatus || "") ||
         lastVerification.message?.toLowerCase().includes("api error")
       );
 
@@ -309,7 +304,7 @@ export async function recordTransaction(transaction: {
 
 export async function updateTransactionStatus(reference: string, updates: {
   status?: string;
-  paystack_status?: string;
+  flutterwave_status?: string;
   verified_at?: string;
   webhook_received_at?: string;
 }) {
@@ -356,51 +351,51 @@ export async function verifyAndActivatePayment(args: {
   email?: string;
 }): Promise<PaymentVerificationResult> {
   const maxAttempts = 5;
-  const verification = await verifyPaystackTransaction(
+  const verification = await verifyFlutterwaveTransaction(
     args.reference,
     args.logPrefix,
     maxAttempts,
     1500
   );
-  const paystackStatus = verification?.data?.status || null;
+  const flutterwaveStatus = verification?.data?.status || null;
 
-  if (paystackStatus !== "success") {
+  if (flutterwaveStatus !== "successful") {
     await updateTransactionStatus(args.reference, {
-      paystack_status: paystackStatus || "failed",
+      flutterwave_status: flutterwaveStatus || "failed",
     });
     
     return {
       success: false as const,
       message: verification?.message || "Transaction not successful",
-      paystackStatus,
+      flutterwaveStatus,
       verification,
     };
   }
 
-  const metadataPlan = normalizeSubscriptionPlan(verification?.data?.metadata?.plan);
+  const metadataPlan = normalizeSubscriptionPlan(verification?.data?.meta?.plan);
   const resolvedPlan = metadataPlan || args.fallbackPlan || null;
   if (!resolvedPlan) {
     throw new Error("Verified transaction is missing a valid subscription plan.");
   }
 
-  const resolvedUserId = verification?.data?.metadata?.userId || args.fallbackUserId || "";
+  const resolvedUserId = verification?.data?.meta?.userId || args.fallbackUserId || "";
   if (!resolvedUserId) {
     throw new Error("Verified transaction is missing a user ID.");
   }
 
-  const expectedAmount = getPlanAmount(resolvedPlan) * 100;
+  const expectedAmount = getPlanAmount(resolvedPlan);
   if (typeof verification?.data?.amount === "number" && verification.data.amount !== expectedAmount) {
     throw new Error(`Transaction amount mismatch. Expected ${expectedAmount}, received ${verification.data.amount}.`);
   }
 
-  const email = verification?.data?.email || args.email;
+  const email = verification?.data?.customer?.email || args.email;
   if (!email) {
     throw new Error("Verified transaction is missing a customer email.");
   }
 
   await updateTransactionStatus(args.reference, {
     status: "success",
-    paystack_status: "success",
+    flutterwave_status: "success",
     verified_at: new Date().toISOString(),
   });
 
@@ -410,7 +405,7 @@ export async function verifyAndActivatePayment(args: {
     success: true as const,
     userId: resolvedUserId,
     plan: resolvedPlan,
-    paystackStatus,
+    flutterwaveStatus,
     subscriptionEnd,
     verification,
   };

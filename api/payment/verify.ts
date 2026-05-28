@@ -44,14 +44,14 @@ export default async function handler(req: any, res: any) {
       reference: body.reference,
       fallbackPlan: normalizeSubscriptionPlan(body.plan),
       fallbackUserId: body.userId,
-      logPrefix: "[Paystack Verify]",
+      logPrefix: "[Flutterwave Verify]",
     });
 
     if (!result.success) {
       return res.status(200).json({
         success: false,
-        status: result.paystackStatus || "pending",
-        paystackStatus: result.paystackStatus,
+        status: result.flutterwaveStatus || "pending",
+        flutterwaveStatus: result.flutterwaveStatus,
         message: result.message,
       });
     }
@@ -59,13 +59,13 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({
       success: true,
       status: "active",
-      paystackStatus: result.paystackStatus,
+      flutterwaveStatus: result.flutterwaveStatus,
       plan: result.plan,
       subscriptionEnd: result.subscriptionEnd,
       reference: body.reference,
     });
   } catch (error: any) {
-    console.error("Paystack verify error:", error);
+    console.error("Flutterwave verify error:", error);
     return res.status(500).json({
       error: "Failed to verify payment",
       details: error.message || "Unknown error occurred",

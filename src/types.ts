@@ -75,7 +75,7 @@ export interface TransactionRecord {
   amount: number;
   currency: string;
   status: "pending" | "success" | "failed" | "abandoned";
-  paystack_status?: string;
+  flutterwave_status?: string;
   email: string;
   metadata?: Record<string, unknown>;
   created_at: string;

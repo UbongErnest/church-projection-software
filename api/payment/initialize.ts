@@ -1,8 +1,8 @@
 import {
-  initializePaystackTransaction,
+  initializeFlutterwaveTransaction,
   normalizeSubscriptionPlan,
   resolveAppUrlFromRequest,
-  getPaystackSecretKeySafe,
+  getFlutterwaveSecretKeySafe,
   getSupabaseAdminSafe,
 } from "../../src/server/payments";
 
@@ -21,11 +21,11 @@ async function parseBody(req: any): Promise<Record<string, unknown>> {
 }
 
 export default async function handler(req: any, res: any) {
-  if (!getPaystackSecretKeySafe()) {
-    console.error("[API Initialize] Configuration error: PAYSTACK_SECRET_KEY missing");
+  if (!getFlutterwaveSecretKeySafe()) {
+    console.error("[API Initialize] Configuration error: FLUTTERWAVE_SECRET_KEY missing");
     return res.status(500).json({
       error: "Failed to initialize payment",
-      details: "Server configuration error: PAYSTACK_SECRET_KEY is not set",
+      details: "Server configuration error: FLUTTERWAVE_SECRET_KEY is not set",
     });
   }
 
@@ -49,7 +49,7 @@ export default async function handler(req: any, res: any) {
     }
 
     const callbackUrl = `${resolveAppUrlFromRequest(req)}/api/payment/callback`;
-    const transaction = await initializePaystackTransaction({
+    const transaction = await initializeFlutterwaveTransaction({
       email: body.email,
       plan,
       userId: body.userId,
@@ -58,8 +58,7 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json({
       success: true,
-      authorizationUrl: transaction.authorizationUrl,
-      accessCode: transaction.accessCode,
+      paymentLink: transaction.link,
       reference: transaction.reference,
     });
   } catch (error: any) {

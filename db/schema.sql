@@ -20,7 +20,7 @@ create table if not exists transactions (
   amount integer not null,
   currency text default 'NGN',
   status text default 'pending' check (status in ('pending', 'success', 'failed', 'abandoned')),
-  paystack_status text,
+  flutterwave_status text,
   email text,
   metadata jsonb,
   created_at timestamptz default now() not null,

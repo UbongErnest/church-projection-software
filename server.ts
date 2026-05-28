@@ -6,11 +6,11 @@ import { GoogleGenAI } from "@google/genai";
 import { normalizeBookName, parseSpokenNumbers } from "./src/bibleDatabase";
 import KJV_DATA from "./src/BibleData/kjv.json";
 import {
-  initializePaystackTransaction,
+  initializeFlutterwaveTransaction,
   normalizeSubscriptionPlan,
   resolveAppUrlFromRequest,
   verifyAndActivatePayment,
-  getPaystackSecretKeySafe,
+  getFlutterwaveSecretKeySafe,
   getSupabaseAdminSafe,
   activateSubscriptionForUser,
 } from "./src/server/payments";
@@ -261,7 +261,7 @@ app.post("/api/ai/copilot", async (req, res) => {
 });
 
 
-// Paystack payment endpoints - Initialize payment and return authorization URL for redirect
+// Flutterwave payment endpoints - Initialize payment and redirect to payment link
 function readJsonBody(body: unknown) {
   if (typeof body === "string") {
     try {
@@ -275,11 +275,11 @@ function readJsonBody(body: unknown) {
 
 app.post("/api/payment/initialize", async (req, res) => {
   const adminMissing = !getSupabaseAdminSafe();
-  if (!getPaystackSecretKeySafe() || adminMissing) {
-    console.error("[API Initialize] Configuration error: Missing Paystack or Supabase config");
+  if (!getFlutterwaveSecretKeySafe() || adminMissing) {
+    console.error("[API Initialize] Configuration error: Missing Flutterwave or Supabase config");
     return res.status(500).json({
       error: "Failed to initialize payment",
-      details: "Server configuration error: PAYSTACK_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY is not set",
+      details: "Server configuration error: FLUTTERWAVE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY is not set",
     });
   }
 
@@ -291,7 +291,7 @@ app.post("/api/payment/initialize", async (req, res) => {
     }
 
     const callbackUrl = `${resolveAppUrlFromRequest(req)}/api/payment/callback`;
-    const transaction = await initializePaystackTransaction({
+    const transaction = await initializeFlutterwaveTransaction({
       email: body.email,
       plan,
       userId: body.userId,
@@ -300,8 +300,7 @@ app.post("/api/payment/initialize", async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      authorizationUrl: transaction.authorizationUrl,
-      accessCode: transaction.accessCode,
+      paymentLink: transaction.link,
       reference: transaction.reference,
     });
   } catch (error: any) {
@@ -337,14 +336,14 @@ app.post("/api/payment/verify", async (req, res) => {
       reference: body.reference,
       fallbackPlan: normalizeSubscriptionPlan(body.plan),
       fallbackUserId: body.userId,
-      logPrefix: "[Paystack Verify]",
+      logPrefix: "[Flutterwave Verify]",
     });
 
     if (!result.success) {
       return res.status(200).json({
         success: false,
-        status: result.paystackStatus || "pending",
-        paystackStatus: result.paystackStatus,
+        status: result.flutterwaveStatus || "pending",
+        flutterwaveStatus: result.flutterwaveStatus,
         message: result.message,
       });
     }
@@ -352,13 +351,13 @@ app.post("/api/payment/verify", async (req, res) => {
     return res.status(200).json({
       success: true,
       status: "active",
-      paystackStatus: result.paystackStatus,
+      flutterwaveStatus: result.flutterwaveStatus,
       plan: result.plan,
       subscriptionEnd: result.subscriptionEnd,
       reference: body.reference,
     });
   } catch (error: any) {
-    console.error("Paystack verify error:", error);
+    console.error("Flutterwave verify error:", error);
     return res.status(500).json({
       error: "Failed to verify payment",
       details: error.message || "Unknown error occurred",
@@ -367,7 +366,7 @@ app.post("/api/payment/verify", async (req, res) => {
 });
 
 app.get("/api/payment/callback", async (req, res) => {
-  const reference = req.query.reference || req.query.trxref;
+  const reference = req.query.tx_ref || req.query.reference;
 
   if (!reference || typeof reference !== "string") {
     return res.redirect("/?payment=error");
@@ -376,29 +375,29 @@ app.get("/api/payment/callback", async (req, res) => {
   return res.redirect(`/?payment=verify&reference=${encodeURIComponent(reference)}`);
 });
 
-// Paystack webhook for async payment confirmation
-app.post("/api/webhook/paystack", async (req, res) => {
-  const signature = req.headers["x-paystack-signature"] as string;
-  const secret = process.env.PAYSTACK_SECRET_KEY || "";
+// Flutterwave webhook for async payment confirmation
+app.post("/api/webhook/flutterwave", async (req, res) => {
+  const signature = req.headers["verif-hash"] as string;
+  const secret = process.env.FLUTTERWAVE_SECRET_KEY || "";
 
   if (signature && secret) {
-    console.log("[Paystack Webhook] Received signature:", signature.substring(0, 20) + "...");
+    console.log("[Flutterwave Webhook] Received signature:", signature.substring(0, 20) + "...");
   }
 
   const { data } = req.body || {};
 
-  console.log("[Paystack Webhook] Event data:", { status: data?.status, reference: data?.reference });
+  console.log("[Flutterwave Webhook] Event data:", { status: data?.status, tx_ref: data?.tx_ref });
 
-  if (data && data.status === "success" && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    const userId = data.metadata?.userId;
-    const plan = normalizeSubscriptionPlan(data.metadata?.plan);
+  if (data && data.status === "successful" && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    const userId = data.meta?.userId;
+    const plan = normalizeSubscriptionPlan(data.meta?.plan);
 
     if (userId && plan) {
       try {
         const { subscriptionEnd } = await activateSubscriptionForUser(userId, plan);
-        console.log("[Paystack Webhook] Activated subscription for user:", userId, "plan:", plan, "ends:", subscriptionEnd);
+        console.log("[Flutterwave Webhook] Activated subscription for user:", userId, "plan:", plan, "ends:", subscriptionEnd);
       } catch (error: any) {
-        console.error("[Paystack Webhook] Failed to activate subscription:", error.message);
+        console.error("[Flutterwave Webhook] Failed to activate subscription:", error.message);
       }
     }
   }
