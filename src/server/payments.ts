@@ -66,7 +66,7 @@ function getSupabaseAdmin(): SupabaseClient {
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
-      throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for payment features.");
+      throw new Error("SERVER_CONFIG_ERROR: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for payment features.");
     }
 
     supabaseAdmin = createClient(supabaseUrl, supabaseKey);
@@ -78,9 +78,27 @@ function getSupabaseAdmin(): SupabaseClient {
 function getPaystackSecretKey(): string {
   const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
   if (!paystackSecretKey) {
-    throw new Error("PAYSTACK_SECRET_KEY is not configured");
+    throw new Error("SERVER_CONFIG_ERROR: PAYSTACK_SECRET_KEY is not configured");
   }
   return paystackSecretKey;
+}
+
+export function getPaystackSecretKeySafe(): string | null {
+  return process.env.PAYSTACK_SECRET_KEY || null;
+}
+
+export function getSupabaseAdminSafe(): SupabaseClient | null {
+  if (supabaseAdmin) return supabaseAdmin;
+  
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    return null;
+  }
+
+  supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+  return supabaseAdmin;
 }
 
 export function normalizeSubscriptionPlan(value: unknown): SubscriptionPlan | null {
@@ -149,9 +167,9 @@ export async function initializePaystackTransaction(args: {
   userId: string;
   callbackUrl?: string;
 }): Promise<{ reference: string; authorizationUrl: string; accessCode: string }> {
-  const reference = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-
   try {
+    const reference = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+
     const paystackPayload: Record<string, unknown> = {
       email: args.email,
       amount: getPlanAmount(args.plan) * 100,
@@ -186,7 +204,6 @@ export async function initializePaystackTransaction(args: {
       accessCode: accessCode ? "***" : "(none)",
       userId: args.userId,
       plan: args.plan,
-      callbackUrl: args.callbackUrl,
     });
 
     return {
@@ -195,8 +212,9 @@ export async function initializePaystackTransaction(args: {
       accessCode,
     };
   } catch (error: any) {
+    const errorMessage = error.message || "Unknown error";
     console.error("[Paystack Initialize] Error:", {
-      message: error.message,
+      message: errorMessage,
       email: args.email,
       plan: args.plan,
       userId: args.userId,

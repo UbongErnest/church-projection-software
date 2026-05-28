@@ -2,9 +2,10 @@ import {
   initializePaystackTransaction,
   normalizeSubscriptionPlan,
   resolveAppUrlFromRequest,
+  getPaystackSecretKeySafe,
 } from "../../src/server/payments";
 
-function readJsonBody(body: unknown) {
+function readJsonBody(body: unknown): Record<string, unknown> {
   if (typeof body === "string") {
     try {
       return JSON.parse(body);
@@ -12,7 +13,7 @@ function readJsonBody(body: unknown) {
       return {};
     }
   }
-  return body && typeof body === "object" ? body : {};
+  return body && typeof body === "object" ? (body as Record<string, unknown>) : {};
 }
 
 export default async function handler(req: any, res: any) {
@@ -20,12 +21,17 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  const secretMissing = !getPaystackSecretKeySafe();
+  if (secretMissing) {
+    console.error("[API Initialize] Configuration error: PAYSTACK_SECRET_KEY missing");
+    return res.status(500).json({
+      error: "Failed to initialize payment",
+      details: "Server configuration error: PAYSTACK_SECRET_KEY is not set",
+    });
+  }
+
   try {
-    const body = readJsonBody(req.body) as {
-      email?: string;
-      plan?: string;
-      userId?: string;
-    };
+    const body = readJsonBody(req.body) as { email?: string; plan?: string; userId?: string };
 
     const plan = normalizeSubscriptionPlan(body.plan);
     if (!body.email || !body.userId || !plan) {
@@ -53,10 +59,12 @@ export default async function handler(req: any, res: any) {
       reference: transaction.reference,
     });
   } catch (error: any) {
-    console.error("Paystack initialize error:", error);
+    const errorMessage = error.message || "Unknown error occurred";
+    console.error("Paystack initialize error:", errorMessage);
+
     return res.status(500).json({
       error: "Failed to initialize payment",
-      details: error.message || "Unknown error occurred",
+      details: errorMessage,
     });
   }
 }
