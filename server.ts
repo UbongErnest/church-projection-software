@@ -10,6 +10,8 @@ import {
   normalizeSubscriptionPlan,
   resolveAppUrlFromRequest,
   verifyAndActivatePayment,
+  getPaystackSecretKeySafe,
+  getSupabaseAdminSafe,
   activateSubscriptionForUser,
 } from "./src/server/payments";
 import {
@@ -260,62 +262,86 @@ app.post("/api/ai/copilot", async (req, res) => {
 
 
 // Paystack payment endpoints - Initialize payment and return authorization URL for redirect
-app.post("/api/payment/initialize", async (req, res) => {
-  const { email, plan, userId } = req.body || {};
-  const normalizedPlan = normalizeSubscriptionPlan(plan);
+function readJsonBody(body: unknown) {
+  if (typeof body === "string") {
+    try {
+      return JSON.parse(body);
+    } catch {
+      return {};
+    }
+  }
+  return body && typeof body === "object" ? body : {};
+}
 
-  if (!email || !userId || !normalizedPlan) {
-    return res.status(400).json({ error: "Missing or invalid email, userId, or plan." });
+app.post("/api/payment/initialize", async (req, res) => {
+  const adminMissing = !getSupabaseAdminSafe();
+  if (!getPaystackSecretKeySafe() || adminMissing) {
+    console.error("[API Initialize] Configuration error: Missing Paystack or Supabase config");
+    return res.status(500).json({
+      error: "Failed to initialize payment",
+      details: "Server configuration error: PAYSTACK_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY is not set",
+    });
   }
 
   try {
+    const body = readJsonBody(req.body) as { email?: string; plan?: string; userId?: string };
+    const plan = normalizeSubscriptionPlan(body.plan) as "monthly" | "yearly" | null;
+    if (!body.email || !body.userId || !plan) {
+      return res.status(400).json({ error: "Missing or invalid email, userId, or plan." });
+    }
+
     const callbackUrl = `${resolveAppUrlFromRequest(req)}/api/payment/callback`;
     const transaction = await initializePaystackTransaction({
-      email,
-      plan: normalizedPlan,
-      userId,
+      email: body.email,
+      plan,
+      userId: body.userId,
       callbackUrl,
     });
 
-    console.log("[Paystack Initialize] Response:", {
-      success: true,
-      authorizationUrl: transaction.authorizationUrl,
-      hasUrl: !!transaction.authorizationUrl,
-      reference: transaction.reference,
-    });
-
-    return res.json({
+    return res.status(200).json({
       success: true,
       authorizationUrl: transaction.authorizationUrl,
       accessCode: transaction.accessCode,
       reference: transaction.reference,
     });
   } catch (error: any) {
-    console.error("Paystack initialize error:", error);
+    console.error("[API Initialize] Error:", error);
     return res.status(500).json({
       error: "Failed to initialize payment",
-      details: error.message || "Unknown error",
+      details: error.message || "Unknown error occurred",
     });
   }
 });
 
 app.post("/api/payment/verify", async (req, res) => {
-  const { reference, userId, plan } = req.body || {};
-
-  if (!reference) {
-    return res.status(400).json({ error: "Missing reference." });
+  if (!getSupabaseAdminSafe()) {
+    console.error("[API Verify] Configuration error: Supabase admin client not configured");
+    return res.status(500).json({
+      error: "Failed to verify payment",
+      details: "Server configuration error: SUPABASE_SERVICE_ROLE_KEY is not set",
+    });
   }
 
   try {
+    const body = readJsonBody(req.body) as {
+      reference?: string;
+      userId?: string;
+      plan?: string;
+    };
+
+    if (!body.reference) {
+      return res.status(400).json({ error: "Missing reference." });
+    }
+
     const result = await verifyAndActivatePayment({
-      reference,
-      fallbackPlan: normalizeSubscriptionPlan(plan),
-      fallbackUserId: userId,
+      reference: body.reference,
+      fallbackPlan: normalizeSubscriptionPlan(body.plan),
+      fallbackUserId: body.userId,
       logPrefix: "[Paystack Verify]",
     });
 
     if (!result.success) {
-      return res.json({
+      return res.status(200).json({
         success: false,
         status: result.paystackStatus || "pending",
         paystackStatus: result.paystackStatus,
@@ -323,19 +349,19 @@ app.post("/api/payment/verify", async (req, res) => {
       });
     }
 
-    return res.json({
+    return res.status(200).json({
       success: true,
       status: "active",
       paystackStatus: result.paystackStatus,
       plan: result.plan,
       subscriptionEnd: result.subscriptionEnd,
-      reference,
+      reference: body.reference,
     });
   } catch (error: any) {
     console.error("Paystack verify error:", error);
     return res.status(500).json({
       error: "Failed to verify payment",
-      details: error.message,
+      details: error.message || "Unknown error occurred",
     });
   }
 });

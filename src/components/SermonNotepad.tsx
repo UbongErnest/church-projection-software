@@ -375,7 +375,7 @@ return (
             Upgrade Required
           </h3>
           <p className="text-white/50 text-[11px] leading-relaxed max-w-[240px]">
-            Upgrade to the <span class="text-amber-400 font-bold">Monthly Plan</span> to unlock sermon journaling, cloud saves, and upgrade to Yearly for AI Copilot.
+            Upgrade to the <span className="text-amber-400 font-bold">Monthly Plan</span> to unlock sermon journaling, cloud saves, and upgrade to Yearly for AI Copilot.
           </p>
           <div className="w-full text-center py-2 px-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 font-sans font-bold text-[10px] uppercase">
             🔒 PREMIUM EXCLUSIVE FEATURE
