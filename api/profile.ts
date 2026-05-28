@@ -4,11 +4,11 @@ import {
 } from "../src/server/userProfiles.ts";
 
 export default async function handler(req: any, res: any) {
-  if (req.method !== "GET") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
   try {
+    if (req.method !== "GET") {
+      return res.status(405).json({ error: "Method not allowed" });
+    }
+
     const { profile } = await getAuthenticatedUserProfileFromRequest(req);
     return res.status(200).json({ profile });
   } catch (error: any) {
@@ -20,6 +20,15 @@ export default async function handler(req: any, res: any) {
     }
 
     console.error("Profile fetch error:", error);
+    
+    // Check if it's a configuration error
+    if (error.message?.includes("SUPABASE") || error.message?.includes("environment")) {
+      return res.status(500).json({
+        error: "Configuration error",
+        details: "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not configured on the server.",
+      });
+    }
+    
     return res.status(500).json({
       error: "Failed to fetch profile",
       details: error.message,
