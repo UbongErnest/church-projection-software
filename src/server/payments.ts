@@ -12,24 +12,26 @@ export interface FlutterwaveTransactionResponse {
   };
 }
 
+export interface FlutterwaveTransaction {
+  status?: string;
+  amount?: number;
+  currency?: string;
+  tx_ref?: string;
+  reference?: string;
+  created_at?: string;
+  customer?: {
+    email?: string;
+  };
+  meta?: Record<string, unknown> & {
+    plan?: string;
+    userId?: string;
+  };
+}
+
 export interface FlutterwaveVerificationResponse {
   status: string;
   message?: string;
-  data?: {
-    status?: string;
-    amount?: number;
-    currency?: string;
-    tx_ref?: string;
-    reference?: string;
-    created_at?: string;
-    customer?: {
-      email?: string;
-    };
-    meta?: Record<string, unknown> & {
-      plan?: string;
-      userId?: string;
-    };
-  };
+  data?: FlutterwaveTransaction[];
 }
 
 export type PaymentVerificationResult = {
@@ -162,7 +164,8 @@ async function flutterwaveRequest<TResponse>(
   const result = await response.json();
 
   if (!response.ok) {
-    throw new Error(`Flutterwave API error: ${result.message || result.error || response.statusText}`);
+    const errorMsg = result.message || result.error || JSON.stringify(result);
+    throw new Error(`Flutterwave API error (${response.status}): ${errorMsg}`);
   }
 
   return result as TResponse;
@@ -181,10 +184,8 @@ export async function initializeFlutterwaveTransaction(args: {
       tx_ref: reference,
       amount: getPlanAmount(args.plan),
       currency: "NGN",
-      payment_type: "card",
       customer: {
         email: args.email,
-        name: args.email.split("@")[0],
       },
       meta: {
         plan: args.plan,
@@ -234,35 +235,40 @@ export async function verifyFlutterwaveTransaction(
   logPrefix: string,
   maxAttempts = 3,
   retryDelayMs = 1500,
-): Promise<FlutterwaveVerificationResponse | null> {
-  let lastVerification: FlutterwaveVerificationResponse | null = null;
+): Promise<FlutterwaveTransaction | null> {
+  let lastVerification: FlutterwaveTransaction | null = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    lastVerification = await flutterwaveRequest<FlutterwaveVerificationResponse>(`/transactions?tx_ref=${reference}`, "GET");
+    const response = await flutterwaveRequest<FlutterwaveVerificationResponse>(`/transactions?tx_ref=${reference}`, "GET");
 
-    const flutterwaveStatus = lastVerification.data?.status || null;
+    const transactions = response.data || [];
+    const transaction = transactions[0];
 
-    console.log(`${logPrefix} Attempt ${attempt}/${maxAttempts}:`, {
-      status: lastVerification.status,
-      message: lastVerification.message,
-      flutterwaveStatus,
-      reference,
-    });
+    if (transaction) {
+      lastVerification = transaction;
+      const flutterwaveStatus = transaction.status || null;
 
-    if (flutterwaveStatus === "successful") {
-      return lastVerification;
-    }
+      console.log(`${logPrefix} Attempt ${attempt}/${maxAttempts}:`, {
+        status: response.status,
+        message: response.message,
+        flutterwaveStatus,
+        reference,
+      });
 
-    const shouldRetry =
-      attempt < maxAttempts &&
-      (
-        !lastVerification.status ||
-        ["pending", "processing"].includes(flutterwaveStatus || "") ||
-        lastVerification.message?.toLowerCase().includes("api error")
-      );
+      if (flutterwaveStatus === "successful") {
+        return transaction;
+      }
 
-    if (!shouldRetry) {
-      return lastVerification;
+      const shouldRetry =
+        attempt < maxAttempts &&
+        (
+          flutterwaveStatus === "pending" ||
+          flutterwaveStatus === "processing"
+        );
+
+      if (!shouldRetry) {
+        return transaction;
+      }
     }
 
     await new Promise(resolve => setTimeout(resolve, retryDelayMs));
@@ -357,7 +363,7 @@ export async function verifyAndActivatePayment(args: {
     maxAttempts,
     1500
   );
-  const flutterwaveStatus = verification?.data?.status || null;
+  const flutterwaveStatus = verification?.status || null;
 
   if (flutterwaveStatus !== "successful") {
     await updateTransactionStatus(args.reference, {
@@ -366,29 +372,28 @@ export async function verifyAndActivatePayment(args: {
     
     return {
       success: false as const,
-      message: verification?.message || "Transaction not successful",
+      message: flutterwaveStatus ? `Transaction status: ${flutterwaveStatus}` : "Transaction not successful",
       flutterwaveStatus,
-      verification,
     };
   }
 
-  const metadataPlan = normalizeSubscriptionPlan(verification?.data?.meta?.plan);
+  const metadataPlan = normalizeSubscriptionPlan(verification?.meta?.plan);
   const resolvedPlan = metadataPlan || args.fallbackPlan || null;
   if (!resolvedPlan) {
     throw new Error("Verified transaction is missing a valid subscription plan.");
   }
 
-  const resolvedUserId = verification?.data?.meta?.userId || args.fallbackUserId || "";
+  const resolvedUserId = verification?.meta?.userId || args.fallbackUserId || "";
   if (!resolvedUserId) {
     throw new Error("Verified transaction is missing a user ID.");
   }
 
   const expectedAmount = getPlanAmount(resolvedPlan);
-  if (typeof verification?.data?.amount === "number" && verification.data.amount !== expectedAmount) {
-    throw new Error(`Transaction amount mismatch. Expected ${expectedAmount}, received ${verification.data.amount}.`);
+  if (typeof verification?.amount === "number" && verification.amount !== expectedAmount) {
+    throw new Error(`Transaction amount mismatch. Expected ${expectedAmount}, received ${verification.amount}.`);
   }
 
-  const email = verification?.data?.customer?.email || args.email;
+  const email = verification?.customer?.email || args.email;
   if (!email) {
     throw new Error("Verified transaction is missing a customer email.");
   }
@@ -407,6 +412,5 @@ export async function verifyAndActivatePayment(args: {
     plan: resolvedPlan,
     flutterwaveStatus,
     subscriptionEnd,
-    verification,
   };
 }
