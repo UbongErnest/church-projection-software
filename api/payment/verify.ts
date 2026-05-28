@@ -1,7 +1,7 @@
 import {
   normalizeSubscriptionPlan,
   verifyAndActivatePayment,
-} from "../../src/server/payments.ts";
+} from "../../src/server/payments";
 
 function readJsonBody(body: unknown) {
   if (typeof body === "string") {

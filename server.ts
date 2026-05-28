@@ -259,7 +259,7 @@ app.post("/api/ai/copilot", async (req, res) => {
 });
 
 
-// Paystack payment endpoints
+// Paystack payment endpoints - Initialize payment and return authorization URL for redirect
 app.post("/api/payment/initialize", async (req, res) => {
   const { email, plan, userId } = req.body || {};
   const normalizedPlan = normalizeSubscriptionPlan(plan);
@@ -277,6 +277,13 @@ app.post("/api/payment/initialize", async (req, res) => {
       callbackUrl,
     });
 
+    console.log("[Paystack Initialize] Response:", {
+      success: true,
+      authorizationUrl: transaction.authorizationUrl,
+      hasUrl: !!transaction.authorizationUrl,
+      reference: transaction.reference,
+    });
+
     return res.json({
       success: true,
       authorizationUrl: transaction.authorizationUrl,
@@ -287,7 +294,7 @@ app.post("/api/payment/initialize", async (req, res) => {
     console.error("Paystack initialize error:", error);
     return res.status(500).json({
       error: "Failed to initialize payment",
-      details: error.message,
+      details: error.message || "Unknown error",
     });
   }
 });

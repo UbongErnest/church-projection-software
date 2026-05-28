@@ -147,26 +147,62 @@ export async function initializePaystackTransaction(args: {
   email: string;
   plan: SubscriptionPlan;
   userId: string;
-}): Promise<{ reference: string }> {
+  callbackUrl?: string;
+}): Promise<{ reference: string; authorizationUrl: string; accessCode: string }> {
   const reference = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-  
-  const transaction = await paystackRequest<PaystackInitializeResponse>("/transaction/initialize", "POST", {
-    email: args.email,
-    amount: getPlanAmount(args.plan) * 100,
-    reference,
-    metadata: {
+
+  try {
+    const paystackPayload: Record<string, unknown> = {
+      email: args.email,
+      amount: getPlanAmount(args.plan) * 100,
+      reference,
+      metadata: {
+        plan: args.plan,
+        userId: args.userId,
+      },
+    };
+
+    if (args.callbackUrl) {
+      paystackPayload.callback_url = args.callbackUrl;
+    }
+
+    const transaction = await paystackRequest<PaystackInitializeResponse>("/transaction/initialize", "POST", paystackPayload);
+
+    if (!transaction.status) {
+      throw new Error(transaction.message || "Paystack transaction initialization failed");
+    }
+
+    const authorizationUrl = transaction.data?.authorization_url;
+    const accessCode = transaction.data?.access_code || "";
+    const returnedReference = transaction.data?.reference;
+
+    if (!returnedReference) {
+      throw new Error("Paystack did not return a transaction reference");
+    }
+
+    console.log("[Paystack Initialize] Transaction initialized:", {
+      reference: returnedReference,
+      authorizationUrl,
+      accessCode: accessCode ? "***" : "(none)",
+      userId: args.userId,
+      plan: args.plan,
+      callbackUrl: args.callbackUrl,
+    });
+
+    return {
+      reference: returnedReference,
+      authorizationUrl: authorizationUrl || "",
+      accessCode,
+    };
+  } catch (error: any) {
+    console.error("[Paystack Initialize] Error:", {
+      message: error.message,
+      email: args.email,
       plan: args.plan,
       userId: args.userId,
-    },
-  });
-
-  if (!transaction.status || !transaction.data?.reference) {
-    throw new Error(transaction.message || "Failed to initialize payment");
+    });
+    throw error;
   }
-
-  return {
-    reference: transaction.data.reference,
-  };
 }
 
 export async function verifyPaystackTransaction(
