@@ -88,7 +88,7 @@ async function fetchServerProfile(accessToken: string) {
 }
 
 // Fallback preach simulator sequences for seamless sandbox testing
-const PulPULP_SIMULATORS = [
+const PULPIT_SIMULATORS = [
   { label: "Matthew 6:9 (Pulpit Preach)", phrase: "Our Father in heaven, hallowed be Your name, let's open Matthew chapter 6 verse 9" },
   { label: "Romans 8:28 (Assurance)", phrase: "We stand on the promises of God, and we know that in all things God works for the good of those who love Him, just as described in Romans chapter 8 verse 28..." },
   { label: "Psalm 23:1 (Comfort)", phrase: "As the Psalmist declared when he was going through dry seasons, turn with me to Psalm 23 verse 1, the Lord is my shepherd..." },
@@ -1048,7 +1048,7 @@ bibleVersion={bibleVersion}
                   Click to Preach Phrase
                 </span>
                 <div className="space-y-2">
-                  {PulPULP_SIMULATORS.map((sim, index) => (
+                  {PULPIT_SIMULATORS.map((sim, index) => (
                     <button
                       key={index}
                       onClick={() => triggerPreachSimulator(sim.phrase)}
