@@ -8,13 +8,13 @@ export class RequestAuthError extends Error {}
 
 let supabaseAdmin: SupabaseClient | null = null;
 
-function getSupabaseAdmin(): SupabaseClient {
+function getSupabaseAdmin(): SupabaseClient | null {
   if (!supabaseAdmin) {
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
-      throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for profile features.");
+      return null;
     }
 
     supabaseAdmin = createClient(supabaseUrl, supabaseKey);
@@ -38,12 +38,17 @@ function getBearerToken(req: RequestLike) {
 }
 
 export async function getAuthenticatedUserIdFromRequest(req: RequestLike) {
+  const client = getSupabaseAdmin();
+  if (!client) {
+    throw new RequestAuthError("Supabase client not configured.");
+  }
+
   const accessToken = getBearerToken(req);
   if (!accessToken) {
     throw new RequestAuthError("Missing bearer token.");
   }
 
-  const { data, error } = await getSupabaseAdmin().auth.getUser(accessToken);
+  const { data, error } = await client.auth.getUser(accessToken);
   if (error || !data.user) {
     throw new RequestAuthError(error?.message || "Unable to authenticate user.");
   }
@@ -52,7 +57,12 @@ export async function getAuthenticatedUserIdFromRequest(req: RequestLike) {
 }
 
 export async function getNormalizedUserProfileById(userId: string) {
-  const { data: profile, error } = await getSupabaseAdmin()
+  const client = getSupabaseAdmin();
+  if (!client) {
+    return null;
+  }
+
+  const { data: profile, error } = await client
     .from("users")
     .select("*")
     .eq("user_id", userId)
@@ -83,7 +93,7 @@ export async function getNormalizedUserProfileById(userId: string) {
     subscription_end: null,
   };
 
-  const { data: updatedProfile, error: updateError } = await getSupabaseAdmin()
+  const { data: updatedProfile, error: updateError } = await client
     .from("users")
     .update(expiredPayload)
     .eq("user_id", userId)
