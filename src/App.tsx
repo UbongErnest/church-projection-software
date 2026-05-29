@@ -197,9 +197,9 @@ export default function App() {
     const handleUpdateSubscription = async (newPlan: "free" | "monthly" | "yearly") => {
       if (!currentUser || !userProfile) return;
       
-      // Calculate subscription end date (monthly = 30 days, yearly = 365 days)
+      // Calculate subscription end date (monthly = 30 days, yearly = 30 days)
       const endDate = newPlan !== "free" 
-        ? new Date(Date.now() + (newPlan === "monthly" ? 30 : 365) * 24 * 60 * 60 * 1000).toISOString()
+        ? new Date(Date.now() + (newPlan === "monthly" ? 30 : 30) * 24 * 60 * 60 * 1000).toISOString()
         : undefined;
       
       const updatedPayload = {
