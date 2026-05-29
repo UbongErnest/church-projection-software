@@ -43,17 +43,19 @@ async function activateSubscriptionForUser(userId: string, plan: SubscriptionPla
   };
 }
 
+function parseRequestBody(body: unknown): { data?: { status?: string; tx_ref?: string; meta?: Record<string, unknown> } } {
+  if (body && typeof body === "object") {
+    return body as { data?: { status?: string; tx_ref?: string; meta?: Record<string, unknown> } };
+  }
+  return {};
+}
+
 export default async function handler(req: any, res: any) {
   const signature = req.headers?.["verif-hash"] as string;
   const secret = process.env.FLUTTERWAVE_SECRET_KEY || "";
 
-  console.log("[Flutterwave Webhook] Received webhook:", { 
-    hasSignature: !!signature,
-    hasSecret: !!secret,
-    hasBody: !!req.body 
-  });
-
-  const { data } = req.body || {};
+  const body = parseRequestBody(req.body);
+  const { data } = body;
 
   console.log("[Flutterwave Webhook] Event data:", { status: data?.status, tx_ref: data?.tx_ref, meta: data?.meta });
 
@@ -75,7 +77,7 @@ export default async function handler(req: any, res: any) {
 
     console.log("[Flutterwave Webhook] Processing - userId:", userId, "plan:", plan, "all meta keys:", data.meta ? Object.keys(data.meta) : "none");
 
-    if (userId && plan) {
+    if (userId && typeof userId === "string" && plan) {
       try {
         const result = await activateSubscriptionForUser(userId, plan);
         console.log("[Flutterwave Webhook] Activated subscription for user:", userId, "plan:", plan, "ends:", result.subscriptionEnd);
@@ -83,7 +85,7 @@ export default async function handler(req: any, res: any) {
         console.error("[Flutterwave Webhook] Failed to activate subscription:", error.message);
       }
     } else {
-      console.error("[Flutterwave Webhook] Missing userId or plan in webhook meta:", JSON.stringify(data.meta));
+      console.error("[Flutterwave Webhook] Missing userId or plan in webhook meta:", JSON.stringify(data?.meta));
     }
   }
 

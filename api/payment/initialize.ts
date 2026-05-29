@@ -119,6 +119,20 @@ async function initializeFlutterwaveTransaction(args: {
   };
 }
 
+function parseRequestBody(body: unknown): { email?: string; userId?: string; plan?: string; [key: string]: unknown } {
+  if (body && typeof body === "object") {
+    return body as { email?: string; userId?: string; plan?: string; [key: string]: unknown };
+  }
+  if (typeof body === "string") {
+    try {
+      return JSON.parse(body) as { email?: string; userId?: string; plan?: string; [key: string]: unknown };
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
 export default async function handler(req: any, res: any) {
   const method = (req.method || "GET").toUpperCase();
   
@@ -141,7 +155,7 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
+    const body = parseRequestBody(req.body);
     const plan = normalizeSubscriptionPlan(body.plan);
     if (!body.email || !body.userId || !plan) {
       return res.status(400).json({ error: "Missing or invalid email, userId, or plan.", received: body });
