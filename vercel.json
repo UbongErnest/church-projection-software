@@ -1,14 +1,6 @@
 {
   "version": 2,
   "buildCommand": "npm run build",
-  "functions": {
-    "api/payment/initialize.ts": {
-      "runtime": "nodejs24.x"
-    },
-    "api/payment/verify.ts": {
-      "runtime": "nodejs24.x"
-    }
-  },
   "builds": [
     {
       "src": "api/**/*.ts",
