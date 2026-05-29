@@ -1,7 +1,10 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import {
   RequestAuthError,
   getAuthenticatedUserProfileFromRequest,
-} from "../src/server/userProfiles.ts";
+} from "../src/server/userProfiles";
 
 export default async function handler(req: any, res: any) {
   try {
