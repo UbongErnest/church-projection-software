@@ -46,11 +46,11 @@ export type PaymentVerificationResult = {
 
 export const PLAN_CONFIG: Record<SubscriptionPlan, { amount: number; durationDays: number }> = {
   monthly: {
-    amount: 10000,
+    amount: 10500,
     durationDays: 30,
   },
   yearly: {
-    amount: 25000,
+    amount: 25500,
     durationDays: 365,
   },
 };

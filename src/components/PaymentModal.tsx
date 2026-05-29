@@ -131,7 +131,7 @@ export default function PaymentModal({ isOpen, onClose, plan, email, userId, onS
   if (!isOpen) return null;
 
   const planName = plan === "monthly" ? "Pro Monthly" : "Premium Plan";
-  const planPrice = plan === "monthly" ? "₦10,000" : "₦25,000";
+  const planPrice = plan === "monthly" ? "₦10,500" : "₦25,500";
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 select-none">

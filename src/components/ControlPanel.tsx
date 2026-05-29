@@ -1646,7 +1646,7 @@ onChange={(e) => {
                       )}
                       <div>
                         <h4 className="font-sans font-bold text-xs text-white uppercase tracking-wider">Pro Monthly</h4>
-                        <div className="text-lg font-bold text-white font-mono mt-1">₦10,000<span className="text-xs text-white/55">/mo</span></div>
+                        <div className="text-lg font-bold text-white font-mono mt-1">₦10,500<span className="text-xs text-white/55">/mo</span></div>
                         <p className="text-[10px] text-white/50 mt-1 leading-normal">Unlocks AI-powered sermon live listening, automatic scripture projection, <strong>plus Media Projection</strong> for images and videos.</p>
                       </div>
 {userPlan !== "monthly" && (
@@ -1655,7 +1655,7 @@ onChange={(e) => {
                            disabled={checkoutLoading}
                            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs py-1.5 rounded-lg mt-3 transition cursor-pointer"
                          >
-                           {userPlan === "yearly" ? "Switch to Pro Monthly" : "Upgrade to Pro Monthly (₦10,000)"}
+                           {userPlan === "yearly" ? "Switch to Pro Monthly" : "Upgrade to Pro Monthly (₦10,500)"}
                          </button>
                        )}
                      </div>
@@ -1671,7 +1671,7 @@ onChange={(e) => {
                       )}
                       <div>
                         <h4 className="font-sans font-bold text-xs text-amber-250 uppercase tracking-wider">Premium Plan</h4>
-                        <div className="text-lg font-bold text-white font-mono mt-1">₦25,000<span className="text-xs text-white/55">/mo</span></div>
+                        <div className="text-lg font-bold text-white font-mono mt-1">₦25,500<span className="text-xs text-white/55">/mo</span></div>
                         <p className="text-[10px] text-white/50 mt-1 leading-normal">Unlocks the ENTIRE application: Hymnals, Announcements, Note cloud journal with Markdown exports, AI outline helper, custom church branding name, parallel dual translations, and advanced themes.</p>
                       </div>
 {userPlan !== "yearly" && (
@@ -1680,7 +1680,7 @@ onChange={(e) => {
                            disabled={checkoutLoading}
                            className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-450 hover:to-amber-550 disabled:opacity-50 text-slate-950 font-extrabold text-xs py-1.5 rounded-lg mt-3 transition cursor-pointer"
                          >
-                           Upgrade to Premium (₦25,000)
+                           Upgrade to Premium (₦25,500)
                          </button>
                        )}
                      </div>
@@ -2048,7 +2048,7 @@ onChange={(e) => {
                     <span className="font-sans font-bold text-xs text-white uppercase tracking-wider">Pro Monthly</span>
                     <Zap className="w-3.5 h-3.5 text-blue-400" />
                   </div>
-                  <div className="text-xl font-bold text-white font-mono mt-1">₦10,000<span className="text-xs text-white/50">/mo</span></div>
+                  <div className="text-xl font-bold text-white font-mono mt-1">₦10,500<span className="text-xs text-white/50">/mo</span></div>
                   <ul className="text-[10px] text-white/55 space-y-1 mt-3">
                     <li>✓ AI Sermon Live Listening</li>
                     <li>✓ Automatic verse detection</li>
@@ -2078,7 +2078,7 @@ onChange={(e) => {
                     <span className="font-sans font-bold text-xs text-amber-250 uppercase tracking-wider">Premium Plan</span>
                     <Crown className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
                   </div>
-                  <div className="text-xl font-bold text-white font-mono mt-1">₦25,000<span className="text-xs text-white/50">/mo</span></div>
+                  <div className="text-xl font-bold text-white font-mono mt-1">₦25,500<span className="text-xs text-white/50">/mo</span></div>
                   <ul className="text-[10px] text-white/55 space-y-1 mt-3">
                     <li className="text-amber-200/90 font-semibold">★ Sanctuary Notes Cloud Journal</li>
                     <li className="text-amber-200/90 font-semibold">★ Praise Hymnals &amp; Media</li>

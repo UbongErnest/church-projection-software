@@ -13,8 +13,8 @@ function normalizeSubscriptionPlan(value: unknown): SubscriptionPlan | null {
 }
 
 function getPlanAmount(plan: SubscriptionPlan): number {
-  const amounts: Record<string, number> = { monthly: 10000, yearly: 25000 };
-  return amounts[plan] || 10000;
+  const amounts: Record<string, number> = { monthly: 10500, yearly: 25500 };
+  return amounts[plan] || 10500;
 }
 
 async function flutterwaveRequest<TResponse>(

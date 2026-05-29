@@ -13,7 +13,7 @@ function normalizeSubscriptionPlan(value: unknown): SubscriptionPlan | null {
 }
 
 function getPlanAmount(plan: SubscriptionPlan): number {
-  const amounts: Record<SubscriptionPlan, number> = { monthly: 10000, yearly: 25000 };
+  const amounts: Record<SubscriptionPlan, number> = { monthly: 10500, yearly: 25500 };
   return amounts[plan];
 }
 
