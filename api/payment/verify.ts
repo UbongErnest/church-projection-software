@@ -29,7 +29,13 @@ async function flutterwaveRequest<TResponse>(
     },
   });
 
-  const result = await response.json();
+  let result: any;
+  try {
+    result = await response.json();
+  } catch (parseError) {
+    const text = await response.text();
+    throw new Error(`Flutterwave API returned non-JSON response (${response.status}): ${text.slice(0, 200)}`);
+  }
 
   if (!response.ok) {
     const errorMsg = result.message || result.error || JSON.stringify(result);
