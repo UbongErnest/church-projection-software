@@ -5,7 +5,7 @@ import {
   initializeFlutterwaveTransaction,
   normalizeSubscriptionPlan,
   resolveAppUrlFromRequest,
-} from "../../src/server/payments";
+} from "@/server/payments";
 
 export default async function handler(req: any, res: any) {
   const method = (req.method || "GET").toUpperCase();

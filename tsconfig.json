@@ -4,23 +4,29 @@
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
     "module": "ESNext",
+    "moduleResolution": "bundler",
     "lib": [
       "ES2022",
       "DOM",
       "DOM.Iterable"
     ],
     "skipLibCheck": true,
-    "moduleResolution": "bundler",
     "isolatedModules": true,
     "moduleDetection": "force",
     "allowJs": true,
     "jsx": "react-jsx",
+    "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"],
+      "@/server/*": ["./src/server/*"],
+      "@/server/payments": ["./src/server/payments.ts"],
+      "@/server/userProfiles": ["./src/server/userProfiles.ts"],
+      "@/bibleDatabase": ["./src/bibleDatabase.ts"],
+      "@/BibleData/*": ["./src/BibleData/*"]
     },
+    "rootDir": ".",
     "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
     "noEmit": true
   }
 }

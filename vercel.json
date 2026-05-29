@@ -4,14 +4,23 @@
   "builds": [
     {
       "src": "api/**/*.ts",
-      "use": "@vercel/node"
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": ["src/BibleData/**", "src/server/**"]
+      }
+    }
+  ],
+  "routes": [
+    {
+      "handle": "filesystem"
     },
     {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }

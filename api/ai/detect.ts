@@ -2,8 +2,8 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import { GoogleGenAI } from "@google/genai";
-import { normalizeBookName, parseSpokenNumbers } from "../../src/bibleDatabase";
-import KJV_DATA from "../../src/BibleData/kjv.json";
+import { normalizeBookName, parseSpokenNumbers } from "@/bibleDatabase";
+import KJV_DATA from "@/BibleData/kjv.json";
 
 type KjvVerse = {
   book_name: string;

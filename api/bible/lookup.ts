@@ -1,8 +1,8 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-import { normalizeBookName } from "../../src/bibleDatabase";
-import KJV_DATA from "../../src/BibleData/kjv.json";
+import { normalizeBookName } from "@/bibleDatabase";
+import KJV_DATA from "@/BibleData/kjv.json";
 
 type KjvVerse = {
   book_name: string;

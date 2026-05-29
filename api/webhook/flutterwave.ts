@@ -1,8 +1,7 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-import { normalizeSubscriptionPlan } from "../../src/server/payments";
-import { activateSubscriptionForUser } from "../../src/server/payments";
+import { normalizeSubscriptionPlan, activateSubscriptionForUser } from "@/server/payments";
 
 export default async function handler(req: any, res: any) {
   const signature = req.headers?.["verif-hash"] as string;
