@@ -1,7 +1,47 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-import { normalizeSubscriptionPlan, activateSubscriptionForUser } from "@/server/payments";
+import { createClient } from "@supabase/supabase-js";
+
+type SubscriptionPlan = "monthly" | "yearly";
+
+function normalizeSubscriptionPlan(value: unknown): SubscriptionPlan | null {
+  if (value === "monthly" || value === "yearly") {
+    return value;
+  }
+  return null;
+}
+
+async function activateSubscriptionForUser(userId: string, plan: SubscriptionPlan) {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error("Supabase not configured");
+  }
+  
+  const supabase = createClient(supabaseUrl, supabaseKey);
+  const durationDays = plan === "monthly" ? 30 : 365;
+  const subscriptionEnd = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
+
+  const { error } = await supabase
+    .from("users")
+    .update({
+      subscription_plan: plan,
+      subscription_status: "active",
+      subscription_end: subscriptionEnd,
+    })
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new Error(`Failed to update user subscription: ${error.message}`);
+  }
+
+  return {
+    plan,
+    subscriptionEnd,
+  };
+}
 
 export default async function handler(req: any, res: any) {
   const signature = req.headers?.["verif-hash"] as string;
