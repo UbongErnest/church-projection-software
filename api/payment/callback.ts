@@ -1,3 +1,6 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 function redirect(res: any, location: string) {
   if (typeof res.redirect === "function") {
     return res.redirect(302, location);
@@ -13,10 +16,11 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const reference = req.query?.reference || req.query?.trxref;
-  if (!reference || typeof reference !== "string") {
+  const reference = req.query?.tx_ref || req.query?.reference;
+  if (!reference || (typeof reference !== "string" && Array.isArray(reference) && reference.length === 0)) {
     return redirect(res, "/?payment=error");
   }
 
-  return redirect(res, `/?payment=verify&reference=${encodeURIComponent(reference)}`);
+  const refValue = typeof reference === "string" ? reference : reference[0];
+  return redirect(res, `/?payment=verify&reference=${encodeURIComponent(refValue)}`);
 }
