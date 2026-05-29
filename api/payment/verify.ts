@@ -1,4 +1,4 @@
-import dotenv from "dotenv";
+import * as dotenv from "dotenv";
 dotenv.config();
 
 import { createClient } from "@supabase/supabase-js";
@@ -166,25 +166,28 @@ export default async function handler(req: any, res: any) {
         message: "Transaction not found. Please wait for webhook confirmation.",
       });
     }
-    
+
     const flutterwaveStatus = verification.status || null;
 
     if (flutterwaveStatus !== "successful") {
       // Still try to activate with the userId from body if we have one (for webhook pre-activation)
-      if (body.userId && body.plan) {
-        const fallbackPlan = normalizeSubscriptionPlan(body.plan);
-        if (fallbackPlan) {
-          try {
-            await activateSubscriptionForUser(body.userId, fallbackPlan);
-            return res.status(200).json({
-              success: true,
-              status: "active",
-              flutterwaveStatus: "pre-activated",
-              plan: fallbackPlan,
-              message: "Subscription pre-activated via fallback",
-            });
-          } catch (e) {
-            console.log("Fallback activation failed, continuing with verification...");
+      if (body.userId && typeof body.userId === "string" && body.plan) {
+        const bodyPlan = typeof body.plan === "string" ? body.plan : undefined;
+        if (bodyPlan === "monthly" || bodyPlan === "yearly") {
+          const fallbackPlan = normalizeSubscriptionPlan(bodyPlan);
+          if (fallbackPlan) {
+            try {
+              await activateSubscriptionForUser(body.userId, fallbackPlan);
+              return res.status(200).json({
+                success: true,
+                status: "active",
+                flutterwaveStatus: "pre-activated",
+                plan: fallbackPlan,
+                message: "Subscription pre-activated via fallback",
+              });
+            } catch (e) {
+              console.log("Fallback activation failed, continuing with verification...");
+            }
           }
         }
       }
@@ -197,18 +200,54 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const metadataPlan = normalizeSubscriptionPlan(verification.meta?.plan);
-    const resolvedPlan = metadataPlan || normalizeSubscriptionPlan(body.plan) || null;
+    // Case-insensitive search for user ID and plan in verification meta
+    let resolvedUserId: string | undefined;
+    let resolvedPlan: SubscriptionPlan | null = normalizeSubscriptionPlan(verification.meta?.plan);
+    
+    // Try to find user ID with case-insensitive matching
+    if (verification.meta?.userId || verification.meta?.user_id) {
+      resolvedUserId = verification.meta?.userId || verification.meta?.user_id;
+    } else if (verification.meta) {
+      const meta = verification.meta as Record<string, unknown>;
+      for (const key of Object.keys(meta)) {
+        if (key.toLowerCase() === "userid") {
+          resolvedUserId = typeof meta[key] === "string" ? meta[key] : undefined;
+          break;
+        }
+      }
+    }
+    
+    // Try to find plan with case-insensitive matching if meta plan failed
+    if (!resolvedPlan && verification.meta) {
+      const meta = verification.meta as Record<string, unknown>;
+      for (const key of Object.keys(meta)) {
+        if (key.toLowerCase() === "plan") {
+          const planValue = typeof meta[key] === "string" ? meta[key] : null;
+          if (planValue === "monthly" || planValue === "yearly") {
+            resolvedPlan = planValue;
+          }
+          break;
+        }
+      }
+    }
+    
+    // Fallback to body parameters
+    if (!resolvedUserId) {
+      resolvedUserId = body.userId;
+    }
+    if (!resolvedPlan) {
+      resolvedPlan = normalizeSubscriptionPlan(body.plan);
+    }
+    
     if (!resolvedPlan) {
       throw new Error("Verified transaction is missing a valid subscription plan.");
     }
-
-    const resolvedUserId = verification.meta?.userId || verification.meta?.user_id || body.userId || "";
+    
     if (!resolvedUserId) {
       throw new Error("Verified transaction is missing a user ID.");
     }
 
-    const { subscriptionEnd } = await activateSubscriptionForUser(resolvedUserId, resolvedPlan);
+    const { subscriptionEnd } = await activateSubscriptionForUser(resolvedUserId as string, resolvedPlan);
 
     return res.status(200).json({
       success: true,

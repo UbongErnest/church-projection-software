@@ -1,4 +1,4 @@
-import dotenv from "dotenv";
+import * as dotenv from "dotenv";
 dotenv.config();
 
 import { createClient } from "@supabase/supabase-js";
@@ -70,14 +70,25 @@ export default async function handler(req: any, res: any) {
       return res.status(500).json({ received: false, error: "Server configuration error" });
     }
     
-    // Try both userId and user_id in case Flutterwave uses different casing
-    const userId = data.meta?.userId || data.meta?.user_id || 
-                   (typeof data.meta === "object" ? Object.keys(data.meta).find(k => k.toLowerCase() === "userid") && data.meta[Object.keys(data.meta).find(k => k.toLowerCase() === "userid")!] : undefined);
-    const plan = normalizeSubscriptionPlan(data.meta?.plan);
+    const meta = data.meta || {};
+    let userId: string | undefined;
+    let planValue: string | undefined;
+    
+    // Case-insensitive search for userId and plan keys
+    for (const key of Object.keys(meta)) {
+      if (key.toLowerCase() === "userid") {
+        userId = typeof meta[key] === "string" ? meta[key] : undefined;
+      }
+      if (key.toLowerCase() === "plan") {
+        planValue = typeof meta[key] === "string" ? meta[key] : undefined;
+      }
+    }
+    
+    const plan = normalizeSubscriptionPlan(planValue);
 
-    console.log("[Flutterwave Webhook] Processing - userId:", userId, "plan:", plan, "all meta keys:", data.meta ? Object.keys(data.meta) : "none");
+    console.log("[Flutterwave Webhook] Processing - userId:", userId, "plan:", plan, "all meta keys:", Object.keys(meta));
 
-    if (userId && typeof userId === "string" && plan) {
+    if (userId && plan) {
       try {
         const result = await activateSubscriptionForUser(userId, plan);
         console.log("[Flutterwave Webhook] Activated subscription for user:", userId, "plan:", plan, "ends:", result.subscriptionEnd);
@@ -85,7 +96,7 @@ export default async function handler(req: any, res: any) {
         console.error("[Flutterwave Webhook] Failed to activate subscription:", error.message);
       }
     } else {
-      console.error("[Flutterwave Webhook] Missing userId or plan in webhook meta:", JSON.stringify(data?.meta));
+      console.error("[Flutterwave Webhook] Missing userId or plan in webhook meta:", JSON.stringify(meta));
     }
   }
 

@@ -391,8 +391,20 @@ app.post("/api/webhook/flutterwave", async (req, res) => {
   console.log("[Flutterwave Webhook] Event data:", { status: data?.status, tx_ref: data?.tx_ref });
 
   if (data && data.status === "successful" && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    const userId = data.meta?.userId;
-    const plan = normalizeSubscriptionPlan(data.meta?.plan);
+    const meta = (data.meta || {}) as Record<string, unknown>;
+    let userId: string | undefined;
+    let planValue: string | undefined;
+    
+    for (const key of Object.keys(meta)) {
+      if (key.toLowerCase() === "userid") {
+        userId = typeof meta[key] === "string" ? meta[key] : undefined;
+      }
+      if (key.toLowerCase() === "plan") {
+        planValue = typeof meta[key] === "string" ? meta[key] : undefined;
+      }
+    }
+    
+    const plan = normalizeSubscriptionPlan(planValue);
 
     if (userId && plan) {
       try {
