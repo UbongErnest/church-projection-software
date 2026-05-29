@@ -4,9 +4,13 @@
   "builds": [
     {
       "src": "api/**/*.ts",
-      "use": "@vercel/node",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
       "config": {
-        "includeFiles": ["src/BibleData/**"]
+        "distDir": "dist"
       }
     }
   ],
