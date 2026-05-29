@@ -7,14 +7,8 @@ import {
   resolveAppUrlFromRequest,
 } from "../../src/server/payments";
 
-export const config = {
-  api: {
-    bodyParser: true,
-  },
-};
-
 export default async function handler(req: any, res: any) {
-  const method = req.method || req.httpMethod || "GET";
+  const method = (req.method || "GET").toUpperCase();
   
   // Check if environment variables are set first
   if (!process.env.FLUTTERWAVE_SECRET_KEY) {
@@ -36,7 +30,8 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const body = req.body || {};
+    // req.body should be parsed by Vercel when Content-Type: application/json
+    const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
     const plan = normalizeSubscriptionPlan(body.plan);
     if (!body.email || !body.userId || !plan) {
       return res.status(400).json({ error: "Missing or invalid email, userId, or plan.", received: body });

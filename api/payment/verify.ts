@@ -7,8 +7,7 @@ import {
 } from "../../src/server/payments";
 
 export default async function handler(req: any, res: any) {
-  // Vercel uses httpMethod, not method
-  const method = (req.method || req.httpMethod || "GET").toUpperCase();
+  const method = (req.method || "GET").toUpperCase();
   
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return res.status(500).json({
@@ -22,7 +21,7 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const body = req.body || {};
+    const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
     if (!body.reference) {
       return res.status(400).json({ error: "Missing reference." });
     }
