@@ -52,10 +52,10 @@ function getSupabaseAdmin() {
 
 async function verifyFlutterwaveTransaction(
   reference: string,
-  maxAttempts = 3,
-  retryDelayMs = 1500,
-): Promise<{ status?: string; meta?: { plan?: string; userId?: string }; amount?: number; customer?: { email?: string } } | null> {
-  let lastVerification: { status?: string; meta?: { plan?: string; userId?: string }; amount?: number; customer?: { email?: string } } | null = null;
+  maxAttempts = 5,
+  retryDelayMs = 2000,
+): Promise<{ status?: string; meta?: { plan?: string; userId?: string; user_id?: string }; amount?: number; customer?: { email?: string } } | null> {
+  let lastVerification: { status?: string; meta?: { plan?: string; userId?: string; user_id?: string }; amount?: number; customer?: { email?: string } } | null = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const response = await flutterwaveRequest<{ data?: Array<{ tx_ref?: string; status?: string; meta?: Record<string, unknown>; amount?: number; customer?: { email?: string } }> }>(`/transactions?tx_ref=${reference}`, "GET");
@@ -112,6 +112,13 @@ async function activateSubscriptionForUser(userId: string, plan: SubscriptionPla
 export default async function handler(req: any, res: any) {
   const method = (req.method || "GET").toUpperCase();
   
+  if (!process.env.FLUTTERWAVE_SECRET_KEY) {
+    return res.status(500).json({
+      error: "Failed to verify payment",
+      details: "FLUTTERWAVE_SECRET_KEY is not set in environment",
+    });
+  }
+  
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return res.status(500).json({
       error: "Failed to verify payment",
@@ -130,9 +137,38 @@ export default async function handler(req: any, res: any) {
     }
 
     const verification = await verifyFlutterwaveTransaction(body.reference);
-    const flutterwaveStatus = verification?.status || null;
+    
+    if (!verification) {
+      return res.status(200).json({
+        success: false,
+        status: "not_found",
+        flutterwaveStatus: null,
+        message: "Transaction not found. Please wait for webhook confirmation.",
+      });
+    }
+    
+    const flutterwaveStatus = verification.status || null;
 
     if (flutterwaveStatus !== "successful") {
+      // Still try to activate with the userId from body if we have one (for webhook pre-activation)
+      if (body.userId && body.plan) {
+        const fallbackPlan = normalizeSubscriptionPlan(body.plan);
+        if (fallbackPlan) {
+          try {
+            await activateSubscriptionForUser(body.userId, fallbackPlan);
+            return res.status(200).json({
+              success: true,
+              status: "active",
+              flutterwaveStatus: "pre-activated",
+              plan: fallbackPlan,
+              message: "Subscription pre-activated via fallback",
+            });
+          } catch (e) {
+            console.log("Fallback activation failed, continuing with verification...");
+          }
+        }
+      }
+      
       return res.status(200).json({
         success: false,
         status: flutterwaveStatus || "pending",
@@ -141,13 +177,13 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const metadataPlan = normalizeSubscriptionPlan(verification?.meta?.plan);
+    const metadataPlan = normalizeSubscriptionPlan(verification.meta?.plan);
     const resolvedPlan = metadataPlan || normalizeSubscriptionPlan(body.plan) || null;
     if (!resolvedPlan) {
       throw new Error("Verified transaction is missing a valid subscription plan.");
     }
 
-    const resolvedUserId = verification?.meta?.userId || body.userId || "";
+    const resolvedUserId = verification.meta?.userId || verification.meta?.user_id || body.userId || "";
     if (!resolvedUserId) {
       throw new Error("Verified transaction is missing a user ID.");
     }

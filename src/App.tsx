@@ -875,19 +875,32 @@ const flutterwaveState = String(verifyData?.flutterwaveStatus || verifyData?.sta
                }
               }
 
-              const { data: sessionData } = await supabase.auth.getSession();
-              const accessToken = sessionData.session?.access_token;
-              if (!accessToken) {
-                throw new Error("Missing active session token for profile refresh.");
-              }
+const { data: sessionData } = await supabase.auth.getSession();
+               const accessToken = sessionData.session?.access_token;
+               if (!accessToken) {
+                 throw new Error("Missing active session token for profile refresh.");
+               }
 
-              const profile = await fetchServerProfile(accessToken);
-              if (profile) {
-                setUserProfile(mapProfileFromDB(profile));
-              }
+               // Retry profile fetch a few times in case webhook hasn't finished
+               for (let i = 0; i < 5; i++) {
+                 const profile = await fetchServerProfile(accessToken);
+                 if (profile && (profile.subscriptionPlan === "monthly" || profile.subscriptionPlan === "yearly")) {
+                   setUserProfile(mapProfileFromDB(profile));
+                   const resolvedPlan = profile.subscriptionPlan;
+                   alert(`Payment successful! You are now on the ${resolvedPlan === "yearly" ? "Premium Plan" : "Pro Monthly"} plan.`);
+                   return;
+                 }
+                 await new Promise(resolve => setTimeout(resolve, 1500));
+               }
+               
+               // Fallback: update profile optimistically if webhook hasn't processed
+               const profile = await fetchServerProfile(accessToken);
+               if (profile) {
+                 setUserProfile(mapProfileFromDB(profile));
+               }
 
-             const resolvedPlan = verifiedPlan || "monthly";
-             alert(`Payment successful! You are now on the ${resolvedPlan === "yearly" ? "Premium Plan" : "Pro Monthly"} plan.`);
+              const resolvedPlan = verifiedPlan || "monthly";
+              alert(`Payment successful! You are now on the ${resolvedPlan === "yearly" ? "Premium Plan" : "Pro Monthly"} plan.`);
             } catch (err) {
               console.warn("Failed to refresh profile after payment:", err);
               alert("Payment went through, but the app could not finish syncing your subscription yet. Please refresh in a few seconds.");

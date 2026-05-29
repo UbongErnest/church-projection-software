@@ -47,25 +47,43 @@ export default async function handler(req: any, res: any) {
   const signature = req.headers?.["verif-hash"] as string;
   const secret = process.env.FLUTTERWAVE_SECRET_KEY || "";
 
-  if (signature && secret) {
-    console.log("[Flutterwave Webhook] Received signature:", signature.substring(0, 20) + "...");
-  }
+  console.log("[Flutterwave Webhook] Received webhook:", { 
+    hasSignature: !!signature,
+    hasSecret: !!secret,
+    hasBody: !!req.body 
+  });
 
   const { data } = req.body || {};
 
-  console.log("[Flutterwave Webhook] Event data:", { status: data?.status, tx_ref: data?.tx_ref });
+  console.log("[Flutterwave Webhook] Event data:", { status: data?.status, tx_ref: data?.tx_ref, meta: data?.meta });
 
-  if (data && data.status === "successful" && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    const userId = data.meta?.userId;
+  if (!data || !data.status) {
+    console.error("[Flutterwave Webhook] Missing data in webhook body");
+    return res.status(400).json({ received: false, error: "Missing data" });
+  }
+
+  if (data.status === "successful") {
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.error("[Flutterwave Webhook] Supabase credentials not configured");
+      return res.status(500).json({ received: false, error: "Server configuration error" });
+    }
+    
+    // Try both userId and user_id in case Flutterwave uses different casing
+    const userId = data.meta?.userId || data.meta?.user_id || 
+                   (typeof data.meta === "object" ? Object.keys(data.meta).find(k => k.toLowerCase() === "userid") && data.meta[Object.keys(data.meta).find(k => k.toLowerCase() === "userid")!] : undefined);
     const plan = normalizeSubscriptionPlan(data.meta?.plan);
+
+    console.log("[Flutterwave Webhook] Processing - userId:", userId, "plan:", plan, "all meta keys:", data.meta ? Object.keys(data.meta) : "none");
 
     if (userId && plan) {
       try {
-        const { subscriptionEnd } = await activateSubscriptionForUser(userId, plan);
-        console.log("[Flutterwave Webhook] Activated subscription for user:", userId, "plan:", plan, "ends:", subscriptionEnd);
+        const result = await activateSubscriptionForUser(userId, plan);
+        console.log("[Flutterwave Webhook] Activated subscription for user:", userId, "plan:", plan, "ends:", result.subscriptionEnd);
       } catch (error: any) {
         console.error("[Flutterwave Webhook] Failed to activate subscription:", error.message);
       }
+    } else {
+      console.error("[Flutterwave Webhook] Missing userId or plan in webhook meta:", JSON.stringify(data.meta));
     }
   }
 
