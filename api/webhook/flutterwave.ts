@@ -43,10 +43,31 @@ async function activateSubscriptionForUser(userId: string, plan: SubscriptionPla
   };
 }
 
-function parseRequestBody(body: unknown): { data?: { status?: string; tx_ref?: string; meta?: Record<string, unknown> } } {
-  if (body && typeof body === "object") {
-    return body as { data?: { status?: string; tx_ref?: string; meta?: Record<string, unknown> } };
+async function readBody(req: any): Promise<{ data?: { status?: string; tx_ref?: string; meta?: Record<string, unknown> } }> {
+  // If body is already parsed (Express middleware)
+  if (req.body && typeof req.body === "object") {
+    return req.body;
   }
+  
+  // If body is a stream or needs to be read
+  if (req.body?.getReader || typeof req.body?.text === "function") {
+    try {
+      const text = await req.body.text();
+      return JSON.parse(text);
+    } catch {
+      return {};
+    }
+  }
+  
+  // If body is a string
+  if (typeof req.body === "string") {
+    try {
+      return JSON.parse(req.body);
+    } catch {
+      return {};
+    }
+  }
+  
   return {};
 }
 
@@ -54,7 +75,7 @@ export default async function handler(req: any, res: any) {
   const signature = req.headers?.["verif-hash"] as string;
   const secret = process.env.FLUTTERWAVE_SECRET_KEY || "";
 
-  const body = parseRequestBody(req.body);
+  const body = await readBody(req);
   const { data } = body;
 
   console.log("[Flutterwave Webhook] Event data:", { status: data?.status, tx_ref: data?.tx_ref, meta: data?.meta });

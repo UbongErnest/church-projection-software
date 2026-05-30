@@ -119,17 +119,31 @@ async function initializeFlutterwaveTransaction(args: {
   };
 }
 
-function parseRequestBody(body: unknown): { email?: string; userId?: string; plan?: string; [key: string]: unknown } {
-  if (body && typeof body === "object") {
-    return body as { email?: string; userId?: string; plan?: string; [key: string]: unknown };
+async function readBody(req: any): Promise<{ email?: string; userId?: string; plan?: string; [key: string]: unknown }> {
+  // If body is already parsed (Express middleware)
+  if (req.body && typeof req.body === "object") {
+    return req.body;
   }
-  if (typeof body === "string") {
+  
+  // If body is a stream or needs to be read
+  if (req.body?.getReader || typeof req.body?.text === "function") {
     try {
-      return JSON.parse(body) as { email?: string; userId?: string; plan?: string; [key: string]: unknown };
+      const text = await req.body.text();
+      return JSON.parse(text);
     } catch {
       return {};
     }
   }
+  
+  // If body is a string
+  if (typeof req.body === "string") {
+    try {
+      return JSON.parse(req.body);
+    } catch {
+      return {};
+    }
+  }
+  
   return {};
 }
 
@@ -155,7 +169,7 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const body = parseRequestBody(req.body);
+    const body = await readBody(req);
     const plan = normalizeSubscriptionPlan(body.plan);
     if (!body.email || !body.userId || !plan) {
       return res.status(400).json({ error: "Missing or invalid email, userId, or plan.", received: body });
