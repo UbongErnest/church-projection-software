@@ -139,15 +139,14 @@ async function getTransactionRecord(supabase: SupabaseClient, reference: string)
     .single();
 
   if (error) {
-    if (error.code === "PGRST116") {
-      console.log("[Supabase] Transaction not found (PGRST116 - no rows)");
-    } else {
-      console.error("[Supabase] Error fetching transaction record:", { 
-        message: error.message, 
-        code: error.code,
-        details: error.details 
-      });
-    }
+    console.error("[Supabase] Error fetching transaction record:", { 
+      message: error.message, 
+      code: error.code,
+      details: error.details,
+      hint: error.hint
+    });
+    // Don't throw - return null and let verification proceed
+    return null;
   }
   
   console.log("[Supabase] Transaction record lookup result:", data || "not found");
