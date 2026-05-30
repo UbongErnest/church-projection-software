@@ -31,7 +31,7 @@ export interface FlutterwaveTransaction {
 export interface FlutterwaveVerificationResponse {
   status: string;
   message?: string;
-  data?: FlutterwaveTransaction[];
+  data?: FlutterwaveTransaction;
 }
 
 export type PaymentVerificationResult = {
@@ -251,28 +251,24 @@ export async function verifyFlutterwaveTransaction(
   maxAttempts = 3,
   retryDelayMs = 1500,
 ): Promise<FlutterwaveTransaction | null> {
-  let lastVerification: FlutterwaveTransaction | null = null;
-
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const response = await flutterwaveRequest<FlutterwaveVerificationResponse>(`/transactions?tx_ref=${reference}`, "GET");
+      // Use verify_by_reference endpoint (more reliable than list endpoint)
+      const response = await flutterwaveRequest<FlutterwaveVerificationResponse>(`/transactions/verify_by_reference?tx_ref=${reference}`, "GET");
 
-      const transactions = response.data || [];
-      const transaction = transactions[0];
+      const tx = response.data || null;
 
-      if (transaction) {
-        lastVerification = transaction;
-        const flutterwaveStatus = transaction.status || null;
+      if (tx) {
+        const flutterwaveStatus = tx.status || null;
 
         console.log(`${logPrefix} Attempt ${attempt}/${maxAttempts}:`, {
           status: response.status,
-          message: response.message,
           flutterwaveStatus,
           reference,
         });
 
         if (flutterwaveStatus === "successful") {
-          return transaction;
+          return tx;
         }
 
         const shouldRetry =
@@ -283,7 +279,7 @@ export async function verifyFlutterwaveTransaction(
           );
 
         if (!shouldRetry) {
-          return transaction;
+          return tx;
         }
       }
 
@@ -313,7 +309,7 @@ export async function verifyFlutterwaveTransaction(
     }
   }
 
-  return lastVerification;
+  return null;
 }
 
 export async function recordTransaction(transaction: {

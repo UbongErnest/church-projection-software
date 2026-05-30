@@ -77,11 +77,12 @@ async function verifyFlutterwaveTransaction(
   console.log("[Flutterwave Verify] Starting verification for reference:", reference);
   
   try {
+    // Use verify_by_reference endpoint (more stable than list endpoint)
     const response = await flutterwaveRequest<{ 
       status?: string; 
-      data?: Array<{ tx_ref?: string; status?: string; meta?: Record<string, unknown>; amount?: number; customer?: { email?: string } }>,
+      data?: { tx_ref?: string; status?: string; meta?: Record<string, unknown>; amount?: number; customer?: { email?: string } },
       message?: string
-    }>(`/transactions?tx_ref=${reference}`, "GET");
+    }>(`/transactions/verify_by_reference?tx_ref=${reference}`, "GET");
 
     // Validate response structure
     if (!response || !response.data) {
@@ -89,20 +90,15 @@ async function verifyFlutterwaveTransaction(
       return null;
     }
 
-    const transactions = response.data || [];
-    const transaction = transactions[0];
-
-    if (transaction) {
-      console.log("[Flutterwave Verify] Response received:", { status: transaction.status, tx_ref: transaction.tx_ref });
-      
-      if (transaction.status === "successful") {
-        console.log("[Flutterwave Verify] Transaction successful, returning");
-        return transaction;
-      }
-    } else {
-      console.log("[Flutterwave Verify] No transactions found for reference");
+    const tx = response.data;
+    console.log("[Flutterwave Verify] Response received:", { status: tx.status, tx_ref: tx.tx_ref });
+    
+    if (tx.status === "successful") {
+      console.log("[Flutterwave Verify] Transaction successful, returning");
+      return tx;
     }
     
+    console.log("[Flutterwave Verify] Transaction status:", tx.status);
     return null;
   } catch (error: any) {
     const isServerError = error.status >= 500;
@@ -136,16 +132,14 @@ async function getTransactionRecord(supabase: SupabaseClient, reference: string)
     .from("transactions")
     .select("user_id, plan, status, flutterwave_status")
     .eq("reference", reference)
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error("[Supabase] Error fetching transaction record:", { 
       message: error.message, 
       code: error.code,
-      details: error.details,
-      hint: error.hint
+      details: error.details 
     });
-    // Don't throw - return null and let verification proceed
     return null;
   }
   
