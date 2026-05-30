@@ -3,7 +3,7 @@ import { supabase } from "../supabase";
 import { BookOpen, Lock, KeyRound, ChevronLeft, Eye, EyeOff, CheckCircle } from "lucide-react";
 
 interface SetNewPasswordPageProps {
-  onNavigate: (view: "landing" | "login" | "register" | "reset-password") => void;
+  onNavigate: (view: "landing" | "login" | "register" | "reset-password" | "set-new-password") => void;
 }
 
 export default function SetNewPasswordPage({ onNavigate }: SetNewPasswordPageProps) {
@@ -17,6 +17,18 @@ export default function SetNewPasswordPage({ onNavigate }: SetNewPasswordPagePro
 
   useEffect(() => {
     const checkRecoverySession = async () => {
+      // Supabase automatically processes hash fragment via onAuthStateChange
+      // Check if we have recovery params in hash or query
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const queryParams = new URLSearchParams(window.location.search);
+      const type = hashParams.get("type") || queryParams.get("type");
+
+      if (type !== "recovery") {
+        setErrorText("Invalid or expired reset link. Please request a new password reset.");
+        return;
+      }
+
+      // Get session - Supabase client should have processed the hash
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         setErrorText("Invalid or expired reset link. Please request a new password reset.");
@@ -56,10 +68,13 @@ export default function SetNewPasswordPage({ onNavigate }: SetNewPasswordPagePro
       if (error) {
         throw error;
       }
+      // Sign out after successful password update so user can login with new password
+      await supabase.auth.signOut();
+      // Clear hash to prevent re-processing
+      window.history.replaceState({}, document.title, "/login");
       setSuccess(true);
       setTimeout(() => {
         onNavigate("login");
-        window.history.replaceState({}, document.title, "/login");
       }, 2000);
     } catch (err: any) {
       console.error("Password update failed", err);

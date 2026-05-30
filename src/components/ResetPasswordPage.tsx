@@ -12,14 +12,13 @@ export default function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps
   const [errorText, setErrorText] = useState("");
   const [resetSent, setResetSent] = useState(false);
 
+  // If user lands on reset-password with recovery hash, redirect to password set page
   useEffect(() => {
-    const checkRecoveryLink = async () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get("type") === "recovery") {
-        onNavigate("set-new-password");
-      }
-    };
-    checkRecoveryLink();
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const queryParams = new URLSearchParams(window.location.search);
+    if (hashParams.get("type") === "recovery" || queryParams.get("type") === "recovery") {
+      onNavigate("set-new-password");
+    }
   }, [onNavigate]);
 
   const handleRequestReset = async (e: FormEvent) => {
@@ -37,7 +36,7 @@ export default function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(emailVal, {
-        redirectTo: `${window.location.origin}/reset-password?type=recovery`,
+        redirectTo: `${window.location.origin}/reset-password`,
       });
 
       if (error) {

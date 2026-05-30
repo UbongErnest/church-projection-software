@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 
 interface RegisterPageProps {
-  onNavigate: (view: "landing" | "login" | "register") => void;
+  onNavigate: (view: "landing" | "login" | "register" | "reset-password" | "set-new-password") => void;
 }
 
 export default function RegisterPage({ onNavigate }: RegisterPageProps) {
@@ -45,126 +45,119 @@ export default function RegisterPage({ onNavigate }: RegisterPageProps) {
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState("");
 
-  const handleRegister = async (e: FormEvent) => {
-     e.preventDefault();
-     setErrorText("");
+const handleRegister = async (e: FormEvent) => {
+    e.preventDefault();
+    setErrorText("");
 
-const nameVal = fullName.trim();
-      const emailVal = email.trim();
-      const phoneVal = phone.trim();
-      const churchVal = churchName.trim();
-      const countryVal = country.trim();
-      const stateVal = state.trim();
-      const cityVal = city.trim();
-      const locationVal = location.trim();
-      const denomVal = denomination.trim();
-      const passVal = password;
+    const nameVal = fullName.trim();
+    const emailVal = email.trim();
+    const phoneVal = phone.trim();
+    const churchVal = churchName.trim();
+    const countryVal = country.trim();
+    const stateVal = state.trim();
+    const cityVal = city.trim();
+    const locationVal = location.trim();
+    const denomVal = denomination.trim();
+    const passVal = password;
 
-      if (
-        !nameVal || 
-        !emailVal ||
-        !churchVal || 
-        !countryVal || 
-        !stateVal || 
-        !cityVal || 
-        !locationVal || 
-        !denomVal || 
-        !passVal
-      ) {
-        setErrorText("Please fill out all required fields.");
-        return;
-      }
+    if (
+      !nameVal ||
+      !emailVal ||
+      !churchVal ||
+      !countryVal ||
+      !stateVal ||
+      !cityVal ||
+      !locationVal ||
+      !denomVal ||
+      !passVal
+    ) {
+      setErrorText("Please fill out all required fields.");
+      return;
+    }
 
-     if (!agreeLegal) {
-       setErrorText("You must accept the Privacy Policy and Terms & Conditions before creating an account.");
-       return;
-     }
+    if (!agreeLegal) {
+      setErrorText("You must accept the Privacy Policy and Terms & Conditions before creating an account.");
+      return;
+    }
 
-     if (passVal.length < 6) {
-       setErrorText("Password must be at least 6 characters long.");
-       return;
-     }
+    if (passVal.length < 6) {
+      setErrorText("Password must be at least 6 characters long.");
+      return;
+    }
 
-     if (passVal !== confirmPassword) {
-       setErrorText("Passwords do not match.");
-       return;
-     }
+    if (passVal !== confirmPassword) {
+      setErrorText("Passwords do not match.");
+      return;
+    }
 
-setLoading(true);
+    setLoading(true);
 
-try {
-        const { data, error: signUpError } = await supabase.auth.signUp({
-          email: emailVal,
-          password: passVal,
-          options: {
-            data: {
-              display_name: nameVal,
-              church_name: churchVal,
-              country: countryVal,
-              state: stateVal,
-              city: cityVal,
-              location: locationVal,
-              denomination: denomVal,
-              phone: phoneVal,
-            }
+    try {
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: emailVal,
+        password: passVal,
+        options: {
+          data: {
+            display_name: nameVal,
+            church_name: churchVal,
+            country: countryVal,
+            state: stateVal,
+            city: cityVal,
+            location: locationVal,
+            denomination: denomVal,
+            phone: phoneVal,
           }
-        });
-        
-if (signUpError) {
-          throw signUpError;
         }
-        
-        // Check if user was created (even if email confirmation required)
-        const userId = data.user?.id || data.session?.user?.id;
-        if (!userId) {
-          throw new Error("User creation failed - no user returned");
-        }
+      });
 
-        // Try to insert user profile - may fail if email confirmation required
-        const now = new Date().toISOString();
-        const userPayload = {
-          user_id: userId,
-          email: emailVal,
-          display_name: nameVal,
-          created_at: now,
-          church_name: churchVal,
-          country: countryVal,
-          state: stateVal,
-          city: cityVal,
-          location: locationVal,
-          denomination: denomVal,
-          phone: phoneVal,
-          subscription_plan: "free" as const,
-          subscription_status: "active",
-          subscription_end: null
-        };
-
-        const { error: profileError } = await supabase
-          .from('users')
-          .insert(userPayload);
-        
-        if (profileError) {
-          // Log but don't necessarily fail - user can complete profile later
-          console.error("Profile creation error:", profileError);
-        }
-        
-// Success - auth state listener will transition to app automatically
-        // The auth state listener fires immediately on successful signUp
-        // If there's a session (auto-login), the parent will show the app via useEffect
-        // If no session (email confirmation required), redirect to login
-        if (!data.session?.user) {
-          // Email confirmation required
-          alert("Registration successful! Please check your email to confirm your account, then sign in.");
-          onNavigate("login");
-        }
-        // If session exists, we don't navigate - the parent's auth listener will handle the transition
-      } catch (err: any) {
-        console.error("Auth register failed", err);
-        setErrorText(err.message || "An unexpected error occurred during registration. Please try again.");
-      } finally {
-        setLoading(false);
+      if (signUpError) {
+        throw signUpError;
       }
-   };
+
+      // Check if user was created (even if email confirmation required)
+      const userId = data.user?.id || data.session?.user?.id;
+      if (!userId) {
+        throw new Error("User creation failed - no user returned");
+      }
+
+      // Try to insert user profile - may fail if email confirmation required
+      const now = new Date().toISOString();
+      const userPayload = {
+        user_id: userId,
+        email: emailVal,
+        display_name: nameVal,
+        created_at: now,
+        church_name: churchVal,
+        country: countryVal,
+        state: stateVal,
+        city: cityVal,
+        location: locationVal,
+        denomination: denomVal,
+        phone: phoneVal,
+        subscription_plan: "free" as const,
+        subscription_status: "active",
+        subscription_end: null
+      };
+
+      const { error: profileError } = await supabase
+        .from('users')
+        .insert(userPayload);
+
+      if (profileError) {
+        // Log but don't necessarily fail - user can complete profile later
+        console.error("Profile creation error:", profileError);
+      }
+
+      // Sign out to ensure user logs in with their new credentials
+      await supabase.auth.signOut();
+      onNavigate("login");
+    } catch (err: any) {
+      console.error("Auth register failed", err);
+      setErrorText(err.message || "An unexpected error occurred during registration. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#0A0C10] text-[#E0E0E0] select-none font-sans relative overflow-y-auto flex flex-col justify-center items-center py-10 px-4">

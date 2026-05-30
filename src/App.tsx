@@ -938,8 +938,9 @@ const { data: sessionData } = await supabase.auth.getSession();
     }
 
     // Check for password recovery mode (for reset link users) - takes priority over all auth states
-    const urlParams = new URLSearchParams(window.location.search);
-    const isRecovery = urlParams.get("type") === "recovery";
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const queryParams = new URLSearchParams(window.location.search);
+    const isRecovery = hashParams.get("type") === "recovery" || queryParams.get("type") === "recovery";
     if (isRecovery) {
       return <SetNewPasswordPage onNavigate={setAuthView} />;
     }
