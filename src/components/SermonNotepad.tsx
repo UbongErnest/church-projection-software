@@ -172,17 +172,32 @@ try {
             newMessage: userMessage
           })
         });
-        const data = await res.json();
-        if (data && data.messages) {
-          setChatMessages(data.messages);
-          triggerSuccessFeedback("AI responded!");
-        } else if (data && data.error) {
-          triggerSuccessFeedback(`⚠️ ${data.error}`);
+        
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          setChatMessages(prev => [...prev, { role: "user", content: userMessage }, { 
+            role: "assistant", 
+            content: errorData.error || "Sorry, I'm having trouble. Please try again." 
+          }]);
+          triggerSuccessFeedback(`⚠️ ${errorData.error || "Chat failed"}`);
         } else {
-          triggerSuccessFeedback("⚠️ Chat request failed.");
+          const data = await res.json();
+          if (data && data.messages) {
+            setChatMessages(data.messages);
+            triggerSuccessFeedback("AI responded!");
+          } else {
+            setChatMessages(prev => [...prev, { role: "user", content: userMessage }, { 
+              role: "assistant", 
+              content: "Sorry, I couldn't process that. Please try again." 
+            }]);
+          }
         }
       } catch (err) {
         console.error("AI Chat error:", err);
+        setChatMessages(prev => [...prev, { role: "user", content: userMessage }, { 
+          role: "assistant", 
+          content: "Sorry, connection failed. Please try again." 
+        }]);
         triggerSuccessFeedback("⚠️ Chat request failed.");
       } finally {
         setIsChatLoading(false);

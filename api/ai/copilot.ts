@@ -30,14 +30,14 @@ export default async function handler(req: any, res: any) {
     const { messages, newMessage } = req.body;
 
     if (!process.env.GEMINI_API_KEY) {
-      return res.json({ 
-        error: "AI Chat requires Gemini API key. Please configure GEMINI_API_KEY in your environment." 
+      return res.status(503).json({ 
+        error: "AI Chat is unavailable - Gemini API key not configured." 
       });
     }
 
     const ai = getAiClient();
     if (!ai) {
-      return res.json({ 
+      return res.status(503).json({ 
         error: "AI Chat is currently unavailable. Please try again later." 
       });
     }
@@ -48,7 +48,7 @@ export default async function handler(req: any, res: any) {
         parts: [{ text: m.content }]
       }));
 
-      const response = await ai.models.generateContent({
+      const requestBody = {
         model: "gemini-1.5-flash",
         contents: [
           ...conversationHistory,
@@ -71,16 +71,17 @@ APP NAVIGATION & FEATURES:
 
 Be helpful, concise, and conversational. No markdown headers (#) or complex formatting.`
         }
-      });
+      };
+
+      const response = await ai.models.generateContent(requestBody);
 
       const botReply = response.text || "I couldn't process your message.";
       const updatedMessages = [...(messages || []), { role: "user", content: newMessage }, { role: "assistant", content: botReply }];
       return res.json({ messages: updatedMessages });
     } catch (error: any) {
-      console.error("AI Chat error:", error);
-      return res.json({ 
-        error: "Chat error occurred. Please try again.",
-        messages: [...(messages || []), { role: "user", content: newMessage }, { role: "assistant", content: "Sorry, I'm having trouble. Please try again." }]
+      console.error("AI Chat error:", error.message || error);
+      return res.status(500).json({ 
+        error: "AI service temporarily unavailable."
       });
     }
   }
