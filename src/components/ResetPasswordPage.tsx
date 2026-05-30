@@ -1,28 +1,26 @@
 import React, { useState, FormEvent, useEffect } from "react";
 import { supabase } from "../supabase";
-import { BookOpen, Mail, Lock, KeyRound, ChevronLeft, Eye, EyeOff, CheckCircle } from "lucide-react";
+import { BookOpen, Mail, ChevronLeft, CheckCircle } from "lucide-react";
 
 interface ResetPasswordPageProps {
-  onNavigate: (view: "landing" | "login" | "register" | "reset-password") => void;
+  onNavigate: (view: "landing" | "login" | "register" | "reset-password" | "set-new-password") => void;
 }
 
 export default function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps) {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState("");
-  const [isRecoveryMode, setIsRecoveryMode] = useState(false);
   const [resetSent, setResetSent] = useState(false);
 
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get("type") === "recovery") {
-      setIsRecoveryMode(true);
-    }
-  }, []);
+    const checkRecoveryLink = async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("type") === "recovery") {
+        onNavigate("set-new-password");
+      }
+    };
+    checkRecoveryLink();
+  }, [onNavigate]);
 
   const handleRequestReset = async (e: FormEvent) => {
     e.preventDefault();
@@ -61,46 +59,6 @@ export default function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps
     }
   };
 
-  const handleSetNewPassword = async (e: FormEvent) => {
-    e.preventDefault();
-    setErrorText("");
-
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      setErrorText("Invalid or expired reset link. Please request a new password reset.");
-      return;
-    }
-
-    if (!password || password.length < 6) {
-      setErrorText("Password must be at least 6 characters.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setErrorText("Passwords do not match.");
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const { error } = await supabase.auth.updateUser({
-        password: password
-      });
-
-      if (error) {
-        throw error;
-      }
-      onNavigate("login");
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } catch (err: any) {
-      console.error("Password update failed", err);
-      setErrorText("Failed to update password. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-[#0A0C10] text-[#E0E0E0] select-none font-sans relative overflow-hidden flex flex-col justify-center items-center px-4">
       
@@ -120,10 +78,10 @@ export default function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps
             <BookOpen className="w-6 h-6 text-white" />
           </div>
           <h2 className="font-sans font-extrabold text-xl text-white tracking-tight uppercase">
-            {isRecoveryMode ? "Set New Password" : "Reset Password"}
+            Reset Password
           </h2>
           <span className="text-[9px] font-mono text-blue-400 uppercase tracking-widest block font-bold mt-0.5">
-            {isRecoveryMode ? "Create your new password" : "Enter your email to receive a reset link"}
+            Enter your email to receive a reset link
           </span>
         </div>
 
@@ -134,128 +92,56 @@ export default function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps
           </div>
         )}
 
-        {resetSent && !isRecoveryMode && (
+        {resetSent && (
           <div className="bg-green-500/10 border border-green-500/20 text-green-400 text-[11px] p-3 rounded-lg flex items-center gap-2 mb-4">
             <CheckCircle className="w-4 h-4 shrink-0" />
             <span>Reset email sent! Check your inbox for the link.</span>
           </div>
         )}
 
-        {isRecoveryMode ? (
-          <form onSubmit={handleSetNewPassword} className="space-y-4">
-            <div className="space-y-1">
-              <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest block font-semibold">
-                New Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
-                <input
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Enter new password (min 6 characters)"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-[#111317] border border-white/10 focus:border-blue-500 focus:outline-none pl-10 pr-10 py-2 rounded-xl text-xs text-white placeholder-white/25 transition-all"
-                  required
-                  disabled={loading}
-                  minLength={6}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition"
-                  tabIndex={-1}
-                >
-                  {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest block font-semibold">
-                Confirm New Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
-                <input
-                  type={showConfirmPassword ? "text" : "password"}
-                  placeholder="Confirm new password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full bg-[#111317] border border-white/10 focus:border-blue-500 focus:outline-none pl-10 pr-10 py-2 rounded-xl text-xs text-white placeholder-white/25 transition-all"
-                  required
-                  disabled={loading}
-                  minLength={6}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition"
-                  tabIndex={-1}
-                >
-                  {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-500 active:scale-[0.98] disabled:opacity-50 disabled:scale-100 text-white font-sans font-bold text-xs py-3 rounded-xl cursor-pointer transition-all shadow-md shadow-blue-900/10 flex items-center justify-center gap-1.5"
-            >
-              {loading ? (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <>
-                  <KeyRound className="w-3.5 h-3.5" /> Update Password
-                </>
-              )}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={handleRequestReset} className="space-y-4">
-            <div className="space-y-1">
-              <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest block font-semibold">
-                Email Address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
-                <input
-                  type="email"
-                  placeholder="pastor@churchname.org"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-[#111317] border border-white/10 focus:border-blue-500 focus:outline-none pl-10 pr-4 py-2 rounded-xl text-xs text-white placeholder-white/25 transition-all"
-                  required
-                  disabled={loading}
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-500 active:scale-[0.98] disabled:opacity-50 disabled:scale-100 text-white font-sans font-bold text-xs py-3 rounded-xl cursor-pointer transition-all shadow-md shadow-blue-900/10 flex items-center justify-center gap-1.5"
-            >
-              {loading ? (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <>
-                  <Mail className="w-3.5 h-3.5" /> Send Reset Link
-                </>
-              )}
-            </button>
-
-            <div className="mt-4 text-center">
-              <button
-                onClick={() => onNavigate("login")}
+        <form onSubmit={handleRequestReset} className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest block font-semibold">
+              Email Address
+            </label>
+            <div className="relative">
+              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+              <input
+                type="email"
+                placeholder="pastor@churchname.org"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full bg-[#111317] border border-white/10 focus:border-blue-500 focus:outline-none pl-10 pr-4 py-2 rounded-xl text-xs text-white placeholder-white/25 transition-all"
+                required
                 disabled={loading}
-                className="text-[10px] text-blue-400/80 hover:text-blue-300 transition cursor-pointer font-medium"
-              >
-                Back to Sign In
-              </button>
+              />
             </div>
-          </form>
-        )}
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-blue-600 hover:bg-blue-500 active:scale-[0.98] disabled:opacity-50 disabled:scale-100 text-white font-sans font-bold text-xs py-3 rounded-xl cursor-pointer transition-all shadow-md shadow-blue-900/10 flex items-center justify-center gap-1.5"
+          >
+            {loading ? (
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <>
+                <Mail className="w-3.5 h-3.5" /> Send Reset Link
+              </>
+            )}
+          </button>
+
+          <div className="mt-4 text-center">
+            <button
+              onClick={() => onNavigate("login")}
+              disabled={loading}
+              className="text-[10px] text-blue-400/80 hover:text-blue-300 transition cursor-pointer font-medium"
+            >
+              Back to Sign In
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
