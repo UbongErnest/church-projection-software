@@ -144,13 +144,13 @@ export default async function handler(req: any, res: any) {
     });
   }
 
-  return res.json({
-    book: normalizedBook,
-    chapter: chNum,
-    verse: vNum,
-    text: {
-      KJV: "No Verse",
-    },
-    source: "invalid_reference",
-  });
+return res.json({
+     book: normalizedBook,
+     chapter: chNum,
+     verse: vNum,
+     text: {
+       KJV: ".",
+     },
+     source: "invalid_reference",
+   });
 }

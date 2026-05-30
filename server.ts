@@ -114,16 +114,16 @@ app.get("/api/bible/lookup", (req, res) => {
     });
   }
 
-  // Invalid reference - no verse found
-  return res.json({
-    book: normalizedBook,
-    chapter: chNum,
-    verse: vNum,
-    text: {
-      KJV: "No Verse",
-    },
-    source: "invalid_reference",
-  });
+// Invalid reference - no verse found
+   return res.json({
+     book: normalizedBook,
+     chapter: chNum,
+     verse: vNum,
+     text: {
+       KJV: ".",
+     },
+     source: "invalid_reference",
+   });
 });
 
 // 2. AI Real-Time Verse Detection & Sermon Context Annotation Endpoint (Pro/Premium)
