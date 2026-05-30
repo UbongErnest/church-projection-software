@@ -2,6 +2,16 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import { GoogleGenAI } from "@google/genai";
+import KJV_DATA from "../../BibleData/kjv.json";
+
+type KjvVerse = {
+  book_name: string;
+  chapter: number;
+  verse: number;
+  text: string;
+};
+
+const KJV_VERSES = (KJV_DATA as { verses: KjvVerse[] }).verses;
 
 let aiClient: GoogleGenAI | null = null;
 function getAiClient(): GoogleGenAI | null {
@@ -22,26 +32,134 @@ function getAiClient(): GoogleGenAI | null {
   return aiClient;
 }
 
-export default async function handler(req: any, res: any) {
-   const action = req.query.action || "outline";
-   
-if (action === "refine") {
-      const { notesContent, topic, sermonContext } = req.body;
-      
-      if (!notesContent || notesContent.trim() === "") {
-        return res.json({ refined: "No notes provided to refine." });
-      }
+// Search KJV for verses containing the query text
+function searchKjvVerses(query: string): Array<{ book: string; chapter: number; verse: number; text: string }> {
+  const results: Array<{ book: string; chapter: number; verse: number; text: string }> = [];
+  const normalizedQuery = query.toLowerCase().trim();
+  
+  for (const verse of KJV_VERSES) {
+    if (results.length >= 10) break;
+    if (verse.text.toLowerCase().includes(normalizedQuery)) {
+      results.push({
+        book: verse.book_name,
+        chapter: verse.chapter,
+        verse: verse.verse,
+        text: verse.text
+      });
+    }
+  }
+  
+  return results;
+}
 
-      const ai = getAiClient();
+export default async function handler(req: any, res: any) {
+  const action = req.query.action || "outline";
+  
+  if (action === "bible-ref") {
+    const { query } = req.body;
+    
+    if (!query || query.trim() === "") {
+      return res.json({ error: "No query provided." });
+    }
+
+    const ai = getAiClient();
+    
+    if (!ai) {
+      const matches = searchKjvVerses(query);
       
-      if (!ai) {
-        const formattedDate = new Date().toLocaleDateString("en-US", {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        });
+      if (matches.length === 0) {
         return res.json({
-          refined: `SERMON NOTES: ${topic || "Sunday Message"}
+          title: "No Direct Match Found",
+          scripture: "Could not locate exact reference",
+          summary: "Try providing more specific details about the story, event, or quote.",
+          relatedScriptures: [],
+          confidence: "low"
+        });
+      }
+      
+      return res.json({
+        title: "Possible Matches Found",
+        scripture: matches.slice(0, 3).map((v) => `${v.book} ${v.chapter}:${v.verse}`).join("\n"),
+        summary: matches[0].text,
+        relatedScriptures: matches.slice(3).map((v) => `${v.book} ${v.chapter}:${v.verse}`).filter((v, i) => i < 5),
+        confidence: "medium"
+      });
+    }
+
+    try {
+      const systemPrompt = `You are a biblical reference expert. Your task is to identify Bible verses, chapters, and passages from user descriptions, stories, events, partial quotes, or remembered phrases.
+
+Rules:
+1. If the user describes a Bible story, identify the story and provide the exact scripture reference.
+2. If the user provides part of a verse, find the matching verse.
+3. If multiple scriptures match, provide the most relevant ones.
+4. Include the Bible book, chapter, and verse.
+5. Give a short explanation of the context (1-2 sentences).
+6. Be accurate and avoid guessing.
+7. If uncertain, provide possible matches and state confidence levels.
+
+Response format (strictly follow this):
+Title: [Story or Verse Name]
+
+Scripture:
+[Book Chapter:Verse]
+
+Summary:
+[Brief explanation]
+
+Related Scriptures:
+[List additional references if applicable]`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: `User Query: ${query}`,
+        config: {
+          systemInstruction: systemPrompt,
+        }
+      });
+
+      return res.json({ bibleReference: response.text || "Could not find reference." });
+    } catch (error: any) {
+      console.error("Bible Reference endpoint error:", error);
+      const matches = searchKjvVerses(query);
+      
+      if (matches.length === 0) {
+        return res.json({
+          title: "No Direct Match Found",
+          scripture: "Could not locate exact reference",
+          summary: "Try providing more specific details about the story, event, or quote.",
+          relatedScriptures: [],
+          confidence: "low"
+        });
+      }
+      
+      return res.json({
+        title: "Possible Matches Found",
+        scripture: matches.slice(0, 3).map((v) => `${v.book} ${v.chapter}:${v.verse}`).join("\n"),
+        summary: matches[0].text,
+        relatedScriptures: matches.slice(3).map((v) => `${v.book} ${v.chapter}:${v.verse}`).filter((v, i) => i < 5),
+        confidence: "medium"
+      });
+    }
+  }
+  
+  if (action === "refine") {
+    const { notesContent, topic, sermonContext } = req.body;
+    
+    if (!notesContent || notesContent.trim() === "") {
+      return res.json({ refined: "No notes provided to refine." });
+    }
+
+    const ai = getAiClient();
+    
+    if (!ai) {
+      const formattedDate = new Date().toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+      return res.json({
+        refined: `SERMON NOTES: ${topic || "Sunday Message"}
 
 Date: ${formattedDate}
 
@@ -70,11 +188,11 @@ QUESTIONS FOR PERSONAL STUDY
 3. What questions arose during the sermon that you should explore further?
 
 (Local structure generator used - Gemini API unavailable)`
-        });
-      }
+      });
+    }
 
-      try {
-        const systemPrompt = `You are a skilled theological editor and spiritual mentor. Transform raw sermon notes into a beautifully formatted document with:
+    try {
+      const systemPrompt = `You are a skilled theological editor and spiritual mentor. Transform raw sermon notes into a beautifully formatted document with:
 
 - Use bold text for important points using **text** format
 - Use clear paragraph breaks for readability
@@ -87,30 +205,30 @@ QUESTIONS FOR PERSONAL STUDY
 
 Format with clear sections, bold headings, and well-structured paragraphs.`;
 
-        const response = await ai.models.generateContent({
-          model: "gemini-1.5-flash",
-          contents: `Sermon Topic: ${topic || "Sunday Service"}
+      const response = await ai.models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: `Sermon Topic: ${topic || "Sunday Service"}
 Sermon Notes (raw):
 "${notesContent}"
 
 ${sermonContext ? `Additional Context: ${sermonContext}` : ""}
 
 Please structure and enhance these notes for clarity, understanding, and spiritual edification.`,
-          config: {
-            systemInstruction: systemPrompt,
-          }
-        });
+        config: {
+          systemInstruction: systemPrompt,
+        }
+      });
 
-        return res.json({ refined: response.text || "Could not refine notes." });
-      } catch (error: any) {
-        console.error("AI Refine endpoint error:", error);
-        const formattedDate = new Date().toLocaleDateString("en-US", {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        });
-        return res.json({
-          refined: `SERMON NOTES: ${topic || "Sunday Message"}
+      return res.json({ refined: response.text || "Could not refine notes." });
+    } catch (error: any) {
+      console.error("AI Refine endpoint error:", error);
+      const formattedDate = new Date().toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+      return res.json({
+        refined: `SERMON NOTES: ${topic || "Sunday Message"}
 
 Date: ${formattedDate}
 
@@ -133,12 +251,11 @@ QUESTIONS FOR PERSONAL STUDY
 3. What questions arose during the sermon that you should explore further?
 
 (Graceful local structure generator fallback triggered)`
-        });
-      }
+      });
     }
-   
-   const { notesContent, topic } = req.body;
-  
+  }
+
+  const { notesContent, topic } = req.body;
   if (!notesContent || notesContent.trim() === "") {
     return res.json({ outline: "No notes provided to generate outline." });
   }
@@ -147,7 +264,25 @@ QUESTIONS FOR PERSONAL STUDY
   
   if (!ai) {
     return res.json({
-      outline: `### AI Copilot Structured Outline: ${topic || "Sunday Service"}\n\n* **I. Introduction & Central Focus**\n  * Hook: Connecting modern life challenges to divine truths.\n  * Central Scripture Recommendation: Focus on a key anchoring passage.\n\n* **II. Core Exegesis (Based on Sermon Notes)**\n  * Analysis of themes found in notes: *"${notesContent.substring(0, 150)}..."*\n  * Contextualizing historical and cultural elements of the references.\n\n* **III. Practical Spiritual Applications**\n  * How the congregation can apply this revelation during the week.\n  * Overcoming common barriers to living out these biblical principles.\n\n* **IV. Conclusion & Key Takeaway**\n  * Summarizing the sermon topic: *${topic}*.\n  * Final closing call to prayer and dedication.\n\n*(Note: Graceful local outline generator fallback triggered because Gemini API Key is offline or quota-limited)*`
+      outline: `AI Copilot Structured Outline: ${topic || "Sunday Service"}
+
+I. Introduction & Central Focus
+- Hook: Connecting modern life challenges to divine truths.
+- Central Scripture Recommendation: Focus on a key anchoring passage.
+
+II. Core Exegesis (Based on Sermon Notes)
+- Analysis of themes found in notes: "${notesContent.substring(0, 150)}..."
+- Contextualizing historical and cultural elements of the references.
+
+III. Practical Spiritual Applications
+- How the congregation can apply this revelation during the week.
+- Overcoming common barriers to living out these biblical principles.
+
+IV. Conclusion & Key Takeaway
+- Summarizing the sermon topic: ${topic}
+- Final closing call to prayer and dedication.
+
+(Graceful local outline generator fallback triggered because Gemini API Key is offline or quota-limited)`
     });
   }
 
@@ -165,7 +300,25 @@ QUESTIONS FOR PERSONAL STUDY
   } catch (error: any) {
     console.error("AI Copilot error:", error);
     return res.json({
-      outline: `### AI Copilot Structured Outline: ${topic || "Sunday Service"}\n\n* **I. Introduction & Central Focus**\n  * Hook: Connecting modern life challenges to divine truths.\n  * Central Scripture Recommendation: Focus on a key anchoring passage.\n\n* **II. Core Exegesis (Based on Sermon Notes)**\n  * Analysis of themes found in notes: *"${notesContent.substring(0, 150)}..."*\n  * Contextualizing historical and cultural elements of the references.\n\n* **III. Practical Spiritual Applications**\n  * How the congregation can apply this revelation during the week.\n  * Overcoming common barriers to living out these biblical principles.\n\n* **IV. Conclusion & Key Takeaway**\n  * Summarizing the sermon topic: *${topic}*.\n  * Final closing call to prayer and dedication.\n\n*(Note: Graceful local outline generator fallback triggered because Gemini API Key is offline or quota-limited)*`
+      outline: `AI Copilot Structured Outline: ${topic || "Sunday Service"}
+
+I. Introduction & Central Focus
+- Hook: Connecting modern life challenges to divine truths.
+- Central Scripture Recommendation: Focus on a key anchoring passage.
+
+II. Core Exegesis (Based on Sermon Notes)
+- Analysis of themes found in notes: "${notesContent.substring(0, 150)}..."
+- Contextualizing historical and cultural elements of the references.
+
+III. Practical Spiritual Applications
+- How the congregation can apply this revelation during the week.
+- Overcoming common barriers to living out these biblical principles.
+
+IV. Conclusion & Key Takeaway
+- Summarizing the sermon topic: ${topic}
+- Final closing call to prayer and dedication.
+
+(Graceful local outline generator fallback triggered because Gemini API Key is offline or quota-limited)`
     });
   }
 }

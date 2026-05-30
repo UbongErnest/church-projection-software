@@ -1,10 +1,11 @@
 ﻿import express from "express";
 import path from "path";
 import dotenv from "dotenv";
-import { createServer as createViteServer } from "vite";
+dotenv.config();
+
 import { GoogleGenAI } from "@google/genai";
-import { normalizeBookName, parseSpokenNumbers } from "./src/bibleDatabase";
 import KJV_DATA from "./src/BibleData/kjv.json";
+import { normalizeBookName, parseSpokenNumbers } from "./src/bibleDatabase";
 import {
   initializeFlutterwaveTransaction,
   normalizeSubscriptionPlan,
@@ -236,6 +237,84 @@ function mockRegexDetect(text: string) {
 // AI Copilot Sermon Outline Generator (Premium exclusive)
 app.post("/api/ai/copilot", async (req, res) => {
   const action = req.query.action || "outline";
+  
+  if (action === "bible-ref") {
+    const { query } = req.body;
+    if (!query || query.trim() === "") {
+      return res.json({ error: "No query provided." });
+    }
+
+    try {
+      const ai = getAiClient();
+      const systemPrompt = `You are a biblical reference expert. Your task is to identify Bible verses, chapters, and passages from user descriptions, stories, events, partial quotes, or remembered phrases.
+
+Rules:
+1. If the user describes a Bible story, identify the story and provide the exact scripture reference.
+2. If the user provides part of a verse, find the matching verse.
+3. If multiple scriptures match, provide the most relevant ones.
+4. Include the Bible book, chapter, and verse.
+5. Give a short explanation of the context (1-2 sentences).
+6. Be accurate and avoid guessing.
+7. If uncertain, provide possible matches and state confidence levels.
+
+Response format (strictly follow this):
+Title: [Story or Verse Name]
+
+Scripture:
+[Book Chapter:Verse]
+
+Summary:
+[Brief explanation]
+
+Related Scriptures:
+[List additional references if applicable]`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: `User Query: ${query}`,
+        config: {
+          systemInstruction: systemPrompt,
+        }
+      });
+
+      return res.json({ bibleReference: response.text || "Could not find reference." });
+    } catch (error: any) {
+      console.error("Bible Reference endpoint error:", error);
+      // Graceful fallback - search KJV for partial matches
+      const normalizedQuery = query.toLowerCase().trim();
+      const matches: Array<{ book: string; chapter: number; verse: number; text: string }> = [];
+      
+      for (const verse of KJV_VERSES) {
+        if (matches.length >= 10) break;
+        if (verse.text.toLowerCase().includes(normalizedQuery)) {
+          matches.push({
+            book: verse.book_name,
+            chapter: verse.chapter,
+            verse: verse.verse,
+            text: verse.text
+          });
+        }
+      }
+      
+      if (matches.length === 0) {
+        return res.json({
+          title: "No Direct Match Found",
+          scripture: "Could not locate exact reference",
+          summary: "Try providing more specific details about the story, event, or quote.",
+          relatedScriptures: [],
+          confidence: "low"
+        });
+      }
+      
+      return res.json({
+        title: "Possible Matches Found",
+        scripture: matches.slice(0, 3).map((v) => `${v.book} ${v.chapter}:${v.verse}`).join("\n"),
+        summary: matches[0].text,
+        relatedScriptures: matches.slice(3).map((v) => `${v.book} ${v.chapter}:${v.verse}`).filter((v, i) => i < 5),
+        confidence: "medium"
+      });
+    }
+  }
   
   if (action === "refine") {
     const { notesContent, topic, sermonContext } = req.body;
