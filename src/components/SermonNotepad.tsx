@@ -166,8 +166,21 @@ export default function SermonNotepad({
           body: JSON.stringify({ query: bibleRefQuery })
         });
         const data = await res.json();
-        if (data && data.bibleReference) {
-          setBibleRefResult(data.bibleReference);
+        // Handle new format (title, scripture, summary) or old format (bibleReference)
+        if (data && (data.title || data.scripture || data.bibleReference)) {
+          const formatted = data.bibleReference 
+            ? data.bibleReference 
+            : `Title: ${data.title || "Bible Reference"}
+
+Scripture:
+${data.scripture || "Unknown"}
+
+Summary:
+${data.summary || "No summary available."}
+
+Related Scriptures:
+${data.relatedScriptures ? data.relatedScriptures.join("\n") : "None"}`;
+          setBibleRefResult(formatted);
           setShowBibleRefModal(true);
           triggerSuccessFeedback("Bible reference found!");
         } else {

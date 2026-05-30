@@ -62,85 +62,26 @@ export default async function handler(req: any, res: any) {
       return res.json({ error: "No query provided." });
     }
 
-    const ai = getAiClient();
+    // Graceful fallback - search KJV for partial matches (works without API key)
+    const matches = searchKjvVerses(query);
     
-    if (!ai) {
-      const matches = searchKjvVerses(query);
-      
-      if (matches.length === 0) {
-        return res.json({
-          title: "No Direct Match Found",
-          scripture: "Could not locate exact reference",
-          summary: "Try providing more specific details about the story, event, or quote.",
-          relatedScriptures: [],
-          confidence: "low"
-        });
-      }
-      
+    if (matches.length === 0) {
       return res.json({
-        title: "Possible Matches Found",
-        scripture: matches.slice(0, 3).map((v) => `${v.book} ${v.chapter}:${v.verse}`).join("\n"),
-        summary: matches[0].text,
-        relatedScriptures: matches.slice(3).map((v) => `${v.book} ${v.chapter}:${v.verse}`).filter((v, i) => i < 5),
-        confidence: "medium"
+        title: "No Direct Match Found",
+        scripture: "Could not locate exact reference",
+        summary: "Try providing more specific details about the story, event, or quote.",
+        relatedScriptures: [],
+        confidence: "low"
       });
     }
-
-    try {
-      const systemPrompt = `You are a biblical reference expert. Your task is to identify Bible verses, chapters, and passages from user descriptions, stories, events, partial quotes, or remembered phrases.
-
-Rules:
-1. If the user describes a Bible story, identify the story and provide the exact scripture reference.
-2. If the user provides part of a verse, find the matching verse.
-3. If multiple scriptures match, provide the most relevant ones.
-4. Include the Bible book, chapter, and verse.
-5. Give a short explanation of the context (1-2 sentences).
-6. Be accurate and avoid guessing.
-7. If uncertain, provide possible matches and state confidence levels.
-
-Response format (strictly follow this):
-Title: [Story or Verse Name]
-
-Scripture:
-[Book Chapter:Verse]
-
-Summary:
-[Brief explanation]
-
-Related Scriptures:
-[List additional references if applicable]`;
-
-      const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
-        contents: `User Query: ${query}`,
-        config: {
-          systemInstruction: systemPrompt,
-        }
-      });
-
-      return res.json({ bibleReference: response.text || "Could not find reference." });
-    } catch (error: any) {
-      console.error("Bible Reference endpoint error:", error);
-      const matches = searchKjvVerses(query);
-      
-      if (matches.length === 0) {
-        return res.json({
-          title: "No Direct Match Found",
-          scripture: "Could not locate exact reference",
-          summary: "Try providing more specific details about the story, event, or quote.",
-          relatedScriptures: [],
-          confidence: "low"
-        });
-      }
-      
-      return res.json({
-        title: "Possible Matches Found",
-        scripture: matches.slice(0, 3).map((v) => `${v.book} ${v.chapter}:${v.verse}`).join("\n"),
-        summary: matches[0].text,
-        relatedScriptures: matches.slice(3).map((v) => `${v.book} ${v.chapter}:${v.verse}`).filter((v, i) => i < 5),
-        confidence: "medium"
-      });
-    }
+    
+    return res.json({
+      title: "Possible Matches Found",
+      scripture: matches.slice(0, 3).map((v) => `${v.book} ${v.chapter}:${v.verse}`).join("\n"),
+      summary: matches[0].text,
+      relatedScriptures: matches.slice(3).map((v) => `${v.book} ${v.chapter}:${v.verse}`).filter((v, i) => i < 5),
+      confidence: "medium"
+    });
   }
   
   if (action === "refine") {
@@ -150,14 +91,16 @@ Related Scriptures:
       return res.json({ refined: "No notes provided to refine." });
     }
 
-    const ai = getAiClient();
+    // Graceful fallback - works without API key first
+    const formattedDate = new Date().toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
     
-    if (!ai) {
-      const formattedDate = new Date().toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
+    // If no API key, return local structure (works always)
+    if (!process.env.GEMINI_API_KEY) {
+      const structuredNotes = notesContent.split('\n').filter((l: string) => l.trim());
       return res.json({
         refined: `SERMON NOTES: ${topic || "Sunday Message"}
 
@@ -165,7 +108,39 @@ Date: ${formattedDate}
 
 MAIN POINTS FROM THE MESSAGE
 
-${notesContent.split('\n').filter((l: string) => l.trim()).map((line: string, i: number) => {
+${structuredNotes.map((line: string) => `• ${line}\n`).join('')}
+
+KEY SCRIPTURE REFERENCES
+
+Meditate on the core scriptures referenced during the sermon to deepen your understanding.
+
+PRACTICAL APPLICATION AND REFLECTION
+
+Consider how these truths apply to your daily walk with Christ. What changes do you need to make in your life based on today's message?
+
+QUESTIONS FOR PERSONAL STUDY
+
+1. What stood out most from today's message?
+2. How can you practically apply this teaching this week?
+3. What questions arose during the sermon that you should explore further?
+
+(Local structure generator used - Gemini API unavailable)`
+      });
+    }
+
+    // Has API key - try AI
+    const ai = getAiClient();
+    
+    if (!ai) {
+      const structuredNotes = notesContent.split('\n').filter((l: string) => l.trim());
+      return res.json({
+        refined: `SERMON NOTES: ${topic || "Sunday Message"}
+
+Date: ${formattedDate}
+
+MAIN POINTS FROM THE MESSAGE
+
+${structuredNotes.map((line: string, i: number) => {
   const trimmed = line.trim();
   if (trimmed.length > 100) {
     return `• ${trimmed}\n\n`;
@@ -222,11 +197,7 @@ Please structure and enhance these notes for clarity, understanding, and spiritu
       return res.json({ refined: response.text || "Could not refine notes." });
     } catch (error: any) {
       console.error("AI Refine endpoint error:", error);
-      const formattedDate = new Date().toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
+      const structuredNotes = notesContent.split('\n').filter((l: string) => l.trim());
       return res.json({
         refined: `SERMON NOTES: ${topic || "Sunday Message"}
 
@@ -234,7 +205,7 @@ Date: ${formattedDate}
 
 MAIN POINTS FROM THE MESSAGE
 
-${notesContent.split('\n').filter((l: string) => l.trim()).map((line: string) => `• ${line.trim()}\n`).join('')}
+${structuredNotes.map((line: string) => `• ${line.trim()}\n`).join('')}
 
 KEY SCRIPTURE REFERENCES
 
@@ -258,6 +229,31 @@ QUESTIONS FOR PERSONAL STUDY
   const { notesContent, topic } = req.body;
   if (!notesContent || notesContent.trim() === "") {
     return res.json({ outline: "No notes provided to generate outline." });
+  }
+
+  // Graceful fallback - works without API key
+  if (!process.env.GEMINI_API_KEY) {
+    return res.json({
+      outline: `AI Copilot Structured Outline: ${topic || "Sunday Service"}
+
+I. Introduction & Central Focus
+- Hook: Connecting modern life challenges to divine truths.
+- Central Scripture Recommendation: Focus on a key anchoring passage.
+
+II. Core Exegesis (Based on Sermon Notes)
+- Analysis of themes found in notes: "${notesContent.substring(0, 150)}..."
+- Contextualizing historical and cultural elements of the references.
+
+III. Practical Spiritual Applications
+- How the congregation can apply this revelation during the week.
+- Overcoming common barriers to living out these biblical principles.
+
+IV. Conclusion & Key Takeaway
+- Summarizing the sermon topic: ${topic}
+- Final closing call to prayer and dedication.
+
+(Graceful local outline generator fallback triggered because Gemini API Key is offline or quota-limited)`
+    });
   }
 
   const ai = getAiClient();
