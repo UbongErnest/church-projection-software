@@ -133,3 +133,5 @@ grant select on webhook_events to authenticated;
 grant all on transactions to service_role;
 grant all on subscriptions to service_role;
 grant all on webhook_events to service_role;
+
+--okay--
