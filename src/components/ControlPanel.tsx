@@ -712,54 +712,94 @@ const handleDeleteAnnouncement = (id: string) => {
      }
    };
 
-   // Custom hymn upload handlers
-   const [newHymnTitle, setNewHymnTitle] = useState("");
-   const [newHymnAuthor, setNewHymnAuthor] = useState("");
-   const [newHymnStanzas, setNewHymnStanzas] = useState([{ text: "" }]);
+// Custom hymn upload handlers
+    const [newHymnTitle, setNewHymnTitle] = useState("");
+    const [newHymnAuthor, setNewHymnAuthor] = useState("");
+    const [newHymnStanzas, setNewHymnStanzas] = useState([{ text: "" }]);
+    const [editingHymnId, setEditingHymnId] = useState<string | null>(null);
 
-   const handleAddStanzaField = () => {
-     setNewHymnStanzas([...newHymnStanzas, { text: "" }]);
-   };
+    // Load hymn into edit form
+    const handleEditHymn = (hymn: Song) => {
+      setEditingHymnId(hymn.id);
+      setNewHymnTitle(hymn.title);
+      setNewHymnAuthor(hymn.author || "");
+      setNewHymnStanzas(hymn.stanzas.map(s => ({ text: s })));
+    };
 
-   const handleStanzaChange = (idx: number, text: string) => {
-     setNewHymnStanzas(newHymnStanzas.map((s, i) => i === idx ? { text } : s));
-   };
+    const handleAddStanzaField = () => {
+      setNewHymnStanzas([...newHymnStanzas, { text: "" }]);
+    };
 
-   const handleRemoveStanza = (idx: number) => {
-     if (newHymnStanzas.length > 1) {
-       setNewHymnStanzas(newHymnStanzas.filter((_, i) => i !== idx));
-     }
-   };
+    const handleStanzaChange = (idx: number, text: string) => {
+      setNewHymnStanzas(newHymnStanzas.map((s, i) => i === idx ? { text } : s));
+    };
 
-   const handleCreateHymn = (e: FormEvent) => {
-     e.preventDefault();
-     if (!newHymnTitle.trim()) return;
+    const handleRemoveStanza = (idx: number) => {
+      if (newHymnStanzas.length > 1) {
+        setNewHymnStanzas(newHymnStanzas.filter((_, i) => i !== idx));
+      }
+    };
 
-     const validStanzas = newHymnStanzas.filter(s => s.text.trim());
-     if (validStanzas.length === 0) return;
+const handleSaveHymn = (e: FormEvent) => {
+      e.preventDefault();
+      if (!newHymnTitle.trim()) return;
 
-     const newHymn: Song = {
-       id: `custom-hymn-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-       title: newHymnTitle.trim(),
-       author: newHymnAuthor.trim() || undefined,
-       stanzas: validStanzas.map(s => s.text.trim()),
-     };
+      const validStanzas = newHymnStanzas.filter(s => s.text.trim());
+      if (validStanzas.length === 0) return;
 
-     const updated = [...customSongs, newHymn];
-     setCustomSongs(updated);
-     setNewHymnTitle("");
-     setNewHymnAuthor("");
-     setNewHymnStanzas([{ text: "" }]);
+      const savedHymn: Song = {
+        id: editingHymnId || `custom-hymn-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        title: newHymnTitle.trim(),
+        author: newHymnAuthor.trim() || undefined,
+        stanzas: validStanzas.map(s => s.text.trim()),
+      };
 
-     // Auto-select the new hymn
-     setSelectedSongId(newHymn.id);
-     setSelectedStanzaIndex(0);
-   };
+      let updated: Song[];
+      if (editingHymnId) {
+        updated = customSongs.map(s => s.id === editingHymnId ? savedHymn : s);
+      } else {
+        updated = [...customSongs, savedHymn];
+      }
+      setCustomSongs(updated);
+      try {
+        localStorage.setItem("chaver_custom_songs", JSON.stringify(updated));
+      } catch (err) {
+        console.error("Storage save failed:", err);
+      }
+      setNewHymnTitle("");
+      setNewHymnAuthor("");
+      setNewHymnStanzas([{ text: "" }]);
+      setEditingHymnId(null);
 
-   // Delete custom hymn
-   const handleDeleteHymn = (id: string) => {
-     setCustomSongs(customSongs.filter(s => s.id !== id));
-   };
+      // Auto-select the saved hymn
+      setSelectedSongId(savedHymn.id);
+      setSelectedStanzaIndex(0);
+    };
+
+    // Delete custom hymn
+    const handleDeleteHymn = (id: string) => {
+      const updated = customSongs.filter(s => s.id !== id);
+      setCustomSongs(updated);
+      try {
+        localStorage.setItem("chaver_custom_songs", JSON.stringify(updated));
+      } catch (err) {
+        console.error("Storage delete failed:", err);
+      }
+      if (editingHymnId === id) {
+        setEditingHymnId(null);
+        setNewHymnTitle("");
+        setNewHymnAuthor("");
+        setNewHymnStanzas([{ text: "" }]);
+      }
+    };
+
+    // Cancel editing
+    const handleCancelEdit = () => {
+      setEditingHymnId(null);
+      setNewHymnTitle("");
+      setNewHymnAuthor("");
+      setNewHymnStanzas([{ text: "" }]);
+    };
 
    const handleTabClick = (tab: "ai-feed" | "manual-bible" | "songs" | "announcements" | "media-library" | "plans") => {
     if (tab === "plans" || tab === "manual-bible") {
@@ -1380,111 +1420,128 @@ const handleDeleteAnnouncement = (id: string) => {
               )}
 
 {/* TAB 3: SONGS / LYRIC WORKSPACE */}
-               {activeTab === "songs" && (
-                 <div className="space-y-3">
-                   {/* Custom Hymn Upload Form */}
-                   <form onSubmit={handleCreateHymn} className="border border-green-500/25 bg-green-950/10 p-3 rounded-lg flex flex-col gap-2 mb-3">
-                     <span className="text-[9px] font-mono text-green-400 uppercase tracking-widest block font-bold">
-                       ➕ Upload Custom Hymn
-                     </span>
-                     <input
-                       type="text"
-                       placeholder="Hymn Title"
-                       value={newHymnTitle}
-                       onChange={(e) => setNewHymnTitle(e.target.value)}
-                       className="w-full bg-black/50 px-2 py-1.5 rounded border border-white/10 text-xs text-white focus:border-green-500 focus:outline-none placeholder-white/20"
-                       required
-                     />
-                     <input
-                       type="text"
-                       placeholder="Author (optional)"
-                       value={newHymnAuthor}
-                       onChange={(e) => setNewHymnAuthor(e.target.value)}
-                       className="w-full bg-black/50 px-2 py-1.5 rounded border border-white/10 text-xs text-white focus:border-green-500 focus:outline-none placeholder-white/20"
-                     />
-                     <div className="flex flex-col gap-1.5">
-                       {newHymnStanzas.map((stanza, idx) => (
-                         <div key={idx} className="flex gap-1">
-                           <textarea
-                             placeholder={`Stanza ${idx + 1}`}
-                             value={stanza.text}
-                             onChange={(e) => handleStanzaChange(idx, e.target.value)}
-                             rows={2}
-                             className="flex-1 bg-black/50 p-2 rounded border border-white/10 text-xs text-white focus:border-green-500 focus:outline-none placeholder-white/20 resize-none font-sans"
-                           />
-                           {newHymnStanzas.length > 1 && (
-                             <button
-                               type="button"
-                               onClick={() => handleRemoveStanza(idx)}
-                               className="px-1.5 text-red-400 hover:text-red-300 text-xs"
-                             >
-                               ✕
-                             </button>
-                           )}
-                         </div>
-                       ))}
-                       <button
-                         type="button"
-                         onClick={handleAddStanzaField}
-                         className="text-[10px] text-green-400 hover:text-green-300 font-medium"
-                       >
-                         + Add Stanza
-                       </button>
-                     </div>
-                     <button
-                       type="submit"
-                       className="bg-green-600 hover:bg-green-500 text-white font-sans font-bold text-xs py-1.5 rounded cursor-pointer transition-all flex items-center justify-center gap-1.5 select-none"
-                     >
-                       <PlusCircle className="w-3.5 h-3.5" /> Save & Add Hymn
-                     </button>
-                   </form>
+                {activeTab === "songs" && (
+                  <div className="space-y-3">
+                    {/* Custom Hymn Upload/Edit Form */}
+                    <form onSubmit={handleSaveHymn} className="border border-green-500/25 bg-green-950/10 p-3 rounded-lg flex flex-col gap-2 mb-3">
+                      <span className="text-[9px] font-mono text-green-400 uppercase tracking-widest block font-bold">
+                        {editingHymnId ? "✏️ Edit Custom Hymn" : "➕ Upload Custom Hymn"}
+                      </span>
+                      <input
+                        type="text"
+                        placeholder="Hymn Title"
+                        value={newHymnTitle}
+                        onChange={(e) => setNewHymnTitle(e.target.value)}
+                        className="w-full bg-black/50 px-2 py-1.5 rounded border border-white/10 text-xs text-white focus:border-green-500 focus:outline-none placeholder-white/20"
+                        required
+                      />
+                      <input
+                        type="text"
+                        placeholder="Author (optional)"
+                        value={newHymnAuthor}
+                        onChange={(e) => setNewHymnAuthor(e.target.value)}
+                        className="w-full bg-black/50 px-2 py-1.5 rounded border border-white/10 text-xs text-white focus:border-green-500 focus:outline-none placeholder-white/20"
+                      />
+                      <div className="flex flex-col gap-1.5">
+                        {newHymnStanzas.map((stanza, idx) => (
+                          <div key={idx} className="flex gap-1">
+                            <textarea
+                              placeholder={`Stanza ${idx + 1}`}
+                              value={stanza.text}
+                              onChange={(e) => handleStanzaChange(idx, e.target.value)}
+                              rows={2}
+                              className="flex-1 bg-black/50 p-2 rounded border border-white/10 text-xs text-white focus:border-green-500 focus:outline-none placeholder-white/20 resize-none font-sans"
+                            />
+                            {newHymnStanzas.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveStanza(idx)}
+                                className="px-1.5 text-red-400 hover:text-red-300 text-xs"
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={handleAddStanzaField}
+                          className="text-[10px] text-green-400 hover:text-green-300 font-medium"
+                        >
+                          + Add Stanza
+                        </button>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="submit"
+                          className="flex-1 bg-green-600 hover:bg-green-500 text-white font-sans font-bold text-xs py-1.5 rounded cursor-pointer transition-all flex items-center justify-center gap-1.5 select-none"
+                        >
+                          <PlusCircle className="w-3.5 h-3.5" /> {editingHymnId ? "Update Hymn" : "Save & Add Hymn"}
+                        </button>
+                        {editingHymnId && (
+                          <button
+                            type="button"
+                            onClick={handleCancelEdit}
+                            className="px-3 bg-red-600/20 hover:bg-red-600/30 text-red-300 font-sans font-bold text-xs py-1.5 rounded cursor-pointer transition-all"
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </div>
+                    </form>
 
-                   <div>
-                     <span className="text-[8px] font-mono uppercase tracking-widest text-white/40 block mb-1">
-                       Active Praise Song Draft
-                     </span>
-                     <select
-                       value={selectedSongId}
-                       onChange={(e) => {
-                         setSelectedSongId(e.target.value);
-                         setSelectedStanzaIndex(0);
-                       }}
-                       className="w-full bg-black/40 p-1.5 text-[11px] rounded border border-white/10 text-white focus:outline-none"
-                     >
-                       {DEFAULT_SONGS.map((song) => (
-                         <option key={song.id} value={song.id} className="bg-[#121417]">
-                           🎵 {song.title} {song.author ? `— ${song.author}` : ""}
-                         </option>
-                       ))}
-                       {customSongs.map((song) => (
-                         <option key={song.id} value={song.id} className="bg-[#121417]">
-                           📝 {song.title} {song.author ? `— ${song.author}` : ""}
-                         </option>
-                       ))}
-                     </select>
-                   </div>
+                    <div>
+                      <span className="text-[8px] font-mono uppercase tracking-widest text-white/40 block mb-1">
+                        Active Praise Song Draft
+                      </span>
+                      <select
+                        value={selectedSongId}
+                        onChange={(e) => {
+                          setSelectedSongId(e.target.value);
+                          setSelectedStanzaIndex(0);
+                        }}
+                        className="w-full bg-black/40 p-1.5 text-[11px] rounded border border-white/10 text-white focus:outline-none"
+                      >
+                        {DEFAULT_SONGS.map((song) => (
+                          <option key={song.id} value={song.id} className="bg-[#121417]">
+                            🎵 {song.title} {song.author ? `— ${song.author}` : ""}
+                          </option>
+                        ))}
+                        {customSongs.map((song) => (
+                          <option key={song.id} value={song.id} className="bg-[#121417]">
+                            📝 {song.title} {song.author ? `— ${song.author}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                   {/* Custom Hymns Management */}
-                   {customSongs.length > 0 && (
-                     <div className="border border-white/5 rounded p-2 bg-white/5">
-                       <span className="text-[8px] font-mono uppercase text-white/40 block mb-1">
-                         Your Custom Hymns
-                       </span>
-                       <div className="grid grid-cols-1 gap-1 max-h-[120px] overflow-y-auto">
-                         {customSongs.map((song) => (
-                           <div key={song.id} className="flex justify-between items-center bg-[#121417]/50 p-1.5 rounded text-[10px]">
-                             <span className="text-white/80 truncate">{song.title}</span>
-                             <button
-                               onClick={() => handleDeleteHymn(song.id)}
-                               className="text-red-400 hover:text-red-300 text-xs ml-1"
-                             >
-                               Delete
-                             </button>
-                           </div>
-                         ))}
-                       </div>
-                     </div>
-                   )}
+                    {/* Custom Hymns Management */}
+                    {customSongs.length > 0 && (
+                      <div className="border border-white/5 rounded p-2 bg-white/5">
+                        <span className="text-[8px] font-mono uppercase text-white/40 block mb-1">
+                          Your Custom Hymns
+                        </span>
+                        <div className="grid grid-cols-1 gap-1 max-h-[120px] overflow-y-auto">
+                          {customSongs.map((song) => (
+                            <div key={song.id} className="flex justify-between items-center bg-[#121417]/50 p-1.5 rounded text-[10px]">
+                              <span className="text-white/80 truncate flex-1">{song.title}</span>
+                              <button
+                                onClick={() => handleEditHymn(song)}
+                                className="text-blue-400 hover:text-blue-300 text-xs mr-1"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteHymn(song.id)}
+                                className="text-red-400 hover:text-red-300 text-xs"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                    {/* Stanza Selector Grid */}
                    <div>
