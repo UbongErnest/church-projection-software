@@ -1,10 +1,9 @@
 import React, { useState, FormEvent } from "react";
 import { supabase } from "../supabase";
-import { BookOpen, Mail, Lock, LogIn, Sparkles, UserPlus, ChevronLeft, Eye, EyeOff } from "lucide-react";
-
+import { BookOpen, Mail, Lock, LogIn, ChevronLeft, Eye, EyeOff, UserPlus } from "lucide-react";
 
 interface LoginPageProps {
-  onNavigate: (view: "landing" | "login" | "register") => void;
+  onNavigate: (view: "landing" | "login" | "register" | "reset-password") => void;
 }
 
 export default function LoginPage({ onNavigate }: LoginPageProps) {
@@ -14,55 +13,52 @@ export default function LoginPage({ onNavigate }: LoginPageProps) {
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState("");
 
-const handleLogin = async (e: FormEvent) => {
-     e.preventDefault();
-     setErrorText("");
+  const handleLogin = async (e: FormEvent) => {
+    e.preventDefault();
+    setErrorText("");
 
-     const emailVal = email.trim();
-     const passVal = password;
+    const emailVal = email.trim();
+    const passVal = password;
 
-     if (!emailVal || !passVal) {
-       setErrorText("Please fill out both email and password fields.");
-       return;
-     }
+    if (!emailVal || !passVal) {
+      setErrorText("Please fill out both email and password fields.");
+      return;
+    }
 
-     setLoading(true);
+    setLoading(true);
 
-     try {
-       const { data, error } = await supabase.auth.signInWithPassword({
-         email: emailVal,
-         password: passVal,
-       });
-       
-if (error) {
-          throw error;
-        }
-        // Success - auth state listener will handle viewMode transition
-      } catch (err: any) {
-       console.error("Auth login failed", err);
-       let friendlyMessage = "Error signing in. Please verify your credentials and try again.";
-       
-       if (err.message?.includes("Invalid login credentials") || err.message?.includes("invalid-credential") || err.message?.includes("wrong-password") || err.message?.includes("user-not-found")) {
-         friendlyMessage = "Incorrect email address or password. Please try again.";
-       } else if (err.message?.includes("Invalid email")) {
-         friendlyMessage = "The email address layout entered is invalid.";
-       } else if (err.message?.includes("too many requests") || err.message?.includes("Too many")) {
-         friendlyMessage = "Too many failed attempts. Security lock engaged. Please wait or reset password.";
-       }
-       
-       setErrorText(friendlyMessage);
-     } finally {
-       setLoading(false);
-     }
-   };
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: emailVal,
+        password: passVal,
+      });
+      
+      if (error) {
+        throw error;
+      }
+    } catch (err: any) {
+      console.error("Auth login failed", err);
+      let friendlyMessage = "Error signing in. Please verify your credentials and try again.";
+      
+      if (err.message?.includes("Invalid login credentials") || err.message?.includes("invalid-credential") || err.message?.includes("wrong-password") || err.message?.includes("user-not-found")) {
+        friendlyMessage = "Incorrect email address or password. Please try again.";
+      } else if (err.message?.includes("Invalid email")) {
+        friendlyMessage = "The email address layout entered is invalid.";
+      } else if (err.message?.includes("too many requests") || err.message?.includes("Too many")) {
+        friendlyMessage = "Too many failed attempts. Security lock engaged. Please wait or reset password.";
+      }
+      
+      setErrorText(friendlyMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#0A0C10] text-[#E0E0E0] select-none font-sans relative overflow-hidden flex flex-col justify-center items-center px-4">
       
-      {/* Background glow atmosphere */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-blue-600/10 rounded-full blur-[100px] -z-10" />
 
-      {/* Back to landing */}
       <button
         onClick={() => onNavigate("landing")}
         className="absolute top-6 left-6 flex items-center gap-1.5 text-xs text-stone-400 hover:text-white transition cursor-pointer font-medium"
@@ -70,10 +66,8 @@ if (error) {
         <ChevronLeft className="w-4 h-4" /> Exit to Home
       </button>
 
-      {/* Main card */}
       <div className="w-full max-w-md bg-white/5 border border-white/5 rounded-2xl p-6 md:p-8 shadow-2xl backdrop-blur-md">
         
-        {/* Logo block */}
         <div className="flex flex-col items-center text-center mb-6">
           <div className="bg-gradient-to-tr from-blue-600 to-sky-400 p-2.5 rounded-xl shadow-lg shadow-blue-500/10 mb-2">
             <BookOpen className="w-6 h-6 text-white" />
@@ -95,7 +89,6 @@ if (error) {
 
         <form onSubmit={handleLogin} className="space-y-4">
           
-          {/* Email */}
           <div className="space-y-1">
             <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest block font-semibold">
               Email Address
@@ -114,7 +107,6 @@ if (error) {
             </div>
           </div>
 
-          {/* Password */}
           <div className="space-y-1">
             <label className="text-[10px] font-mono text-white/40 uppercase tracking-widest block font-semibold">
               Secret Password
@@ -157,7 +149,16 @@ if (error) {
 
         </form>
 
-        {/* Dynamic selector to Register */}
+        <div className="mt-4 text-center">
+          <button
+            onClick={() => onNavigate("reset-password")}
+            disabled={loading}
+            className="text-[10px] text-blue-400/80 hover:text-blue-300 transition cursor-pointer font-medium"
+          >
+            Forgot Password?
+          </button>
+        </div>
+
         <div className="mt-6 pt-5 border-t border-white/5 text-center">
           <p className="text-[11px] text-[#8b9bb4]">
             New to Pulpit Studio?{" "}

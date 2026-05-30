@@ -4,6 +4,7 @@ import ControlPanel from "./components/ControlPanel";
 import ProjectorScreen from "./components/ProjectorScreen";
 import SermonNotepad from "./components/SermonNotepad";
 import LandingPage from "./components/LandingPage";
+import ResetPage from "./components/ResetPasswordPage";
 import RegisterPage from "./components/RegisterPage";
 import LoginPage from "./components/LoginPage";
 import { supabase, mapProfileFromDB, UserProfile } from "./supabase";
@@ -103,7 +104,7 @@ export default function App() {
     const [currentUser, setCurrentUser] = useState<SupabaseUser | null>(null);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [authChecked, setAuthChecked] = useState<boolean>(false);
-  const [authView, setAuthView] = useState<"landing" | "login" | "register">("landing");
+  const [authView, setAuthView] = useState<"landing" | "login" | "register" | "reset-password">("landing");
 
 // Auth monitoring listener and real-time Supabase profile sync
     useEffect(() => {
@@ -942,6 +943,9 @@ const { data: sessionData } = await supabase.auth.getSession();
       }
       if (authView === "register") {
         return <RegisterPage onNavigate={setAuthView} />;
+      }
+      if (authView === "reset-password") {
+        return <ResetPage onNavigate={setAuthView} />;
       }
       return <LandingPage onNavigate={setAuthView} />;
     }
