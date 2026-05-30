@@ -65,10 +65,10 @@ export default function SermonNotepad({
     const [isRefiningNotes, setIsRefiningNotes] = useState(false);
     const [refinedNotes, setRefinedNotes] = useState("");
     const [showRefineModal, setShowRefineModal] = useState(false);
-    const [bibleRefQuery, setBibleRefQuery] = useState("");
-    const [isSearchingBibleRef, setIsSearchingBibleRef] = useState(false);
-    const [bibleRefResult, setBibleRefResult] = useState("");
-    const [showBibleRefModal, setShowBibleRefModal] = useState(false);
+    // UI State for Bible Reference Chat
+    const [bibleRefMessages, setBibleRefMessages] = useState<Array<{role: "user" | "assistant", content: string}>>([]);
+    const [bibleRefInput, setBibleRefInput] = useState("");
+    const [isBibleChatLoading, setIsBibleChatLoading] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -121,90 +121,72 @@ export default function SermonNotepad({
      }
 
      setIsRefiningNotes(true);
-     try {
-       const res = await fetch("/api/ai/copilot?action=refine", {
-         method: "POST",
-         headers: { "Content-Type": "application/json" },
-         body: JSON.stringify({
-           notesContent: noteContent,
-           topic: noteTitle || sermonTopic,
-           sermonContext: sermonTopic
-         })
-       });
-       const data = await res.json();
-       if (data && data.refined) {
-         setRefinedNotes(data.refined);
-         setShowRefineModal(true);
-         triggerSuccessFeedback("Notes refined successfully!");
-       } else {
-         triggerSuccessFeedback("⚠️ Failed to refine notes.");
-       }
-} catch (err) {
+try {
+        const res = await fetch("/api/ai/copilot?action=refine", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            notesContent: noteContent,
+            topic: noteTitle || sermonTopic,
+            sermonContext: sermonTopic
+          })
+        });
+        const data = await res.json();
+        if (data && data.refined) {
+          setRefinedNotes(data.refined);
+          setShowRefineModal(true);
+          triggerSuccessFeedback("Notes refined successfully!");
+        } else {
+          triggerSuccessFeedback("⚠️ Failed to refine notes.");
+        }
+      } catch (err) {
         console.error("AI Refine notes fetch error:", err);
         triggerSuccessFeedback("⚠️ Notes refinement request failed.");
       } finally {
         setIsRefiningNotes(false);
-      }
+}
     };
 
-    // Bible Reference AI Search handler
-    const handleBibleRefSearch = async () => {
+    // Bible Reference AI Chat handler
+    const handleBibleChat = async () => {
       if (hasExpired || userPlan !== "yearly") {
         triggerSuccessFeedback(hasExpired ? "⚠️ Subscription Expired! Renew to use AI Copilot." : "⚠️ Bible Reference AI requires Yearly Premium!");
         return;
       }
-      if (!bibleRefQuery.trim()) {
-        triggerSuccessFeedback("⚠️ Enter a query to search the Bible!");
+      if (!bibleRefInput.trim()) {
+        triggerSuccessFeedback("⚠️ Enter a query to chat with Bible AI!");
         return;
       }
 
-      setIsSearchingBibleRef(true);
+      setIsBibleChatLoading(true);
+      const userMessage = bibleRefInput.trim();
+      setBibleRefInput("");
+
       try {
-        const res = await fetch("/api/ai/copilot?action=bible-ref", {
+        const res = await fetch("/api/ai/copilot?action=bibleref-chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: bibleRefQuery })
+          body: JSON.stringify({
+            messages: bibleRefMessages,
+            newMessage: userMessage
+          })
         });
         const data = await res.json();
-        // Handle new format (title, scripture, summary) or old format (bibleReference)
-        if (data && (data.title || data.scripture || data.bibleReference)) {
-          const formatted = data.bibleReference 
-            ? data.bibleReference 
-            : `Title: ${data.title || "Bible Reference"}
-
-Scripture:
-${data.scripture || "Unknown"}
-
-Summary:
-${data.summary || "No summary available."}
-
-Related Scriptures:
-${data.relatedScriptures ? data.relatedScriptures.join("\n") : "None"}`;
-          setBibleRefResult(formatted);
-          setShowBibleRefModal(true);
-          triggerSuccessFeedback("Bible reference found!");
+        if (data && data.messages) {
+          setBibleRefMessages(data.messages);
+          triggerSuccessFeedback("Bible AI responded!");
         } else {
-          setBibleRefResult(`Title: No Match Found
-
-Scripture:
-Unknown
-
-Summary:
-Could not identify the scripture from your description. Try being more specific with details, names, or phrases.
-
-Related Scriptures:
-None`);
-          setShowBibleRefModal(true);
+          triggerSuccessFeedback("⚠️ Bible chat request failed.");
         }
       } catch (err) {
-        console.error("Bible Reference search error:", err);
-        triggerSuccessFeedback("⚠️ Bible reference search failed.");
+        console.error("Bible Reference chat error:", err);
+        triggerSuccessFeedback("⚠️ Bible chat request failed.");
       } finally {
-        setIsSearchingBibleRef(false);
+        setIsBibleChatLoading(false);
       }
     };
 
-// Load saved notes once on load via Supabase
+    // Load saved notes once on load via Supabase
    useEffect(() => {
      const fetchSermonNotes = async () => {
        const { data: { user } } = await supabase.auth.getUser();
@@ -604,42 +586,59 @@ return (
            </div>
          </div>
 
-         {/* Bible Reference AI Search (Premium) */}
-         <div className="flex flex-col gap-1 bg-black/30 p-2 rounded-lg border border-white/5">
-           <span className="text-[8px] font-mono text-indigo-400/80 uppercase tracking-wider block mb-1 flex items-center gap-1">
-             <Search className="w-3 h-3 text-indigo-400" />
-             Bible Reference AI Assistant
-           </span>
-           <div className="flex gap-1.5">
-             <input
-               type="text"
-               placeholder="Describe a story, phrase, or event..."
-               value={bibleRefQuery}
-               onChange={(e) => setBibleRefQuery(e.target.value)}
-               className="flex-1 bg-black/50 border border-white/10 px-2 py-1 rounded text-xs text-white placeholder-white/30 focus:border-indigo-500 focus:outline-none"
-               disabled={userPlan !== "yearly" || hasExpired}
-             />
-             <button
-               type="button"
-               onClick={handleBibleRefSearch}
-               disabled={userPlan !== "yearly" || hasExpired || isSearchingBibleRef || !bibleRefQuery.trim()}
-               className={`px-2.5 py-1 rounded text-[9px] font-mono uppercase transition-colors cursor-pointer flex items-center gap-1 ${
-                 userPlan === "yearly" && !hasExpired
-                   ? "bg-indigo-600 hover:bg-indigo-500 text-white"
-                   : "bg-stone-800 text-stone-500 cursor-not-allowed"
-               }`}
-               title={userPlan !== "yearly" || hasExpired ? "Requires Yearly Premium" : "Search for Bible reference"}
-             >
-               {isSearchingBibleRef ? (
-                 <div className="w-3 h-3 border border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin" />
-               ) : (
-                 <Search className="w-3 h-3" />
-               )}
-               <span>Search</span>
-               {(userPlan !== "yearly" || hasExpired) && <Lock className="w-2.5 h-2.5" />}
-             </button>
-           </div>
-         </div>
+{/* Bible Reference AI Chat (Premium) */}
+          <div className="flex flex-col gap-1.5 bg-black/30 p-2 rounded-lg border border-white/5">
+            <span className="text-[8px] font-mono text-indigo-400/80 uppercase tracking-wider block mb-1 flex items-center gap-1">
+              <Search className="w-3 h-3 text-indigo-400" />
+              Bible Reference AI Chat
+            </span>
+            
+            {/* Chat Messages Display */}
+            <div className="flex flex-col gap-1.5 max-h-[120px] overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 pr-1 min-h-[60px]">
+              {bibleRefMessages.length === 0 ? (
+                <span className="text-[9px] text-stone-500 italic">Ask about any scripture, story, or biblical concept...</span>
+              ) : (
+                bibleRefMessages.map((msg, idx) => (
+                  <div key={idx} className={`text-[9px] ${msg.role === "user" ? "text-indigo-300 font-medium" : "text-stone-300"} ${msg.role === "user" ? "ml-2" : "mr-2"}`}>
+                    <span className={`uppercase text-[8px] ${msg.role === "user" ? "text-indigo-400" : "text-indigo-500"}`}>{msg.role === "user" ? "You:" : "AI:"}</span>
+                    <span className="whitespace-pre-wrap">{msg.content}</span>
+                  </div>
+                ))
+              )}
+            </div>
+            
+            {/* Chat Input */}
+            <div className="flex gap-1.5">
+              <input
+                type="text"
+                placeholder="Ask about scriptures..."
+                value={bibleRefInput}
+                onChange={(e) => setBibleRefInput(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleBibleChat())}
+                className="flex-1 bg-black/50 border border-white/10 px-2 py-1 rounded text-xs text-white placeholder-white/30 focus:border-indigo-500 focus:outline-none"
+                disabled={userPlan !== "yearly" || hasExpired || isBibleChatLoading}
+              />
+              <button
+                type="button"
+                onClick={handleBibleChat}
+                disabled={userPlan !== "yearly" || hasExpired || isBibleChatLoading || !bibleRefInput.trim()}
+                className={`px-2.5 py-1 rounded text-[9px] font-mono uppercase transition-colors cursor-pointer flex items-center gap-1 ${
+                  userPlan === "yearly" && !hasExpired
+                    ? "bg-indigo-600 hover:bg-indigo-500 text-white"
+                    : "bg-stone-800 text-stone-500 cursor-not-allowed"
+                }`}
+                title={userPlan !== "yearly" || hasExpired ? "Requires Yearly Premium" : "Chat with Bible AI"}
+              >
+                {isBibleChatLoading ? (
+                  <div className="w-3 h-3 border border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin" />
+                ) : (
+                  <Search className="w-3 h-3" />
+                )}
+                <span>Ask</span>
+                {(userPlan !== "yearly" || hasExpired) && <Lock className="w-2.5 h-2.5" />}
+              </button>
+            </div>
+          </div>
 
          {/* Content Notepad Area */}
         <div className="flex flex-col gap-1 relative">
@@ -989,44 +988,8 @@ return (
             </div>
           </div>
         )}
-
-        {/* BIBLE REFERENCE AI MODAL */}
-        {showBibleRefModal && (
-          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 select-none">
-            <div className="w-full max-w-2xl bg-[#111317] border border-white/10 rounded-2xl p-6 md:p-8 flex flex-col max-h-[85vh] shadow-2xl relative text-left">
-              <button
-                onClick={() => setShowBibleRefModal(false)}
-                className="absolute top-5 right-5 p-1 rounded-lg text-stone-400 hover:text-white hover:bg-white/5 transition cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-
-              <div className="flex items-center gap-2 border-b border-white/5 pb-4 mb-4">
-                <Search className="w-5 h-5 text-indigo-400" />
-                <div>
-                  <h3 className="font-sans font-black text-sm uppercase text-white tracking-tight">Bible Reference AI</h3>
-                  <span className="text-[9px] font-mono text-indigo-400 uppercase tracking-widest font-bold">Scripture lookup assistant</span>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto text-xs text-stone-300 space-y-4 pr-1 leading-relaxed font-sans scrollbar-thin scrollbar-thumb-white/10 whitespace-pre-wrap select-text">
-                {bibleRefResult}
-              </div>
-
-              <div className="mt-6 pt-4 border-t border-white/5 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowBibleRefModal(false)}
-                  className="bg-stone-850 hover:bg-stone-750 text-stone-300 font-sans font-bold text-xs px-5 py-2.5 rounded-lg cursor-pointer transition border border-white/5"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-         </>
-        )}
-     </div>
-   );
- }
+      </>
+      )}
+    </div>
+  );
+}
