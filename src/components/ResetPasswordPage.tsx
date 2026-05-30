@@ -39,7 +39,7 @@ export default function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(emailVal, {
-        redirectTo: `${window.location.origin}/login?type=recovery`,
+        redirectTo: `${window.location.origin}/reset-password?type=recovery`,
       });
 
       if (error) {
