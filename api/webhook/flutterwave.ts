@@ -24,7 +24,7 @@ interface TransactionRecord {
   flutterwave_status: string;
 }
 
-async function readBody(req: any): Promise<Record<string, unknown>> {
+function readBody(req: any): Record<string, unknown> {
   console.log("[Webhook] Parsing body, type:", typeof req.body);
   
   if (req.body && typeof req.body === "object") {
@@ -33,7 +33,7 @@ async function readBody(req: any): Promise<Record<string, unknown>> {
   
   if (typeof req.body?.text === "function") {
     try {
-      const text = await req.body.text();
+      const text = req.body.text();
       const parsed = JSON.parse(text);
       return typeof parsed === "object" ? parsed : {};
     } catch (e) {
@@ -128,14 +128,7 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ received: false, error: "Method not allowed" });
   }
 
-  let body: Record<string, unknown>;
-  try {
-    body = await readBody(req);
-  } catch (e: any) {
-    console.error("[Flutterwave Webhook] Failed to read body:", e.message);
-    return res.status(400).json({ received: false, error: "Invalid request body" });
-  }
-
+  const body = readBody(req);
   const data = (body.data || {}) as Record<string, unknown>;
   const dataStatus = typeof data.status === "string" ? data.status : undefined;
   const reference = typeof data.tx_ref === "string" ? data.tx_ref : undefined;

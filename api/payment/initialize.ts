@@ -123,35 +123,19 @@ async function initializeFlutterwaveTransaction(args: {
   };
 }
 
-async function readBody(req: any): Promise<{ email?: string; userId?: string; plan?: string; [key: string]: unknown }> {
+function readBody(req: any): { email?: string; userId?: string; plan?: string; [key: string]: unknown } {
   console.log("[Request] Parsing body, type:", typeof req.body);
   
   // If body is already parsed (Express middleware)
   if (req.body && typeof req.body === "object") {
+    console.log("[Request] Body already parsed");
     return req.body;
   }
   
-  // If body is a stream or needs to be read
-  if (req.body?.getReader || typeof req.body?.text === "function") {
-    try {
-      const text = await req.body.text();
-      const parsed = JSON.parse(text);
-      return typeof parsed === "object" ? parsed : {};
-    } catch (e) {
-      console.error("[Request] Failed to parse streaming body:", e);
-      return {};
-    }
-  }
-  
-  // If body is a string
-  if (typeof req.body === "string") {
-    try {
-      const parsed = JSON.parse(req.body);
-      return typeof parsed === "object" ? parsed : {};
-    } catch (e) {
-      console.error("[Request] Failed to parse string body:", e);
-      return {};
-    }
+  // Query parameters fallback
+  if (req.query && typeof req.query === "object") {
+    console.log("[Request] Using query parameters as fallback");
+    return req.query;
   }
   
   return {};
@@ -181,14 +165,8 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ success: false, error: "Method not allowed", receivedMethod: method });
   }
 
-  let body: { email?: string; userId?: string; plan?: string };
-  try {
-    body = await readBody(req);
-    console.log("[Payment Initialize] Parsed body:", { email: body.email, userId: body.userId, plan: body.plan });
-  } catch (e: any) {
-    console.error("[Payment Initialize] Failed to read body:", e.message);
-    return res.status(400).json({ success: false, error: "Invalid request body" });
-  }
+  const body = readBody(req);
+  console.log("[Payment Initialize] Parsed body:", { email: body.email, userId: body.userId, plan: body.plan });
 
   const plan = normalizeSubscriptionPlan(body.plan);
   if (!body.email || !body.userId || !plan) {

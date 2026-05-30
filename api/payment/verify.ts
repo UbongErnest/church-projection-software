@@ -238,27 +238,20 @@ async function activateSubscriptionForUser(supabase: SupabaseClient, userId: str
   };
 }
 
-async function readBody(req: any): Promise<Record<string, unknown>> {
+function readBody(req: any): Record<string, unknown> {
   console.log("[Request] Parsing body, type:", typeof req.body);
   
+  // Vercel/Next.js parses body automatically - use it directly
   if (req.body && typeof req.body === "object") {
+    console.log("[Request] Body already parsed by Vercel");
     return req.body as Record<string, unknown>;
   }
   
-  if (typeof req.body?.text === "function") {
-    try {
-      const text = await req.body.text();
-      const parsed = JSON.parse(text);
-      return typeof parsed === "object" ? parsed : {};
-    } catch (e) {
-      console.error("[Request] Failed to parse streaming body:", e);
-      return {};
-    }
-  }
-  
+  // If body is already a string
   if (typeof req.body === "string") {
     try {
       const parsed = JSON.parse(req.body);
+      console.log("[Request] Body parsed from string");
       return typeof parsed === "object" ? parsed : {};
     } catch (e) {
       console.error("[Request] Failed to parse string body:", e);
@@ -266,6 +259,13 @@ async function readBody(req: any): Promise<Record<string, unknown>> {
     }
   }
   
+  // Query parameters fallback (for GET-style callback)
+  if (req.query && typeof req.query === "object") {
+    console.log("[Request] Using query parameters as fallback");
+    return req.query as Record<string, unknown>;
+  }
+  
+  console.log("[Request] No body or query found in request");
   return {};
 }
 
@@ -298,14 +298,8 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ success: false, error: "Method not allowed", receivedMethod: method });
   }
 
-  let body: Record<string, unknown>;
-  try {
-    body = await readBody(req);
-    console.log("[Payment Verify] Parsed body:", { reference: body.reference, userId: body.userId, plan: body.plan });
-  } catch (e: any) {
-    console.error("[Payment Verify] Failed to read body:", e.message);
-    return res.status(400).json({ success: false, error: "Invalid request body", stage: "body_parsing" });
-  }
+  const body = readBody(req);
+  console.log("[Payment Verify] Parsed body:", { reference: body.reference, userId: body.userId, plan: body.plan });
 
   const reference = typeof body.reference === "string" ? body.reference : undefined;
   if (!reference) {

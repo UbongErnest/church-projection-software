@@ -419,19 +419,22 @@ export async function verifyAndActivatePayment(args: {
   const { data: existingRecord } = await supabase
     .from("transactions")
     .select("user_id, plan, status, flutterwave_status, subscription_end")
-    .eq("reference", args.reference)
-    .single();
+    .eq("reference", args.reference);
 
-  if (existingRecord && (existingRecord.flutterwave_status === "success" || existingRecord.status === "success")) {
-    console.log(`${args.logPrefix} Transaction already processed, returning success`);
-    return {
-      success: true as const,
-      message: "Subscription already activated",
-      flutterwaveStatus: "successful",
-      userId: existingRecord.user_id,
-      plan: existingRecord.plan as SubscriptionPlan,
-      subscriptionEnd: existingRecord.subscription_end,
-    };
+  // Check first record if found
+  if (existingRecord && existingRecord.length > 0) {
+    const record = existingRecord[0];
+    if (record.flutterwave_status === "success" || record.status === "success") {
+      console.log(`${args.logPrefix} Transaction already processed, returning success`);
+      return {
+        success: true as const,
+        message: "Subscription already activated",
+        flutterwaveStatus: "successful",
+        userId: record.user_id,
+        plan: record.plan as SubscriptionPlan,
+        subscriptionEnd: record.subscription_end,
+      };
+    }
   }
 
   const maxAttempts = 3;
