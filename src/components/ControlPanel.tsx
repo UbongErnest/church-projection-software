@@ -412,9 +412,9 @@ function generateFallbackVerseText(book: string, chapter: number, verse: number)
       KJV: cleanText,
     };
   }
-  return {
-    KJV: "No Verse",
-  };
+return {
+     KJV: ".",
+   };
 }
 
 // Convert custom manual search bar queries (e.g. "Romans 12 1") and automatically cast

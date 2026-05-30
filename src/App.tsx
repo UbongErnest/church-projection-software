@@ -47,17 +47,17 @@ function scanForVerseLocally(text: string): { book: string; chapter: number; ver
 }
 
 function getFallbackVerseText(book: string, chapter: number, verse: number): { KJV: string } {
-  const kjvText = getKjvVerseText(book, chapter, verse);
-  if (kjvText) {
-    const cleanText = kjvText.trim().replace(/^¶\s*/, "");
-    return {
-      KJV: cleanText,
-    };
-  }
-  return {
-    KJV: "No Verse",
-  };
-}
+   const kjvText = getKjvVerseText(book, chapter, verse);
+   if (kjvText) {
+     const cleanText = kjvText.trim().replace(/^¶\s*/, "");
+     return {
+       KJV: cleanText,
+     };
+   }
+   return {
+     KJV: ".",
+   };
+ }
 
 async function readApiResponse(response: Response) {
   const rawText = await response.text();
