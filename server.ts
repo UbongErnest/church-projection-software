@@ -179,7 +179,7 @@ Schema:
 }`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.0-flash",
       contents: `Live Speech Transcript:\n"${processedTranscript}"`,
       config: {
         systemInstruction: systemPrompt,
@@ -308,7 +308,7 @@ Related Scriptures:
 [List additional references if applicable]`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-2.0-flash",
         contents: `User Query: ${query}`,
         config: {
           systemInstruction: systemPrompt,
@@ -387,7 +387,7 @@ QUESTIONS FOR PERSONAL STUDY
 Format with clear sections, bold headings, and well-structured paragraphs.`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
+        model: "gemini-2.0-flash",
         contents: `Sermon Topic: ${topic || "Sunday Service"}
 Sermon Notes (raw):
 "${notesContent}"
@@ -465,7 +465,7 @@ IV. Conclusion & Key Takeaway
     const ai = getAiClient();
     const systemPrompt = "You are an expert theologian and sermon outline editor. Create a beautifully structured sermon outline with clear headings, scriptural suggestions, and real-life application points from the rough pastor notes.";
     const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
+      model: "gemini-2.0-flash",
       contents: `Sermon Topic: ${topic || "Untold Sunday Study"}\nRough Notes:\n"${notesContent}"`,
       config: {
         systemInstruction: systemPrompt,
