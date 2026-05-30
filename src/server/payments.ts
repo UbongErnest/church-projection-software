@@ -51,7 +51,7 @@ export const PLAN_CONFIG: Record<SubscriptionPlan, { amount: number; durationDay
   },
   yearly: {
     amount: 25500,
-    durationDays: 30,
+    durationDays: 365,
   },
 };
 
@@ -152,6 +152,8 @@ async function flutterwaveRequest<TResponse>(
   method: "GET" | "POST" = "POST",
   data?: unknown,
 ): Promise<TResponse> {
+  console.log(`[Flutterwave Request] ${method} ${endpoint}`);
+  
   const response = await fetch(`https://api.flutterwave.com/v3${endpoint}`, {
     method,
     headers: {
@@ -161,11 +163,23 @@ async function flutterwaveRequest<TResponse>(
     body: method === "POST" ? JSON.stringify(data ?? {}) : undefined,
   });
 
-  const result = await response.json();
+  let result: any;
+  try {
+    result = await response.json();
+  } catch (parseError) {
+    const text = await response.text();
+    const error = new Error(`Flutterwave API returned non-JSON response (${response.status}): ${text.slice(0, 200)}`) as any;
+    error.status = response.status;
+    throw error;
+  }
+
+  console.log(`[Flutterwave Response] Status: ${response.status}`, result);
 
   if (!response.ok) {
     const errorMsg = result.message || result.error || JSON.stringify(result);
-    throw new Error(`Flutterwave API error (${response.status}): ${errorMsg}`);
+    const error = new Error(`Flutterwave API error (${response.status}): ${errorMsg}`) as any;
+    error.status = response.status;
+    throw error;
   }
 
   return result as TResponse;
@@ -286,10 +300,16 @@ export async function recordTransaction(transaction: {
   plan: SubscriptionPlan;
   amount: number;
   currency?: string;
-  email: string;
+  email?: string;
 }) {
   const supabase = getSupabaseAdmin();
-  
+   
+  console.log("[Supabase] Recording transaction:", { 
+    reference: transaction.reference, 
+    userId: transaction.userId,
+    plan: transaction.plan 
+  });
+   
   const { error } = await supabase
     .from("transactions")
     .upsert({
@@ -303,12 +323,14 @@ export async function recordTransaction(transaction: {
       created_at: new Date().toISOString(),
     }, {
       onConflict: "reference",
-      ignoreDuplicates: false,
     });
 
   if (error) {
-    console.error("Failed to record transaction:", error);
+    console.error("[Supabase] Failed to record transaction:", error.message);
+    throw new Error(`Failed to record transaction: ${error.message}`);
   }
+  
+  console.log("[Supabase] Transaction recorded successfully");
 }
 
 export async function updateTransactionStatus(reference: string, updates: {
@@ -331,20 +353,29 @@ export async function updateTransactionStatus(reference: string, updates: {
 
 export async function activateSubscriptionForUser(userId: string, plan: SubscriptionPlan) {
   const subscriptionEnd = calculateSubscriptionEnd(plan);
+  const subscriptionStart = new Date().toISOString();
   const supabase = getSupabaseAdmin();
-  
-  const { error } = await supabase
+
+  console.log("[Supabase] Activating subscription:", { userId, plan, subscriptionStart, subscriptionEnd });
+
+  const { data, error } = await supabase
     .from("users")
     .update({
       subscription_plan: plan,
       subscription_status: "active",
+      subscription_start: subscriptionStart,
       subscription_end: subscriptionEnd,
     })
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .select("user_id, subscription_plan, subscription_status")
+    .single();
 
   if (error) {
+    console.error("[Supabase] Subscription activation failed:", error.message);
     throw new Error(`Failed to update user subscription: ${error.message}`);
   }
+
+  console.log("[Supabase] Subscription activated:", data);
 
   return {
     plan,
@@ -359,7 +390,29 @@ export async function verifyAndActivatePayment(args: {
   logPrefix: string;
   email?: string;
 }): Promise<PaymentVerificationResult> {
-  const maxAttempts = 5;
+  const supabase = getSupabaseAdmin();
+
+  // Idempotency check - see if transaction was already processed
+  console.log(`${args.logPrefix} Checking existing transaction record:`, args.reference);
+  const { data: existingRecord } = await supabase
+    .from("transactions")
+    .select("user_id, plan, status, flutterwave_status, subscription_end")
+    .eq("reference", args.reference)
+    .single();
+
+  if (existingRecord && (existingRecord.flutterwave_status === "success" || existingRecord.status === "success")) {
+    console.log(`${args.logPrefix} Transaction already processed, returning success`);
+    return {
+      success: true as const,
+      message: "Subscription already activated",
+      flutterwaveStatus: "successful",
+      userId: existingRecord.user_id,
+      plan: existingRecord.plan as SubscriptionPlan,
+      subscriptionEnd: existingRecord.subscription_end,
+    };
+  }
+
+  const maxAttempts = 3;
   const verification = await verifyFlutterwaveTransaction(
     args.reference,
     args.logPrefix,

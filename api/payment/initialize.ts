@@ -1,7 +1,7 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 type SubscriptionPlan = "monthly" | "yearly";
 
@@ -43,6 +43,8 @@ async function flutterwaveRequest<TResponse>(
   method: "GET" | "POST" = "POST",
   data?: unknown,
 ): Promise<TResponse> {
+  console.log(`[Flutterwave Request] ${method} ${endpoint}`);
+  
   const response = await fetch(`https://api.flutterwave.com/v3${endpoint}`, {
     method,
     headers: {
@@ -59,6 +61,8 @@ async function flutterwaveRequest<TResponse>(
     const text = await response.text();
     throw new Error(`Flutterwave API returned non-JSON response (${response.status}): ${text.slice(0, 200)}`);
   }
+
+  console.log(`[Flutterwave Response] Status: ${response.status}`);
 
   if (!response.ok) {
     const errorMsg = result.message || result.error || JSON.stringify(result);
@@ -120,6 +124,8 @@ async function initializeFlutterwaveTransaction(args: {
 }
 
 async function readBody(req: any): Promise<{ email?: string; userId?: string; plan?: string; [key: string]: unknown }> {
+  console.log("[Request] Parsing body, type:", typeof req.body);
+  
   // If body is already parsed (Express middleware)
   if (req.body && typeof req.body === "object") {
     return req.body;
@@ -129,8 +135,10 @@ async function readBody(req: any): Promise<{ email?: string; userId?: string; pl
   if (req.body?.getReader || typeof req.body?.text === "function") {
     try {
       const text = await req.body.text();
-      return JSON.parse(text);
-    } catch {
+      const parsed = JSON.parse(text);
+      return typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+      console.error("[Request] Failed to parse streaming body:", e);
       return {};
     }
   }
@@ -138,8 +146,10 @@ async function readBody(req: any): Promise<{ email?: string; userId?: string; pl
   // If body is a string
   if (typeof req.body === "string") {
     try {
-      return JSON.parse(req.body);
-    } catch {
+      const parsed = JSON.parse(req.body);
+      return typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+      console.error("[Request] Failed to parse string body:", e);
       return {};
     }
   }
@@ -150,32 +160,86 @@ async function readBody(req: any): Promise<{ email?: string; userId?: string; pl
 export default async function handler(req: any, res: any) {
   const method = (req.method || "GET").toUpperCase();
   
-  if (!process.env.FLUTTERWAVE_SECRET_KEY) {
-    return res.status(500).json({
-      error: "Failed to initialize payment",
-      details: "FLUTTERWAVE_SECRET_KEY is not set in environment",
-    });
-  }
+  console.log("[Payment Initialize] Request received", { method });
   
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  // Validate environment
+  const missingEnvVars: string[] = [];
+  if (!process.env.FLUTTERWAVE_SECRET_KEY) missingEnvVars.push("FLUTTERWAVE_SECRET_KEY");
+  if (!process.env.SUPABASE_URL) missingEnvVars.push("SUPABASE_URL");
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) missingEnvVars.push("SUPABASE_SERVICE_ROLE_KEY");
+  
+  if (missingEnvVars.length > 0) {
+    console.error("[Payment Initialize] Missing environment variables:", missingEnvVars);
     return res.status(500).json({
-      error: "Failed to initialize payment",
-      details: "SUPABASE_SERVICE_ROLE_KEY is not set in environment",
+      success: false,
+      error: "Server configuration error",
+      details: `Missing required environment variables: ${missingEnvVars.join(", ")}`,
     });
   }
 
   if (method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed", receivedMethod: method });
+    return res.status(405).json({ success: false, error: "Method not allowed", receivedMethod: method });
   }
 
+  let body: { email?: string; userId?: string; plan?: string };
   try {
-    const body = await readBody(req);
-    const plan = normalizeSubscriptionPlan(body.plan);
-    if (!body.email || !body.userId || !plan) {
-      return res.status(400).json({ error: "Missing or invalid email, userId, or plan.", received: body });
+    body = await readBody(req);
+    console.log("[Payment Initialize] Parsed body:", { email: body.email, userId: body.userId, plan: body.plan });
+  } catch (e: any) {
+    console.error("[Payment Initialize] Failed to read body:", e.message);
+    return res.status(400).json({ success: false, error: "Invalid request body" });
+  }
+
+  const plan = normalizeSubscriptionPlan(body.plan);
+  if (!body.email || !body.userId || !plan) {
+    console.error("[Payment Initialize] Missing required fields:", { 
+      hasEmail: !!body.email, 
+      hasUserId: !!body.userId, 
+      hasPlan: !!plan 
+    });
+    return res.status(400).json({ 
+      success: false, 
+      error: "Missing or invalid email, userId, or plan.", 
+      received: body 
+    });
+  }
+
+  const supabase = createClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  // Record transaction in database before sending to Flutterwave (for idempotency)
+  const reference = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+  
+  const callbackUrl = `${resolveAppUrlFromRequest(req)}/api/payment/callback`;
+
+  try {
+    // Record transaction
+    const expectedAmount = getPlanAmount(plan);
+    console.log("[Supabase] Recording initial transaction:", { reference, userId: body.userId, plan, expectedAmount });
+    
+    const { error: recordError } = await supabase
+      .from("transactions")
+      .upsert({
+        reference,
+        user_id: body.userId,
+        plan,
+        amount: expectedAmount,
+        currency: "NGN",
+        email: body.email,
+        status: "pending",
+        created_at: new Date().toISOString(),
+      }, {
+        onConflict: "reference",
+      });
+
+    if (recordError) {
+      console.error("[Supabase] Failed to record initial transaction:", recordError.message);
+    } else {
+      console.log("[Supabase] Initial transaction recorded");
     }
 
-    const callbackUrl = `${resolveAppUrlFromRequest(req)}/api/payment/callback`;
     const transaction = await initializeFlutterwaveTransaction({
       email: body.email,
       plan,
@@ -183,14 +247,27 @@ export default async function handler(req: any, res: any) {
       callbackUrl,
     });
 
+    // Update reference with the one returned by Flutterwave
+    if (transaction.reference !== reference) {
+      console.log("[Supabase] Updating transaction with Flutterwave reference");
+      await supabase
+        .from("transactions")
+        .update({ reference: transaction.reference })
+        .eq("reference", reference);
+    }
+
     return res.status(200).json({
       success: true,
       paymentLink: transaction.link,
       reference: transaction.reference,
     });
   } catch (error: any) {
-    console.error("[API Initialize] Error:", error);
+    console.error("[Payment Initialize] Error:", {
+      message: error.message,
+      stack: error.stack,
+    });
     return res.status(500).json({
+      success: false,
       error: "Failed to initialize payment",
       details: error.message || "Unknown error occurred",
     });

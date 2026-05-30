@@ -18,6 +18,7 @@ import {
   RequestAuthError,
   getAuthenticatedUserProfileFromRequest,
 } from "./src/server/userProfiles";
+import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
 
@@ -387,36 +388,116 @@ app.post("/api/webhook/flutterwave", async (req, res) => {
   }
 
   const { data } = req.body || {};
+  const dataStatus = typeof data?.status === "string" ? data.status : undefined;
+  const reference = typeof data?.tx_ref === "string" ? data.tx_ref : undefined;
 
-  console.log("[Flutterwave Webhook] Event data:", { status: data?.status, tx_ref: data?.tx_ref });
+  console.log("[Flutterwave Webhook] Event data:", { 
+    status: dataStatus, 
+    tx_ref: reference, 
+    meta: data?.meta 
+  });
 
-  if (data && data.status === "successful" && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    const meta = (data.meta || {}) as Record<string, unknown>;
-    let userId: string | undefined;
-    let planValue: string | undefined;
-    
-    for (const key of Object.keys(meta)) {
-      if (key.toLowerCase() === "userid") {
-        userId = typeof meta[key] === "string" ? meta[key] : undefined;
-      }
-      if (key.toLowerCase() === "plan") {
-        planValue = typeof meta[key] === "string" ? meta[key] : undefined;
-      }
-    }
-    
-    const plan = normalizeSubscriptionPlan(planValue);
+  // Only process successful transactions
+  if (dataStatus !== "successful") {
+    console.log("[Flutterwave Webhook] Transaction not successful, skipping:", dataStatus);
+    return res.status(200).json({ received: true, status: "skipped_non_successful" });
+  }
 
-    if (userId && plan) {
-      try {
-        const { subscriptionEnd } = await activateSubscriptionForUser(userId, plan);
-        console.log("[Flutterwave Webhook] Activated subscription for user:", userId, "plan:", plan, "ends:", subscriptionEnd);
-      } catch (error: any) {
-        console.error("[Flutterwave Webhook] Failed to activate subscription:", error.message);
-      }
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.error("[Flutterwave Webhook] Supabase credentials not configured");
+    return res.status(500).json({ 
+      received: false, 
+      error: "Server configuration error: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing" 
+    });
+  }
+
+  const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+
+  // Idempotency check - if already processed, skip
+  if (reference) {
+    const { data: existingRecord } = await supabase
+      .from("transactions")
+      .select("flutterwave_status")
+      .eq("reference", reference)
+      .single();
+
+    if (existingRecord?.flutterwave_status === "success") {
+      console.log("[Flutterwave Webhook] Transaction already processed, idempotency check passed");
+      return res.status(200).json({ received: true, status: "already_processed" });
     }
   }
 
-  return res.status(200).json({ received: true });
+  const meta = (data?.meta || {}) as Record<string, unknown>;
+  let userId: string | undefined;
+  let planValue: string | undefined;
+  
+  // Case-insensitive search for userId and plan
+  for (const key of Object.keys(meta)) {
+    const lowerKey = key.toLowerCase();
+    if (lowerKey === "userid") {
+      userId = typeof meta[key] === "string" ? meta[key] : undefined;
+    }
+    if (lowerKey === "plan") {
+      planValue = typeof meta[key] === "string" ? meta[key] : undefined;
+    }
+  }
+  
+  const plan = normalizeSubscriptionPlan(planValue);
+
+  console.log("[Flutterwave Webhook] Processing - userId:", userId, "plan:", plan, "meta keys:", Object.keys(meta));
+
+  if (!userId) {
+    console.error("[Flutterwave Webhook] Missing userId in webhook meta");
+    return res.status(200).json({ received: true, status: "skipped_missing_userid" });
+  }
+
+  if (!plan) {
+    console.error("[Flutterwave Webhook] Missing or invalid plan in webhook meta");
+    return res.status(200).json({ received: true, status: "skipped_missing_plan" });
+  }
+
+  try {
+    // Record/update transaction
+    if (reference) {
+      const amount = typeof data?.amount === "number" ? data.amount : 0;
+      const customerEmail = typeof (data?.customer as { email?: string })?.email === "string" 
+        ? (data?.customer as { email?: string }).email 
+        : undefined;
+
+      console.log("[Supabase] Recording/updating webhook transaction:", { reference, userId, plan, amount });
+
+      await supabase
+        .from("transactions")
+        .upsert({
+          reference,
+          user_id: userId,
+          plan,
+          amount,
+          currency: typeof data?.currency === "string" ? data.currency : "NGN",
+          email: customerEmail,
+          status: "success",
+          flutterwave_status: "success",
+          verified_at: new Date().toISOString(),
+          webhook_received_at: new Date().toISOString(),
+        }, {
+          onConflict: "reference",
+        });
+    }
+
+    // Activate subscription
+    const { subscriptionEnd } = await activateSubscriptionForUser(userId, plan);
+    console.log("[Flutterwave Webhook] Activated subscription for user:", userId, "plan:", plan, "ends:", subscriptionEnd);
+  } catch (error: any) {
+    console.error("[Flutterwave Webhook] Failed to activate subscription:", {
+      message: error.message,
+      stack: error.stack,
+    });
+  }
+
+  return res.status(200).json({ received: true, status: "processed" });
 });
 
 // 3. Mount Vite or serve static production folder
