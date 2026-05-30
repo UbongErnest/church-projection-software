@@ -57,49 +57,90 @@ export default function SermonNotepad({
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
 
-  // AI Copilot state
-  const [isGeneratingOutline, setIsGeneratingOutline] = useState(false);
-  const [generatedOutline, setGeneratedOutline] = useState("");
-  const [showOutlineModal, setShowOutlineModal] = useState(false);
+// AI Copilot state
+   const [isGeneratingOutline, setIsGeneratingOutline] = useState(false);
+   const [generatedOutline, setGeneratedOutline] = useState("");
+   const [showOutlineModal, setShowOutlineModal] = useState(false);
+   const [isRefiningNotes, setIsRefiningNotes] = useState(false);
+   const [refinedNotes, setRefinedNotes] = useState("");
+   const [showRefineModal, setShowRefineModal] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // AI Outline generator handler
-  const handleTriggerAiOutline = async () => {
-    if (hasExpired || userPlan !== "yearly") {
-      triggerSuccessFeedback(hasExpired ? "⚠️ Subscription Expired! Renew to use AI Copilot." : "⚠️ AI Copilot Outline requires Yearly Premium!");
-      return;
-    }
-    if (!noteContent.trim()) {
-      triggerSuccessFeedback("⚠️ Journal canvas empty! Add notes first.");
-      return;
-    }
+// AI Outline generator handler
+   const handleTriggerAiOutline = async () => {
+     if (hasExpired || userPlan !== "yearly") {
+       triggerSuccessFeedback(hasExpired ? "⚠️ Subscription Expired! Renew to use AI Copilot." : "⚠️ AI Copilot Outline requires Yearly Premium!");
+       return;
+     }
+     if (!noteContent.trim()) {
+       triggerSuccessFeedback("⚠️ Journal canvas empty! Add notes first.");
+       return;
+     }
 
-    setIsGeneratingOutline(true);
-    try {
-      const res = await fetch("/api/ai/copilot", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          notesContent: noteContent,
-          topic: noteTitle || sermonTopic
-        })
-      });
-      const data = await res.json();
-      if (data && data.outline) {
-        setGeneratedOutline(data.outline);
-        setShowOutlineModal(true);
-        triggerSuccessFeedback("AI outline generated!");
-      } else {
-        triggerSuccessFeedback("⚠️ Failed to generate sermon outline.");
-      }
-    } catch (err) {
-      console.error("AI Copilot outline fetch error:", err);
-      triggerSuccessFeedback("⚠️ Outline request failed.");
-    } finally {
-      setIsGeneratingOutline(false);
-    }
-  };
+     setIsGeneratingOutline(true);
+     try {
+       const res = await fetch("/api/ai/copilot", {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify({
+           notesContent: noteContent,
+           topic: noteTitle || sermonTopic
+         })
+       });
+       const data = await res.json();
+       if (data && data.outline) {
+         setGeneratedOutline(data.outline);
+         setShowOutlineModal(true);
+         triggerSuccessFeedback("AI outline generated!");
+       } else {
+         triggerSuccessFeedback("⚠️ Failed to generate sermon outline.");
+       }
+     } catch (err) {
+       console.error("AI Copilot outline fetch error:", err);
+       triggerSuccessFeedback("⚠️ Outline request failed.");
+     } finally {
+       setIsGeneratingOutline(false);
+     }
+   };
+
+   // AI Notes Refinement handler
+   const handleRefineNotes = async () => {
+     if (hasExpired || userPlan !== "yearly") {
+       triggerSuccessFeedback(hasExpired ? "⚠️ Subscription Expired! Renew to use AI Copilot." : "⚠️ AI Notes Refinement requires Yearly Premium!");
+       return;
+     }
+     if (!noteContent.trim()) {
+       triggerSuccessFeedback("⚠️ Journal canvas empty! Add notes first.");
+       return;
+     }
+
+     setIsRefiningNotes(true);
+     try {
+       const res = await fetch("/api/ai/copilot?action=refine", {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify({
+           notesContent: noteContent,
+           topic: noteTitle || sermonTopic,
+           sermonContext: sermonTopic
+         })
+       });
+       const data = await res.json();
+       if (data && data.refined) {
+         setRefinedNotes(data.refined);
+         setShowRefineModal(true);
+         triggerSuccessFeedback("Notes refined successfully!");
+       } else {
+         triggerSuccessFeedback("⚠️ Failed to refine notes.");
+       }
+     } catch (err) {
+       console.error("AI Refine notes fetch error:", err);
+       triggerSuccessFeedback("⚠️ Notes refinement request failed.");
+     } finally {
+       setIsRefiningNotes(false);
+     }
+   };
 
 // Load saved notes once on load via Supabase
    useEffect(() => {
@@ -494,28 +535,50 @@ return (
           </button>
         </div>
 
-        {/* AI Copilot Outline builder (unlocked only for Yearly Premium) */}
-        <div className="pt-1 text-left">
-          <button
-            type="button"
-            onClick={handleTriggerAiOutline}
-            disabled={isGeneratingOutline}
-            className={`w-full font-sans font-bold text-xs py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-md ${
-              userPlan === "yearly"
-                ? "bg-gradient-to-r from-amber-500/15 to-teal-500/15 hover:from-amber-500/25 hover:to-teal-500/25 border border-teal-500/35 text-teal-300 cursor-pointer"
-                : "bg-stone-900/60 border border-white/5 text-stone-500 cursor-pointer hover:border-amber-500/20"
-            }`}
-          >
-            {isGeneratingOutline ? (
-              <div className="w-3.5 h-3.5 border-2 border-teal-400/30 border-t-teal-400 rounded-full animate-spin" />
-            ) : (
-              <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            )}
-            <span>AI Sermon Copilot Outline</span>
-            {userPlan !== "yearly" && <Lock className="w-2.5 h-2.5 text-amber-500 shrink-0" />}
-          </button>
-        </div>
-      </form>
+{/* AI Copilot Outline builder (unlocked only for Yearly Premium) */}
+         <div className="pt-1 text-left">
+           <button
+             type="button"
+             onClick={handleTriggerAiOutline}
+             disabled={isGeneratingOutline}
+             className={`w-full font-sans font-bold text-xs py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-md ${
+               userPlan === "yearly"
+                 ? "bg-gradient-to-r from-amber-500/15 to-teal-500/15 hover:from-amber-500/25 hover:to-teal-500/25 border border-teal-500/35 text-teal-300 cursor-pointer"
+                 : "bg-stone-900/60 border border-white/5 text-stone-500 cursor-pointer hover:border-amber-500/20"
+             }`}
+           >
+             {isGeneratingOutline ? (
+               <div className="w-3.5 h-3.5 border-2 border-teal-400/30 border-t-teal-400 rounded-full animate-spin" />
+             ) : (
+               <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+             )}
+             <span>AI Sermon Copilot Outline</span>
+             {userPlan !== "yearly" && <Lock className="w-2.5 h-2.5 text-amber-500 shrink-0" />}
+           </button>
+         </div>
+
+         {/* AI Notes Refinement button (unlocked only for Yearly Premium) */}
+         <div className="pt-1 text-left">
+           <button
+             type="button"
+             onClick={handleRefineNotes}
+             disabled={isRefiningNotes}
+             className={`w-full font-sans font-bold text-xs py-2 rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-md ${
+               userPlan === "yearly"
+                 ? "bg-gradient-to-r from-emerald-500/15 to-cyan-500/15 hover:from-emerald-500/25 hover:to-cyan-500/25 border border-cyan-500/35 text-cyan-300 cursor-pointer"
+                 : "bg-stone-900/60 border border-white/5 text-stone-500 cursor-pointer hover:border-amber-500/20"
+             }`}
+           >
+             {isRefiningNotes ? (
+               <div className="w-3.5 h-3.5 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
+             ) : (
+               <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+             )}
+             <span>AI Structure & Refine Notes</span>
+             {userPlan !== "yearly" && <Lock className="w-2.5 h-2.5 text-amber-500 shrink-0" />}
+           </button>
+         </div>
+       </form>
 
       {/* Library of Preserved Sermon Notes */}
       <div className="mt-2.5">
@@ -636,55 +699,101 @@ return (
         )}
       </div>
 
-      {/* AI OUTLINE DISPLAY MODAL */}
-      {showOutlineModal && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 select-none">
-          <div className="w-full max-w-2xl bg-[#111317] border border-white/10 rounded-2xl p-6 md:p-8 flex flex-col max-h-[85vh] shadow-2xl relative text-left">
-            <button
-              onClick={() => setShowOutlineModal(false)}
-              className="absolute top-5 right-5 p-1 rounded-lg text-stone-400 hover:text-white hover:bg-white/5 transition cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
+{/* AI OUTLINE DISPLAY MODAL */}
+       {showOutlineModal && (
+         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 select-none">
+           <div className="w-full max-w-2xl bg-[#111317] border border-white/10 rounded-2xl p-6 md:p-8 flex flex-col max-h-[85vh] shadow-2xl relative text-left">
+             <button
+               onClick={() => setShowOutlineModal(false)}
+               className="absolute top-5 right-5 p-1 rounded-lg text-stone-400 hover:text-white hover:bg-white/5 transition cursor-pointer"
+             >
+               <X className="w-4 h-4" />
+             </button>
 
-            <div className="flex items-center gap-2 border-b border-white/5 pb-4 mb-4">
-              <Crown className="w-5 h-5 text-amber-400" />
-              <div>
-                <h3 className="font-sans font-black text-sm uppercase text-white tracking-tight">AI Copilot Sermon Outline</h3>
-                <span className="text-[9px] font-mono text-teal-400 uppercase tracking-widest font-bold">Generated based on rough journal notes</span>
-              </div>
-            </div>
+             <div className="flex items-center gap-2 border-b border-white/5 pb-4 mb-4">
+               <Crown className="w-5 h-5 text-amber-400" />
+               <div>
+                 <h3 className="font-sans font-black text-sm uppercase text-white tracking-tight">AI Copilot Sermon Outline</h3>
+                 <span className="text-[9px] font-mono text-teal-400 uppercase tracking-widest font-bold">Generated based on rough journal notes</span>
+               </div>
+             </div>
 
-            <div className="flex-1 overflow-y-auto text-xs text-stone-300 space-y-4 pr-1 leading-relaxed font-sans scrollbar-thin scrollbar-thumb-white/10 whitespace-pre-wrap select-text">
-              {generatedOutline}
-            </div>
+             <div className="flex-1 overflow-y-auto text-xs text-stone-300 space-y-4 pr-1 leading-relaxed font-sans scrollbar-thin scrollbar-thumb-white/10 whitespace-pre-wrap select-text">
+               {generatedOutline}
+             </div>
 
-            <div className="mt-6 pt-4 border-t border-white/5 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  // Append outline directly to notes!
-                  setNoteContent((prev) => prev + "\n\n---\n\n" + generatedOutline);
-                  setShowOutlineModal(false);
-                  triggerSuccessFeedback("Appended outline to note editor!");
-                }}
-                className="bg-teal-600 hover:bg-teal-500 text-white font-sans font-bold text-xs px-5 py-2.5 rounded-lg cursor-pointer transition"
-              >
-                Append to Editor
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowOutlineModal(false)}
-                className="bg-stone-850 hover:bg-stone-750 text-stone-300 font-sans font-bold text-xs px-5 py-2.5 rounded-lg cursor-pointer transition border border-white/5"
-              >
-                Dismiss Outline
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+             <div className="mt-6 pt-4 border-t border-white/5 flex justify-end gap-3">
+               <button
+                 type="button"
+                 onClick={() => {
+                   setNoteContent((prev) => prev + "\n\n---\n\n" + generatedOutline);
+                   setShowOutlineModal(false);
+                   triggerSuccessFeedback("Appended outline to note editor!");
+                 }}
+                 className="bg-teal-600 hover:bg-teal-500 text-white font-sans font-bold text-xs px-5 py-2.5 rounded-lg cursor-pointer transition"
+               >
+                 Append to Editor
+               </button>
+               <button
+                 type="button"
+                 onClick={() => setShowOutlineModal(false)}
+                 className="bg-stone-850 hover:bg-stone-750 text-stone-300 font-sans font-bold text-xs px-5 py-2.5 rounded-lg cursor-pointer transition border border-white/5"
+               >
+                 Dismiss Outline
+               </button>
+             </div>
+           </div>
+         </div>
+       )}
+
+       {/* AI REFINED NOTES DISPLAY MODAL */}
+       {showRefineModal && (
+         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 select-none">
+           <div className="w-full max-w-2xl bg-[#111317] border border-white/10 rounded-2xl p-6 md:p-8 flex flex-col max-h-[85vh] shadow-2xl relative text-left">
+             <button
+               onClick={() => setShowRefineModal(false)}
+               className="absolute top-5 right-5 p-1 rounded-lg text-stone-400 hover:text-white hover:bg-white/5 transition cursor-pointer"
+             >
+               <X className="w-4 h-4" />
+             </button>
+
+             <div className="flex items-center gap-2 border-b border-white/5 pb-4 mb-4">
+               <Sparkles className="w-5 h-5 text-cyan-400" />
+               <div>
+                 <h3 className="font-sans font-black text-sm uppercase text-white tracking-tight">AI Structured Notes</h3>
+                 <span className="text-[9px] font-mono text-cyan-400 uppercase tracking-widest font-bold">Enhanced for clarity and understanding</span>
+               </div>
+             </div>
+
+             <div className="flex-1 overflow-y-auto text-xs text-stone-300 space-y-4 pr-1 leading-relaxed font-sans scrollbar-thin scrollbar-thumb-white/10 whitespace-pre-wrap select-text">
+               {refinedNotes}
+             </div>
+
+             <div className="mt-6 pt-4 border-t border-white/5 flex justify-end gap-3">
+               <button
+                 type="button"
+                 onClick={() => {
+                   setNoteContent(refinedNotes);
+                   setShowRefineModal(false);
+                   triggerSuccessFeedback("Refined notes applied to editor!");
+                 }}
+                 className="bg-cyan-600 hover:bg-cyan-500 text-white font-sans font-bold text-xs px-5 py-2.5 rounded-lg cursor-pointer transition"
+               >
+                 Use Refined Notes
+               </button>
+               <button
+                 type="button"
+                 onClick={() => setShowRefineModal(false)}
+                 className="bg-stone-850 hover:bg-stone-750 text-stone-300 font-sans font-bold text-xs px-5 py-2.5 rounded-lg cursor-pointer transition border border-white/5"
+               >
+                 Dismiss
+               </button>
+             </div>
+           </div>
+         </div>
+       )}
         </>
-      )}
-    </div>
-  );
-}
+       )}
+     </div>
+   );
+ }

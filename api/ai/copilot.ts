@@ -23,7 +23,59 @@ function getAiClient(): GoogleGenAI | null {
 }
 
 export default async function handler(req: any, res: any) {
-  const { notesContent, topic } = req.body;
+   const action = req.query.action || "outline";
+   
+   if (action === "refine") {
+     const { notesContent, topic, sermonContext } = req.body;
+     
+     if (!notesContent || notesContent.trim() === "") {
+       return res.json({ refined: "No notes provided to refine." });
+     }
+
+     const ai = getAiClient();
+     
+     if (!ai) {
+       return res.json({
+         refined: `## 📖 Structured Sermon Notes: ${topic || "Sunday Message"}\n\n### I. Main Points from the Message\n\n${notesContent.split('\n').filter((l: string) => l.trim()).map((l: string, i: number) => `${i + 1}. ${l}`).join('\n')}\n\n### II. Key Scripture References\n\n*Identify and meditate on the core scriptures referenced during the sermon.*\n\n### III. Life Application & Reflection\n\n*Consider how these truths apply to daily walk and spiritual growth.*\n\n### IV. Discussion & Questions\n\n- What stood out most from today's message?\n- How can you practically apply this teaching?\n- What questions arose during the sermon?\n\n*(Note: Local structure generator used - Gemini API unavailable)*`
+       });
+     }
+
+     try {
+       const systemPrompt = `You are a skilled theological editor and spiritual mentor. Transform raw sermon notes into a beautifully structured, well-organized document with:
+
+1. Clear main points with descriptive headings
+2. Well-structured sentences and paragraphs
+3. Contextual explanations for better understanding
+4. Life applications and reflection questions  
+5. Scripture cross-references where relevant
+6. A helpful introduction and meaningful conclusion
+
+Format with markdown headers, bullet points, and clear sections. Make it accessible and edifying for anyone reading it later.`;
+
+       const response = await ai.models.generateContent({
+         model: "gemini-1.5-flash",
+         contents: `Sermon Topic: ${topic || "Sunday Service"}
+Sermon Notes (raw):
+"${notesContent}"
+
+${sermonContext ? `Additional Context: ${sermonContext}` : ""}
+
+Please structure and enhance these notes for clarity, understanding, and spiritual edification.`,
+         config: {
+           systemInstruction: systemPrompt,
+         }
+       });
+
+       return res.json({ refined: response.text || "Could not refine notes." });
+     } catch (error: any) {
+       console.error("AI Refine endpoint error:", error);
+       return res.json({
+         refined: `## 📖 Structured Sermon Notes: ${topic || "Sunday Message"}\n\n### I. Main Points from the Message\n\n${notesContent.split('\n').filter((l: string) => l.trim()).map((l: string, i: number) => `${i + 1}. ${l}`).join('\n')}\n\n### II. Key Scripture References\n\n*Identify and meditate on the core scriptures referenced during the sermon.*\n\n### III. Life Application & Reflection\n\n*Consider how these truths apply to daily walk and spiritual growth.*\n\n### IV. Discussion & Questions\n\n- What stood out most from today's message?\n- How can you practically apply this teaching?\n- What questions arose during the sermon?\n\n*(Note: Graceful local structure generator fallback triggered)*`
+       });
+     }
+   }
+   
+   const { notesContent, topic } = req.body;
   
   if (!notesContent || notesContent.trim() === "") {
     return res.json({ outline: "No notes provided to generate outline." });

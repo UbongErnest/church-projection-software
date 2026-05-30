@@ -235,6 +235,72 @@ function mockRegexDetect(text: string) {
 
 // AI Copilot Sermon Outline Generator (Premium exclusive)
 app.post("/api/ai/copilot", async (req, res) => {
+  const action = req.query.action || "outline";
+  
+  if (action === "refine") {
+    const { notesContent, topic, sermonContext } = req.body;
+    if (!notesContent || notesContent.trim() === "") {
+      return res.json({ refined: "No notes provided to refine." });
+    }
+
+    try {
+      const ai = getAiClient();
+      const systemPrompt = `You are a skilled theological editor and spiritual mentor. Transform raw sermon notes into a beautifully structured, well-organized document with:
+
+1. Clear main points with descriptive headings
+2. Well-structured sentences and paragraphs
+3. Contextual explanations for better understanding
+4. Life applications and reflection questions  
+5. Scripture cross-references where relevant
+6. A helpful introduction and meaningful conclusion
+
+Format with markdown headers, bullet points, and clear sections. Make it accessible and edifying for anyone reading it later.`;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: `Sermon Topic: ${topic || "Sunday Service"}
+Sermon Notes (raw):
+"${notesContent}"
+
+${sermonContext ? `Additional Context: ${sermonContext}` : ""}
+
+Please structure and enhance these notes for clarity, understanding, and spiritual edification.`,
+        config: {
+          systemInstruction: systemPrompt,
+        }
+      });
+
+      return res.json({ refined: response.text || "Could not refine notes." });
+    } catch (error: any) {
+      console.error("AI Refine endpoint error:", error);
+      // Graceful fallback
+      const structuredNotes = notesContent.split('\n').filter((l: string) => l.trim());
+      return res.json({
+        refined: `## 📖 Structured Sermon Notes: ${topic || "Sunday Message"}
+
+### I. Main Points from the Message
+
+${structuredNotes.map((line: string, i: number) => `${i + 1}. ${line}`).join('\n')}
+
+### II. Key Scripture References
+
+*Identify and meditate on the core scriptures referenced during the sermon.*
+
+### III. Life Application & Reflection
+
+*Consider how these truths apply to daily walk and spiritual growth.*
+
+### IV. Discussion & Questions
+
+- What stood out most from today's message?
+- How can you practically apply this teaching?
+- What questions arose during the sermon?
+
+*(Note: Graceful local structure generator fallback triggered)*`
+      });
+    }
+  }
+  
   const { notesContent, topic } = req.body;
   if (!notesContent || notesContent.trim() === "") {
     return res.json({ outline: "No notes provided to generate outline." });
@@ -256,7 +322,25 @@ app.post("/api/ai/copilot", async (req, res) => {
     console.error("AI Copilot error:", error);
     // Graceful fallback with premium placeholder
     return res.json({
-      outline: `### ðŸ“– AI Copilot Structured Outline: ${topic || "Sunday Service"}\n\n* **I. Introduction & Central Focus**\n  * Hook: Connecting modern life challenges to divine truths.\n  * Central Scripture Recommendation: Focus on a key anchoring passage.\n\n* **II. Core Exegesis (Based on Sermon Notes)**\n  * Analysis of themes found in notes: *"${notesContent.substring(0, 150)}..."*\n  * Contextualizing historical and cultural elements of the references.\n\n* **III. Practical Spiritual Applications**\n  * How the congregation can apply this revelation during the week.\n  * Overcoming common barriers to living out these biblical principles.\n\n* **IV. Conclusion & Key Takeaway**\n  * Summarizing the sermon topic: *${topic}*.\n  * Final closing call to prayer and dedication.\n\n*(Note: Graceful local outline generator fallback triggered because Gemini API Key is offline or quota-limited)*`
+      outline: `### AI Copilot Structured Outline: ${topic || "Sunday Service"}
+
+* **I. Introduction & Central Focus**
+  * Hook: Connecting modern life challenges to divine truths.
+  * Central Scripture Recommendation: Focus on a key anchoring passage.
+
+* **II. Core Exegesis (Based on Sermon Notes)**
+  * Analysis of themes found in notes: *"${notesContent.substring(0, 150)}..."*
+  * Contextualizing historical and cultural elements of the references.
+
+* **III. Practical Spiritual Applications**
+  * How the congregation can apply this revelation during the week.
+  * Overcoming common barriers to living out these biblical principles.
+
+* **IV. Conclusion & Key Takeaway**
+  * Summarizing the sermon topic: *${topic}*.
+  * Final closing call to prayer and dedication.
+
+*(Note: Graceful local outline generator fallback triggered because Gemini API Key is offline or quota-limited)*`
     });
   }
 });
