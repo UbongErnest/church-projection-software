@@ -21,8 +21,9 @@ import {
    Crown,
    Lock,
    X,
-   Search
- } from "lucide-react";
+   Search,
+   MessageSquare
+  } from "lucide-react";
 
 interface SermonNotepadProps {
    sermonTopic: string;
@@ -65,10 +66,10 @@ export default function SermonNotepad({
     const [isRefiningNotes, setIsRefiningNotes] = useState(false);
     const [refinedNotes, setRefinedNotes] = useState("");
     const [showRefineModal, setShowRefineModal] = useState(false);
-    // UI State for Bible Reference Chat
-    const [bibleRefMessages, setBibleRefMessages] = useState<Array<{role: "user" | "assistant", content: string}>>([]);
-    const [bibleRefInput, setBibleRefInput] = useState("");
-    const [isBibleChatLoading, setIsBibleChatLoading] = useState(false);
+    // AI Chat state
+    const [chatMessages, setChatMessages] = useState<Array<{role: "user" | "assistant", content: string}>>([]);
+    const [chatInput, setChatInput] = useState("");
+    const [isChatLoading, setIsChatLoading] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -147,42 +148,44 @@ try {
 }
     };
 
-    // Bible Reference AI Chat handler
-    const handleBibleChat = async () => {
+// AI Chat handler
+    const handleAiChat = async () => {
       if (hasExpired || userPlan !== "yearly") {
-        triggerSuccessFeedback(hasExpired ? "⚠️ Subscription Expired! Renew to use AI Copilot." : "⚠️ Bible Reference AI requires Yearly Premium!");
+        triggerSuccessFeedback(hasExpired ? "⚠️ Subscription Expired! Renew to use AI Copilot." : "⚠️ AI Chat requires Yearly Premium!");
         return;
       }
-      if (!bibleRefInput.trim()) {
-        triggerSuccessFeedback("⚠️ Enter a query to chat with Bible AI!");
+      if (!chatInput.trim()) {
+        triggerSuccessFeedback("⚠️ Enter a message!");
         return;
       }
 
-      setIsBibleChatLoading(true);
-      const userMessage = bibleRefInput.trim();
-      setBibleRefInput("");
+      setIsChatLoading(true);
+      const userMessage = chatInput.trim();
+      setChatInput("");
 
       try {
-        const res = await fetch("/api/ai/copilot?action=bibleref-chat", {
+        const res = await fetch("/api/ai/copilot?action=ai-chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            messages: bibleRefMessages,
+            messages: chatMessages,
             newMessage: userMessage
           })
         });
         const data = await res.json();
         if (data && data.messages) {
-          setBibleRefMessages(data.messages);
-          triggerSuccessFeedback("Bible AI responded!");
+          setChatMessages(data.messages);
+          triggerSuccessFeedback("AI responded!");
+        } else if (data && data.error) {
+          triggerSuccessFeedback(`⚠️ ${data.error}`);
         } else {
-          triggerSuccessFeedback("⚠️ Bible chat request failed.");
+          triggerSuccessFeedback("⚠️ Chat request failed.");
         }
       } catch (err) {
-        console.error("Bible Reference chat error:", err);
-        triggerSuccessFeedback("⚠️ Bible chat request failed.");
+        console.error("AI Chat error:", err);
+        triggerSuccessFeedback("⚠️ Chat request failed.");
       } finally {
-        setIsBibleChatLoading(false);
+        setIsChatLoading(false);
       }
     };
 
@@ -586,19 +589,19 @@ return (
            </div>
          </div>
 
-{/* Bible Reference AI Chat (Premium) */}
+{/* AI Chat (Premium) */}
           <div className="flex flex-col gap-1.5 bg-black/30 p-2 rounded-lg border border-white/5">
             <span className="text-[8px] font-mono text-indigo-400/80 uppercase tracking-wider block mb-1 flex items-center gap-1">
-              <Search className="w-3 h-3 text-indigo-400" />
-              Bible Reference AI Chat
+              <MessageSquare className="w-3 h-3 text-indigo-400" />
+              AI Chat Assistant
             </span>
             
             {/* Chat Messages Display */}
             <div className="flex flex-col gap-1.5 max-h-[120px] overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 pr-1 min-h-[60px]">
-              {bibleRefMessages.length === 0 ? (
-                <span className="text-[9px] text-stone-500 italic">Ask about any scripture, story, or biblical concept...</span>
+              {chatMessages.length === 0 ? (
+                <span className="text-[9px] text-stone-500 italic">Ask me anything about the app, sermons, or general questions...</span>
               ) : (
-                bibleRefMessages.map((msg, idx) => (
+                chatMessages.map((msg, idx) => (
                   <div key={idx} className={`text-[9px] ${msg.role === "user" ? "text-indigo-300 font-medium" : "text-stone-300"} ${msg.role === "user" ? "ml-2" : "mr-2"}`}>
                     <span className={`uppercase text-[8px] ${msg.role === "user" ? "text-indigo-400" : "text-indigo-500"}`}>{msg.role === "user" ? "You:" : "AI:"}</span>
                     <span className="whitespace-pre-wrap">{msg.content}</span>
@@ -611,30 +614,30 @@ return (
             <div className="flex gap-1.5">
               <input
                 type="text"
-                placeholder="Ask about scriptures..."
-                value={bibleRefInput}
-                onChange={(e) => setBibleRefInput(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleBibleChat())}
+                placeholder="Type your message..."
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleAiChat())}
                 className="flex-1 bg-black/50 border border-white/10 px-2 py-1 rounded text-xs text-white placeholder-white/30 focus:border-indigo-500 focus:outline-none"
-                disabled={userPlan !== "yearly" || hasExpired || isBibleChatLoading}
+                disabled={userPlan !== "yearly" || hasExpired || isChatLoading}
               />
               <button
                 type="button"
-                onClick={handleBibleChat}
-                disabled={userPlan !== "yearly" || hasExpired || isBibleChatLoading || !bibleRefInput.trim()}
+                onClick={handleAiChat}
+                disabled={userPlan !== "yearly" || hasExpired || isChatLoading || !chatInput.trim()}
                 className={`px-2.5 py-1 rounded text-[9px] font-mono uppercase transition-colors cursor-pointer flex items-center gap-1 ${
                   userPlan === "yearly" && !hasExpired
                     ? "bg-indigo-600 hover:bg-indigo-500 text-white"
                     : "bg-stone-800 text-stone-500 cursor-not-allowed"
                 }`}
-                title={userPlan !== "yearly" || hasExpired ? "Requires Yearly Premium" : "Chat with Bible AI"}
+                title={userPlan !== "yearly" || hasExpired ? "Requires Yearly Premium" : "Chat with AI Assistant"}
               >
-                {isBibleChatLoading ? (
+                {isChatLoading ? (
                   <div className="w-3 h-3 border border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin" />
                 ) : (
-                  <Search className="w-3 h-3" />
+                  <MessageSquare className="w-3 h-3" />
                 )}
-                <span>Ask</span>
+                <span>Send</span>
                 {(userPlan !== "yearly" || hasExpired) && <Lock className="w-2.5 h-2.5" />}
               </button>
             </div>
