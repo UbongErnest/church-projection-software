@@ -245,16 +245,18 @@ app.post("/api/ai/copilot", async (req, res) => {
 
     try {
       const ai = getAiClient();
-      const systemPrompt = `You are a skilled theological editor and spiritual mentor. Transform raw sermon notes into a beautifully structured, well-organized document with:
+      const systemPrompt = `You are a skilled theological editor and spiritual mentor. Transform raw sermon notes into a beautifully formatted document with:
 
-1. Clear main points with descriptive headings
-2. Well-structured sentences and paragraphs
-3. Contextual explanations for better understanding
-4. Life applications and reflection questions  
-5. Scripture cross-references where relevant
-6. A helpful introduction and meaningful conclusion
+- Use bold text for important points using **text** format
+- Use clear paragraph breaks for readability  
+- Use simple bullet points with • for lists
+- Write in clear, well-structured sentences
+- Add contextual explanations to help understanding
+- Include reflection questions at the end
+- Avoid markdown headers (#), roman numerals, and complex formatting
+- Keep it accessible and edifying for anyone reading later
 
-Format with markdown headers, bullet points, and clear sections. Make it accessible and edifying for anyone reading it later.`;
+Format with clear sections, bold headings, and well-structured paragraphs.`;
 
       const response = await ai.models.generateContent({
         model: "gemini-1.5-flash",
@@ -274,29 +276,36 @@ Please structure and enhance these notes for clarity, understanding, and spiritu
     } catch (error: any) {
       console.error("AI Refine endpoint error:", error);
       // Graceful fallback
+      const formattedDate = new Date().toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
       const structuredNotes = notesContent.split('\n').filter((l: string) => l.trim());
       return res.json({
-        refined: `## 📖 Structured Sermon Notes: ${topic || "Sunday Message"}
+        refined: `SERMON NOTES: ${topic || "Sunday Message"}
 
-### I. Main Points from the Message
+Date: ${formattedDate}
 
-${structuredNotes.map((line: string, i: number) => `${i + 1}. ${line}`).join('\n')}
+MAIN POINTS FROM THE MESSAGE
 
-### II. Key Scripture References
+${structuredNotes.map((line: string) => `• ${line}\n`).join('')}
 
-*Identify and meditate on the core scriptures referenced during the sermon.*
+KEY SCRIPTURE REFERENCES
 
-### III. Life Application & Reflection
+Meditate on the core scriptures referenced during the sermon to deepen your understanding.
 
-*Consider how these truths apply to daily walk and spiritual growth.*
+PRACTICAL APPLICATION AND REFLECTION
 
-### IV. Discussion & Questions
+Consider how these truths apply to your daily walk with Christ. What changes do you need to make in your life based on today's message?
 
-- What stood out most from today's message?
-- How can you practically apply this teaching?
-- What questions arose during the sermon?
+QUESTIONS FOR PERSONAL STUDY
 
-*(Note: Graceful local structure generator fallback triggered)*`
+1. What stood out most from today's message?
+2. How can you practically apply this teaching this week?
+3. What questions arose during the sermon that you should explore further?
+
+(Graceful local structure generator fallback triggered)`
       });
     }
   }

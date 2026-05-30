@@ -366,7 +366,12 @@ export default function SermonNotepad({
     triggerSuccessFeedback("Appended voice transcript quote!");
   };
 
-// Export note to filesystem as text/markdown document (.md) or PDF
+// Convert markdown bold (**text**) to HTML bold (<strong>text</strong>)
+  const convertBoldToHtml = (text: string): string => {
+    return text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  };
+
+  // Export note to filesystem as text/markdown document (.md) or PDF
   const handleDownloadNote = (note: SavedSermonNote, e?: React.MouseEvent, asPdf = false) => {
     if (e) e.stopPropagation();
 
@@ -375,13 +380,6 @@ export default function SermonNotepad({
       return;
     }
 
-    const timestampHeader = `---
-Sermon Title : ${note.title}
-Date Taken   : ${note.created_at} at ${note.timestamp}
-System Source: Chaver AI Automatic Pulpot Monitor
----
-
-`;
     const docContent = note.content;
     const cleanFileName = note.title.toLowerCase().replace(/[^a-z0-8 ]/g, "").replace(/\s+/g, "_") || "sermon_notes";
 
@@ -393,13 +391,14 @@ System Source: Chaver AI Automatic Pulpot Monitor
   <meta charset="utf-8">
   <title>${note.title}</title>
   <style>
-    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 40px; line-height: 1.6; color: #333; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 40px; line-height: 1.6; color: #333; background: #fff; }
     .header { border-bottom: 2px solid #555; padding-bottom: 20px; margin-bottom: 30px; }
-    .title { font-size: 28px; font-weight: bold; margin-bottom: 10px; text-transform: uppercase; }
+    .title { font-size: 28px; font-weight: bold; margin-bottom: 10px; text-transform: uppercase; color: #2c3e50; }
     .meta { font-size: 12px; color: #666; }
     .content { font-size: 14px; white-space: pre-wrap; }
-    h1, h2, h3 { color: #2c3e50; margin-top: 20px; }
-    strong { color: #1a5276; }
+    .section { margin-top: 25px; }
+    .section-title { font-weight: bold; font-size: 16px; margin-bottom: 10px; color: #2c3e50; }
+    strong { color: #1a5276; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -407,7 +406,7 @@ System Source: Chaver AI Automatic Pulpot Monitor
     <div class="title">${note.title}</div>
     <div class="meta">📅 ${note.created_at} • ${note.timestamp} • Chaver AI Sanctuary Journal</div>
   </div>
-  <div class="content">${docContent.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>")}</div>
+  <div class="content">${convertBoldToHtml(docContent).replace(/\n/g, "<br>")}</div>
 </body>
 </html>`;
 
@@ -422,6 +421,13 @@ System Source: Chaver AI Automatic Pulpot Monitor
         triggerSuccessFeedback("Opening PDF print dialog...");
       }
     } else {
+      const timestampHeader = `---
+Sermon Title : ${note.title}
+Date Taken   : ${note.created_at} at ${note.timestamp}
+System Source: Chaver AI Automatic Pulpot Monitor
+---
+
+`;
       const docText = timestampHeader + docContent;
       const blob = new Blob([docText], { type: "text/markdown;charset=utf-8" });
       const url = URL.createObjectURL(blob);
@@ -840,13 +846,14 @@ return (
   <meta charset="utf-8">
   <title>${noteTitle || "Refined Notes"}</title>
   <style>
-    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 40px; line-height: 1.6; color: #333; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 40px; line-height: 1.6; color: #333; background: #fff; }
     .header { border-bottom: 2px solid #555; padding-bottom: 20px; margin-bottom: 30px; }
-    .title { font-size: 28px; font-weight: bold; margin-bottom: 10px; text-transform: uppercase; }
+    .title { font-size: 28px; font-weight: bold; margin-bottom: 10px; text-transform: uppercase; color: #2c3e50; }
     .meta { font-size: 12px; color: #666; }
     .content { font-size: 14px; white-space: pre-wrap; }
-    h1, h2, h3 { color: #2c3e50; margin-top: 20px; }
-    strong { color: #1a5276; }
+    .section { margin-top: 25px; }
+    .section-title { font-weight: bold; font-size: 16px; margin-bottom: 10px; color: #2c3e50; }
+    strong { color: #1a5276; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -854,7 +861,7 @@ return (
     <div class="title">${noteTitle || "Refined Notes"}</div>
     <div class="meta">📅 ${new Date().toLocaleDateString()} • Chaver AI Sanctuary Journal</div>
   </div>
-  <div class="content">${refinedNotes.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>")}</div>
+  <div class="content">${convertBoldToHtml(refinedNotes).replace(/\n/g, "<br>")}</div>
 </body>
 </html>`;
                     const printWindow = window.open('', '_blank');
