@@ -366,8 +366,8 @@ export default function SermonNotepad({
     triggerSuccessFeedback("Appended voice transcript quote!");
   };
 
-  // Export note to filesystem as text/markdown document (.md)
-  const handleDownloadNote = (note: SavedSermonNote, e?: React.MouseEvent) => {
+// Export note to filesystem as text/markdown document (.md) or PDF
+  const handleDownloadNote = (note: SavedSermonNote, e?: React.MouseEvent, asPdf = false) => {
     if (e) e.stopPropagation();
 
     if (userPlan === "free") {
@@ -378,24 +378,63 @@ export default function SermonNotepad({
     const timestampHeader = `---
 Sermon Title : ${note.title}
 Date Taken   : ${note.created_at} at ${note.timestamp}
-System Source: Chaver AI Automatic Pulpit Monitor
+System Source: Chaver AI Automatic Pulpot Monitor
 ---
 
 `;
-    const docText = timestampHeader + note.content;
-    const blob = new Blob([docText], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    
-    const link = document.createElement("a");
-    // Clean up filename
+    const docContent = note.content;
     const cleanFileName = note.title.toLowerCase().replace(/[^a-z0-8 ]/g, "").replace(/\s+/g, "_") || "sermon_notes";
-    link.href = url;
-    link.download = `${cleanFileName}_notes.md`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    triggerSuccessFeedback("Downloaded Markdown file!");
+
+    if (asPdf) {
+      const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${note.title}</title>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 40px; line-height: 1.6; color: #333; }
+    .header { border-bottom: 2px solid #555; padding-bottom: 20px; margin-bottom: 30px; }
+    .title { font-size: 28px; font-weight: bold; margin-bottom: 10px; text-transform: uppercase; }
+    .meta { font-size: 12px; color: #666; }
+    .content { font-size: 14px; white-space: pre-wrap; }
+    h1, h2, h3 { color: #2c3e50; margin-top: 20px; }
+    strong { color: #1a5276; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">${note.title}</div>
+    <div class="meta">📅 ${note.created_at} • ${note.timestamp} • Chaver AI Sanctuary Journal</div>
+  </div>
+  <div class="content">${docContent.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>")}</div>
+</body>
+</html>`;
+
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+        printWindow.onload = () => {
+          printWindow.print();
+          setTimeout(() => printWindow.close(), 100);
+        };
+        triggerSuccessFeedback("Opening PDF print dialog...");
+      }
+    } else {
+      const docText = timestampHeader + docContent;
+      const blob = new Blob([docText], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${cleanFileName}_notes.md`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      triggerSuccessFeedback("Downloaded Markdown file!");
+    }
   };
 
   // Word & Character count info helper
@@ -668,6 +707,16 @@ return (
                         <FileDown className="w-3 h-3" />
                       </button>
                       <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDownloadNote(note, undefined, true);
+                        }}
+                        title="Export as PDF (opens print dialog)"
+                        className="p-1 rounded transition text-stone-400 hover:text-emerald-400 hover:bg-stone-800"
+                      >
+                        <Download className="w-3 h-3" />
+                      </button>
+                      <button
                         onClick={(e) => handleDeleteNote(note.id, e)}
                         title="Delete sermon note"
                         className="p-1 text-stone-400 hover:text-red-400 hover:bg-stone-800 rounded transition"
@@ -769,31 +818,73 @@ return (
                {refinedNotes}
              </div>
 
-             <div className="mt-6 pt-4 border-t border-white/5 flex justify-end gap-3">
-               <button
-                 type="button"
-                 onClick={() => {
-                   setNoteContent(refinedNotes);
-                   setShowRefineModal(false);
-                   triggerSuccessFeedback("Refined notes applied to editor!");
-                 }}
-                 className="bg-cyan-600 hover:bg-cyan-500 text-white font-sans font-bold text-xs px-5 py-2.5 rounded-lg cursor-pointer transition"
-               >
-                 Use Refined Notes
-               </button>
-               <button
-                 type="button"
-                 onClick={() => setShowRefineModal(false)}
-                 className="bg-stone-850 hover:bg-stone-750 text-stone-300 font-sans font-bold text-xs px-5 py-2.5 rounded-lg cursor-pointer transition border border-white/5"
-               >
-                 Dismiss
-               </button>
-             </div>
-           </div>
-         </div>
-       )}
-        </>
-       )}
+<div className="mt-6 pt-4 border-t border-white/5 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNoteContent(refinedNotes);
+                    setShowRefineModal(false);
+                    triggerSuccessFeedback("Refined notes applied to editor!");
+                  }}
+                  className="bg-cyan-600 hover:bg-cyan-500 text-white font-sans font-bold text-xs px-5 py-2.5 rounded-lg cursor-pointer transition"
+                >
+                  Use Refined Notes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${noteTitle || "Refined Notes"}</title>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 40px; line-height: 1.6; color: #333; }
+    .header { border-bottom: 2px solid #555; padding-bottom: 20px; margin-bottom: 30px; }
+    .title { font-size: 28px; font-weight: bold; margin-bottom: 10px; text-transform: uppercase; }
+    .meta { font-size: 12px; color: #666; }
+    .content { font-size: 14px; white-space: pre-wrap; }
+    h1, h2, h3 { color: #2c3e50; margin-top: 20px; }
+    strong { color: #1a5276; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">${noteTitle || "Refined Notes"}</div>
+    <div class="meta">📅 ${new Date().toLocaleDateString()} • Chaver AI Sanctuary Journal</div>
+  </div>
+  <div class="content">${refinedNotes.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>")}</div>
+</body>
+</html>`;
+                    const printWindow = window.open('', '_blank');
+                    if (printWindow) {
+                      printWindow.document.write(htmlContent);
+                      printWindow.document.close();
+                      printWindow.onload = () => {
+                        printWindow.print();
+                        setTimeout(() => printWindow.close(), 100);
+                      };
+                      triggerSuccessFeedback("Opening PDF print dialog...");
+                    }
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-sans font-bold text-xs px-5 py-2.5 rounded-lg cursor-pointer transition flex items-center gap-1"
+                >
+                  <Download className="w-3 h-3" /> Download PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowRefineModal(false)}
+                  className="bg-stone-850 hover:bg-stone-750 text-stone-300 font-sans font-bold text-xs px-5 py-2.5 rounded-lg cursor-pointer transition border border-white/5"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+         </>
+        )}
      </div>
    );
  }
