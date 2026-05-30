@@ -46,10 +46,12 @@ async function flutterwaveRequest<TResponse>(
 
   console.log(`[Flutterwave Response] Status: ${response.status}`, result);
 
+  // Don't throw on 5xx - return result for graceful error handling
   if (!response.ok) {
     const errorMsg = result.message || result.error || JSON.stringify(result);
     const error = new Error(`Flutterwave API error (${response.status}): ${errorMsg}`) as any;
     error.status = response.status;
+    error.stage = "flutterwave_verification";
     throw error;
   }
 
@@ -71,39 +73,53 @@ function getSupabaseAdmin(): SupabaseClient {
 
 async function verifyFlutterwaveTransaction(
   reference: string,
-  maxAttempts = 1,
 ): Promise<{ status?: string; meta?: Record<string, unknown>; amount?: number; customer?: { email?: string } } | null> {
   console.log("[Flutterwave Verify] Starting verification for reference:", reference);
   
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const response = await flutterwaveRequest<{ data?: Array<{ tx_ref?: string; status?: string; meta?: Record<string, unknown>; amount?: number; customer?: { email?: string } }> }>(`/transactions?tx_ref=${reference}`, "GET");
+  try {
+    const response = await flutterwaveRequest<{ 
+      status?: string; 
+      data?: Array<{ tx_ref?: string; status?: string; meta?: Record<string, unknown>; amount?: number; customer?: { email?: string } }>,
+      message?: string
+    }>(`/transactions?tx_ref=${reference}`, "GET");
 
-      const transactions = response.data || [];
-      const transaction = transactions[0];
-
-      if (transaction) {
-        console.log(`[Flutterwave Verify] Attempt ${attempt} response:`, { status: transaction.status, tx_ref: transaction.tx_ref });
-        
-        if (transaction.status === "successful") {
-          console.log("[Flutterwave Verify] Transaction successful, returning");
-          return transaction;
-        }
-      } else {
-        console.log("[Flutterwave Verify] No transactions found for reference");
-      }
-    } catch (error: any) {
-      console.error("[Flutterwave Verify] Error:", error.message, "attempt:", attempt);
-      throw error;
+    // Validate response structure
+    if (!response || !response.data) {
+      console.error("[Flutterwave Verify] Invalid response structure - no data field");
+      return null;
     }
 
-    const delay = 1500;
-    console.log(`[Flutterwave Verify] Waiting ${delay}ms before next check`);
-    await new Promise(resolve => setTimeout(resolve, delay));
-  }
+    const transactions = response.data || [];
+    const transaction = transactions[0];
 
-  console.log("[Flutterwave Verify] Completed all attempts without success");
-  return null;
+    if (transaction) {
+      console.log("[Flutterwave Verify] Response received:", { status: transaction.status, tx_ref: transaction.tx_ref });
+      
+      if (transaction.status === "successful") {
+        console.log("[Flutterwave Verify] Transaction successful, returning");
+        return transaction;
+      }
+    } else {
+      console.log("[Flutterwave Verify] No transactions found for reference");
+    }
+    
+    return null;
+  } catch (error: any) {
+    const isServerError = error.status >= 500;
+    console.error("[Flutterwave Verify] Error:", { 
+      message: error.message, 
+      status: error.status,
+      isServerError,
+    });
+    
+    // For 5xx errors, return null instead of throwing - allows webhook retry
+    if (isServerError) {
+      console.log("[Flutterwave Verify] Server error - returning null for graceful handling");
+      return null;
+    }
+    
+    throw error;
+  }
 }
 
 interface TransactionRecord {
@@ -115,14 +131,23 @@ interface TransactionRecord {
 
 async function getTransactionRecord(supabase: SupabaseClient, reference: string): Promise<TransactionRecord | null> {
   console.log("[Supabase] Checking transaction record for:", reference);
+  
   const { data, error } = await supabase
     .from("transactions")
     .select("user_id, plan, status, flutterwave_status")
     .eq("reference", reference)
     .single();
 
-  if (error && error.code !== "PGRST116") {
-    console.error("[Supabase] Error fetching transaction record:", error.message);
+  if (error) {
+    if (error.code === "PGRST116") {
+      console.log("[Supabase] Transaction not found (PGRST116 - no rows)");
+    } else {
+      console.error("[Supabase] Error fetching transaction record:", { 
+        message: error.message, 
+        code: error.code,
+        details: error.details 
+      });
+    }
   }
   
   console.log("[Supabase] Transaction record lookup result:", data || "not found");
@@ -135,7 +160,7 @@ async function recordTransaction(supabase: SupabaseClient, transaction: {
   plan: SubscriptionPlan;
   amount: number;
   email?: string;
-}) {
+}): Promise<void> {
   console.log("[Supabase] Recording transaction:", { reference: transaction.reference, userId: transaction.userId });
   
   const { error } = await supabase
@@ -154,18 +179,18 @@ async function recordTransaction(supabase: SupabaseClient, transaction: {
     });
 
   if (error) {
-    console.error("[Supabase] Failed to record transaction:", error.message);
-    throw new Error(`Failed to record transaction: ${error.message}`);
+    const errorMsg = error.message || "Unknown error";
+    console.error("[Supabase] Failed to record transaction:", errorMsg);
+  } else {
+    console.log("[Supabase] Transaction recorded successfully");
   }
-  
-  console.log("[Supabase] Transaction recorded successfully");
 }
 
 async function updateTransactionStatus(supabase: SupabaseClient, reference: string, updates: {
   status?: string;
   flutterwave_status?: string;
   verified_at?: string;
-}) {
+}): Promise<void> {
   console.log("[Supabase] Updating transaction status:", { reference, updates });
   
   const { error } = await supabase
@@ -180,27 +205,30 @@ async function updateTransactionStatus(supabase: SupabaseClient, reference: stri
   }
 }
 
-async function activateSubscriptionForUser(supabase: SupabaseClient, userId: string, plan: SubscriptionPlan) {
+async function activateSubscriptionForUser(supabase: SupabaseClient, userId: string, plan: SubscriptionPlan): Promise<{ plan: SubscriptionPlan; subscriptionEnd: string }> {
   const subscriptionEnd = calculateSubscriptionEnd(plan);
   const now = new Date().toISOString();
   
-  console.log("[Supabase] Activating subscription for user:", { userId, plan, subscriptionEnd, subscriptionStart: now });
+  console.log("[Supabase] Activating subscription for user:", { userId, plan, subscriptionStart: now, subscriptionEnd });
 
   const { data, error } = await supabase
     .from("users")
     .update({
       subscription_plan: plan,
       subscription_status: "active",
-      subscription_end: subscriptionEnd,
       subscription_start: now,
+      subscription_end: subscriptionEnd,
     })
     .eq("user_id", userId)
     .select("user_id, subscription_plan, subscription_status")
     .single();
 
   if (error) {
-    console.error("[Supabase] Subscription activation failed:", error.message);
-    throw new Error(`Failed to update user subscription: ${error.message}`);
+    const errorMsg = error.message || "Unknown error";
+    const err = new Error(`Failed to update user subscription: ${errorMsg}`) as any;
+    err.stage = "subscription_update";
+    console.error("[Supabase] Subscription activation failed:", errorMsg, { code: error.code });
+    throw err;
   }
   
   console.log("[Supabase] Subscription activated successfully:", data);
@@ -262,6 +290,7 @@ export default async function handler(req: any, res: any) {
     return res.status(500).json({
       success: false,
       error: "Server configuration error",
+      stage: "environment_validation",
       details: `Missing required environment variables: ${missingVars.join(", ")}`,
     });
   }
@@ -276,19 +305,20 @@ export default async function handler(req: any, res: any) {
     console.log("[Payment Verify] Parsed body:", { reference: body.reference, userId: body.userId, plan: body.plan });
   } catch (e: any) {
     console.error("[Payment Verify] Failed to read body:", e.message);
-    return res.status(400).json({ success: false, error: "Invalid request body" });
+    return res.status(400).json({ success: false, error: "Invalid request body", stage: "body_parsing" });
   }
 
   const reference = typeof body.reference === "string" ? body.reference : undefined;
   if (!reference) {
     console.error("[Payment Verify] Missing reference in request");
-    return res.status(400).json({ success: false, error: "Missing transaction reference" });
+    return res.status(400).json({ success: false, error: "Missing transaction reference", stage: "validation" });
   }
 
   const supabase = getSupabaseAdmin();
 
   try {
     // Idempotency check - see if transaction was already processed
+    console.log("[Payment Verify] Stage: checking_idempotency");
     const existingRecord = await getTransactionRecord(supabase, reference);
     
     if (existingRecord && (existingRecord.flutterwave_status === "success" || existingRecord.status === "success")) {
@@ -303,16 +333,18 @@ export default async function handler(req: any, res: any) {
     }
 
     // Verify with Flutterwave
+    console.log("[Payment Verify] Stage: flutterwave_verification");
     const verification = await verifyFlutterwaveTransaction(reference);
     
     if (!verification) {
-      console.log("[Payment Verify] Transaction not found in Flutterwave");
+      console.log("[Payment Verify] Transaction not found or Flutterwave server error");
       return res.status(200).json({
         success: false,
-        status: "not_found",
+        status: "pending",
         flutterwaveStatus: null,
-        message: "Transaction not found. Please wait for webhook confirmation.",
+        message: "Transaction verification pending. Please wait for webhook confirmation.",
         reference,
+        stage: "flutterwave_verification",
       });
     }
 
@@ -326,10 +358,12 @@ export default async function handler(req: any, res: any) {
         flutterwaveStatus,
         message: `Transaction status: ${flutterwaveStatus}`,
         reference,
+        stage: "flutterwave_verification",
       });
     }
 
     // Case-insensitive search for user ID and plan in verification meta
+    console.log("[Payment Verify] Stage: resolving_user_and_plan");
     let resolvedUserId: string | undefined;
     let resolvedPlan: SubscriptionPlan | null = normalizeSubscriptionPlan(verification.meta?.plan);
     
@@ -369,28 +403,35 @@ export default async function handler(req: any, res: any) {
     }
 
     if (!resolvedPlan) {
-      throw new Error("Verified transaction is missing a valid subscription plan in meta data and request body.");
+      console.error("[Payment Verify] Missing plan - validation failed");
+      return res.status(400).json({
+        success: false,
+        error: "Verified transaction is missing a valid subscription plan in meta data and request body.",
+        stage: "validation",
+      });
     }
 
     if (!resolvedUserId) {
-      throw new Error("Verified transaction is missing a user ID in meta data and request body.");
+      console.error("[Payment Verify] Missing userId - validation failed");
+      return res.status(400).json({
+        success: false,
+        error: "Verified transaction is missing a user ID in meta data and request body.",
+        stage: "validation",
+      });
     }
 
     // Record and update transaction before activating subscription
     const expectedAmount = getPlanAmount(resolvedPlan);
     const customerEmail = verification.customer?.email;
     
-    try {
-      await recordTransaction(supabase, {
-        reference,
-        userId: resolvedUserId,
-        plan: resolvedPlan,
-        amount: expectedAmount,
-        email: customerEmail,
-      });
-    } catch (recordError: any) {
-      console.error("[Payment Verify] Could not record transaction (continuing anyway):", recordError.message);
-    }
+    console.log("[Payment Verify] Stage: recording_transaction");
+    await recordTransaction(supabase, {
+      reference,
+      userId: resolvedUserId,
+      plan: resolvedPlan,
+      amount: expectedAmount,
+      email: customerEmail,
+    });
 
     await updateTransactionStatus(supabase, reference, {
       status: "success",
@@ -398,8 +439,11 @@ export default async function handler(req: any, res: any) {
       verified_at: new Date().toISOString(),
     });
 
+    // Activate subscription
+    console.log("[Payment Verify] Stage: subscription_update");
     const { subscriptionEnd } = await activateSubscriptionForUser(supabase, resolvedUserId, resolvedPlan);
 
+    console.log("[Payment Verify] Stage: complete - subscription activated");
     return res.status(200).json({
       success: true,
       status: "active",
@@ -413,11 +457,13 @@ export default async function handler(req: any, res: any) {
     console.error("[Payment Verify] Unhandled error:", {
       message: error.message,
       stack: error.stack,
+      stage: error.stage || "unknown",
       reference,
     });
     return res.status(500).json({
       success: false,
       error: "Failed to verify payment",
+      stage: error.stage || "unknown",
       details: error.message || "Unknown error occurred",
     });
   }

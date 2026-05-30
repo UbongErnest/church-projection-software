@@ -89,16 +89,12 @@ alter table subscriptions enable row level security;
 alter table webhook_events enable row level security;
 
 -- Policy: Users can only see their own transactions
-create policy if not exists "users_can_view_own_transactions" 
-  on transactions 
-  for select 
-  using (auth.uid()::text = user_id);
+DROP POLICY IF EXISTS users_can_view_own_transactions ON transactions;
+CREATE POLICY users_can_view_own_transactions ON transactions FOR SELECT USING (auth.uid()::text = user_id);
 
 -- Policy: Users can only see their own subscriptions
-create policy if not exists "users_can_view_own_subscriptions" 
-  on subscriptions 
-  for select 
-  using (auth.uid()::text = user_id);
+DROP POLICY IF EXISTS users_can_view_own_subscriptions ON subscriptions;
+CREATE POLICY users_can_view_own_subscriptions ON subscriptions FOR SELECT USING (auth.uid()::text = user_id);
 
 -- Policy: Service role can manage all tables (needed for edge functions/webhooks)
 -- Note: The service_role key bypasses RLS by default
@@ -115,18 +111,18 @@ end;
 $$;
 
 -- Trigger for transactions table
-drop trigger if exists update_transactions_updated_at on transactions;
-create trigger update_transactions_updated_at
-  before update on transactions
-  for each row
-  execute procedure update_updated_at();
+DROP TRIGGER IF EXISTS update_transactions_updated_at ON transactions;
+CREATE TRIGGER update_transactions_updated_at
+  BEFORE UPDATE ON transactions
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at();
 
 -- Trigger for subscriptions table
-drop trigger if exists update_subscriptions_updated_at on subscriptions;
-create trigger update_subscriptions_updated_at
-  before update on subscriptions
-  for each row
-  execute procedure update_updated_at();
+DROP TRIGGER IF EXISTS update_subscriptions_updated_at ON subscriptions;
+CREATE TRIGGER update_subscriptions_updated_at
+  BEFORE UPDATE ON subscriptions
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at();
 
 -- Grant permissions to authenticated users
 grant select, insert, update on transactions to authenticated;

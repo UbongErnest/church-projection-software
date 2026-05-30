@@ -168,12 +168,10 @@ async function flutterwaveRequest<TResponse>(
     result = await response.json();
   } catch (parseError) {
     const text = await response.text();
-    const error = new Error(`Flutterwave API returned non-JSON response (${response.status}): ${text.slice(0, 200)}`) as any;
-    error.status = response.status;
-    throw error;
+    throw new Error(`Flutterwave API returned non-JSON response (${response.status}): ${text.slice(0, 200)}`);
   }
 
-  console.log(`[Flutterwave Response] Status: ${response.status}`, result);
+  console.log(`[Flutterwave Response] Status: ${response.status}`);
 
   if (!response.ok) {
     const errorMsg = result.message || result.error || JSON.stringify(result);
@@ -256,39 +254,63 @@ export async function verifyFlutterwaveTransaction(
   let lastVerification: FlutterwaveTransaction | null = null;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const response = await flutterwaveRequest<FlutterwaveVerificationResponse>(`/transactions?tx_ref=${reference}`, "GET");
+    try {
+      const response = await flutterwaveRequest<FlutterwaveVerificationResponse>(`/transactions?tx_ref=${reference}`, "GET");
 
-    const transactions = response.data || [];
-    const transaction = transactions[0];
+      const transactions = response.data || [];
+      const transaction = transactions[0];
 
-    if (transaction) {
-      lastVerification = transaction;
-      const flutterwaveStatus = transaction.status || null;
+      if (transaction) {
+        lastVerification = transaction;
+        const flutterwaveStatus = transaction.status || null;
 
-      console.log(`${logPrefix} Attempt ${attempt}/${maxAttempts}:`, {
-        status: response.status,
-        message: response.message,
-        flutterwaveStatus,
-        reference,
+        console.log(`${logPrefix} Attempt ${attempt}/${maxAttempts}:`, {
+          status: response.status,
+          message: response.message,
+          flutterwaveStatus,
+          reference,
+        });
+
+        if (flutterwaveStatus === "successful") {
+          return transaction;
+        }
+
+        const shouldRetry =
+          attempt < maxAttempts &&
+          (
+            flutterwaveStatus === "pending" ||
+            flutterwaveStatus === "processing"
+          );
+
+        if (!shouldRetry) {
+          return transaction;
+        }
+      }
+
+      await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+    } catch (error: any) {
+      const status = error.status;
+      const isServerError = status >= 500;
+      console.log(`${logPrefix} Attempt ${attempt}/${maxAttempts} failed:`, { 
+        status, 
+        isServerError, 
+        message: error.message?.substring(0, 100) 
       });
-
-      if (flutterwaveStatus === "successful") {
-        return transaction;
+      
+      // For server errors, return null to let webhook handle later
+      if (isServerError && attempt >= maxAttempts) {
+        console.log(`${logPrefix} Flutterwave server error after all attempts - returning null for webhook retry`);
+        return null;
       }
-
-      const shouldRetry =
-        attempt < maxAttempts &&
-        (
-          flutterwaveStatus === "pending" ||
-          flutterwaveStatus === "processing"
-        );
-
-      if (!shouldRetry) {
-        return transaction;
+      
+      // For client errors (4xx), throw immediately
+      if (!isServerError) {
+        throw error;
       }
+      
+      // Wait before retry on 5xx
+      await new Promise(resolve => setTimeout(resolve, retryDelayMs));
     }
-
-    await new Promise(resolve => setTimeout(resolve, retryDelayMs));
   }
 
   return lastVerification;
@@ -419,6 +441,17 @@ export async function verifyAndActivatePayment(args: {
     maxAttempts,
     1500
   );
+  
+  // Handle Flutterwave server errors gracefully - return to let webhook handle
+  if (!verification) {
+    console.log(`${args.logPrefix} Verification returned null - likely Flutterwave server error`);
+    return {
+      success: false as const,
+      flutterwaveStatus: null,
+      message: "Transaction verification pending - will be confirmed via webhook",
+    };
+  }
+  
   const flutterwaveStatus = verification?.status || null;
 
   if (flutterwaveStatus !== "successful") {

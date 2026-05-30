@@ -319,7 +319,9 @@ app.post("/api/payment/verify", async (req, res) => {
   if (!getSupabaseAdminSafe()) {
     console.error("[API Verify] Configuration error: Supabase admin client not configured");
     return res.status(500).json({
+      success: false,
       error: "Failed to verify payment",
+      stage: "environment_validation",
       details: "Server configuration error: SUPABASE_SERVICE_ROLE_KEY is not set",
     });
   }
@@ -332,7 +334,11 @@ app.post("/api/payment/verify", async (req, res) => {
     };
 
     if (!body.reference) {
-      return res.status(400).json({ error: "Missing reference." });
+      return res.status(400).json({ 
+        success: false, 
+        error: "Missing payment reference", 
+        stage: "validation" 
+      });
     }
 
     const result = await verifyAndActivatePayment({
@@ -348,6 +354,7 @@ app.post("/api/payment/verify", async (req, res) => {
         status: result.flutterwaveStatus || "pending",
         flutterwaveStatus: result.flutterwaveStatus,
         message: result.message,
+        stage: result.flutterwaveStatus ? "flutterwave_verification" : "supabase_check",
       });
     }
 
@@ -360,9 +367,15 @@ app.post("/api/payment/verify", async (req, res) => {
       reference: body.reference,
     });
   } catch (error: any) {
-    console.error("Flutterwave verify error:", error);
+    console.error("[API Verify] Error:", {
+      message: error.message,
+      stack: error.stack,
+      stage: error.stage || "unknown",
+    });
     return res.status(500).json({
+      success: false,
       error: "Failed to verify payment",
+      stage: error.stage || "unknown",
       details: error.message || "Unknown error occurred",
     });
   }
