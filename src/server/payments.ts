@@ -51,7 +51,7 @@ export const PLAN_CONFIG: Record<SubscriptionPlan, { amount: number; durationDay
   },
   yearly: {
     amount: 25500,
-    durationDays: 365,
+    durationDays: 30,
   },
 };
 

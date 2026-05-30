@@ -13,7 +13,7 @@ function normalizeSubscriptionPlan(value: unknown): SubscriptionPlan | null {
 }
 
 function calculateSubscriptionEnd(plan: SubscriptionPlan): string {
-  const durationDays = plan === "monthly" ? 30 : 365;
+  const durationDays = plan === "monthly" ? 30 : 30;
   return new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
 }
 
