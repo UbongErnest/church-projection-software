@@ -62,22 +62,24 @@ async function getTransactionRecord(supabase: SupabaseClient, reference: string)
     .from("transactions")
     .select("user_id, plan, status, flutterwave_status")
     .eq("reference", reference)
-    .single();
+    .maybeSingle();
 
-  if (error && error.code !== "PGRST116") {
+  if (error) {
     console.error("[Supabase] Error checking transaction record:", error.message);
+    return null;
   }
   
   console.log("[Supabase] Transaction record lookup result:", data || "not found");
   return data as TransactionRecord | null;
 }
 
-async function activateSubscriptionForUser(supabase: SupabaseClient, userId: string, plan: SubscriptionPlan) {
+async function activateSubscriptionForUser(supabase: SupabaseClient, userId: string, plan: SubscriptionPlan, reference?: string) {
   const subscriptionEnd = calculateSubscriptionEnd(plan);
   const subscriptionStart = new Date().toISOString();
   
   console.log("[Supabase] Activating subscription via webhook:", { userId, plan, subscriptionStart, subscriptionEnd });
 
+  // Update users table
   const { data, error } = await supabase
     .from("users")
     .update({
@@ -96,6 +98,26 @@ async function activateSubscriptionForUser(supabase: SupabaseClient, userId: str
     err.stage = "subscription_update";
     console.error("[Supabase] Webhook subscription activation failed:", errMsg, { code: error.code });
     throw err;
+  }
+  
+  // Also upsert to subscriptions table
+  const { error: subError } = await supabase
+    .from("subscriptions")
+    .upsert({
+      user_id: userId,
+      plan,
+      status: "active",
+      started_at: subscriptionStart,
+      ends_at: subscriptionEnd,
+      reference,
+    }, {
+      onConflict: "user_id",
+    });
+  
+  if (subError) {
+    console.error("[Supabase] Failed to record subscription:", subError.message);
+  } else {
+    console.log("[Supabase] Subscription recorded in subscriptions table");
   }
   
   console.log("[Supabase] Subscription activated via webhook:", data);
@@ -227,7 +249,7 @@ export default async function handler(req: any, res: any) {
     }
 
     // Activate subscription
-    const result = await activateSubscriptionForUser(supabase, userId, plan);
+    const result = await activateSubscriptionForUser(supabase, userId, plan, reference);
     console.log("[Flutterwave Webhook] Activated subscription for user:", userId, "plan:", plan, "ends:", result.subscriptionEnd);
   } catch (error: any) {
     console.error("[Flutterwave Webhook] Failed to activate subscription:", {

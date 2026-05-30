@@ -389,8 +389,11 @@ export async function activateSubscriptionForUser(userId: string, plan: Subscrip
     .single();
 
   if (error) {
-    console.error("[Supabase] Subscription activation failed:", error.message);
-    throw new Error(`Failed to update user subscription: ${error.message}`);
+    const errMsg = error.message || "Unknown error";
+    const err = new Error(`Failed to update user subscription: ${errMsg}`) as any;
+    err.stage = "subscription_update";
+    console.error("[Supabase] Subscription activation failed:", errMsg);
+    throw err;
   }
 
   console.log("[Supabase] Subscription activated:", data);
