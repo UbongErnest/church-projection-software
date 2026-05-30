@@ -1,6 +1,6 @@
 import React, { useState, FormEvent, useEffect } from "react";
 import { supabase } from "../supabase";
-import { BookOpen, Lock, KeyRound, ChevronLeft, Eye, EyeOff, CheckCircle, AlertCircle } from "lucide-react";
+import { BookOpen, Lock, KeyRound, ChevronLeft, Eye, EyeOff, CheckCircle } from "lucide-react";
 
 interface SetNewPasswordPageProps {
   onNavigate: (view: "landing" | "login" | "register" | "reset-password") => void;

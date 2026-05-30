@@ -937,6 +937,13 @@ const { data: sessionData } = await supabase.auth.getSession();
       );
     }
 
+    // Check for password recovery mode (for reset link users) - takes priority over all auth states
+    const urlParams = new URLSearchParams(window.location.search);
+    const isRecovery = urlParams.get("type") === "recovery";
+    if (isRecovery) {
+      return <SetNewPasswordPage onNavigate={setAuthView} />;
+    }
+
     // Unauthenticated visitors must register/login to access the pulpit studio
     if (!currentUser) {
       if (authView === "login") {
