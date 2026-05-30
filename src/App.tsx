@@ -558,13 +558,13 @@ export default function App() {
     recognitionRef.current = rec;
   }, [isListening]);
 
-  // Launch AI speech detection endpoint with dual hybrid execution pipelines (micro-latency local regex + fallback deep Gemini NLP)
-  const triggerAiDetection = async (transcriptText: string) => {
-    const userPlan = userProfile?.subscriptionPlan || "free";
-    const subscriptionStatus = userProfile?.subscriptionStatus;
-    if (userPlan === "free" || subscriptionStatus === "expired") return;
+// Launch AI speech detection endpoint with dual hybrid execution pipelines (micro-latency local regex + fallback deep Gemini NLP)
+   const triggerAiDetection = async (transcriptText: string) => {
+     const userPlan = userProfile?.subscriptionPlan || "free";
+     const subscriptionStatus = userProfile?.subscriptionStatus;
+     if (userPlan === "free" || subscriptionStatus === "expired") return;
 
-    if (!transcriptText || transcriptText.trim().length < 8) return;
+     if (!transcriptText || transcriptText.trim().length < 8) return;
 
 // 1. DUAL PIPELINE: HIGH-SPEED MICRO-LATENCY CLIENT REGEX INTERCEPTOR
     const localMatch = scanForVerseLocally(transcriptText);

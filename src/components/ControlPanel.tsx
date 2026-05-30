@@ -205,11 +205,31 @@ const handleFlutterwaveCheckout = async (plan: "monthly" | "yearly") => {
         }
       };
 
-   // Song and announcements selection
-  const [selectedSongId, setSelectedSongId] = useState<string>(DEFAULT_SONGS[0].id);
-  const [selectedStanzaIndex, setSelectedStanzaIndex] = useState<number>(0);
+// Song and announcements selection
+   const [selectedSongId, setSelectedSongId] = useState<string>(DEFAULT_SONGS[0].id);
+   const [selectedStanzaIndex, setSelectedStanzaIndex] = useState<number>(0);
 
-  // Stateful announcements list (loads stored or falls back to DEFAULT_ANNOUNCEMENTS)
+   // Custom hymns state (user-uploaded songs)
+   const [customSongs, setCustomSongs] = useState<Song[]>(() => {
+     try {
+       const stored = localStorage.getItem("chaver_custom_songs");
+       if (stored) return JSON.parse(stored);
+     } catch (e) {
+       console.warn("Storage reading blocked or empty, loaded defaults.");
+     }
+     return [];
+   });
+
+   // Persist custom songs to localStorage
+   useEffect(() => {
+     try {
+       localStorage.setItem("chaver_custom_songs", JSON.stringify(customSongs));
+     } catch (err) {
+       console.error("Storage save failed:", err);
+     }
+   }, [customSongs]);
+
+   // Stateful announcements list (loads stored or falls back to DEFAULT_ANNOUNCEMENTS)
   const [announcements, setAnnouncements] = useState<AnnouncementSlide[]>(() => {
     try {
       const stored = localStorage.getItem("chaver_custom_announcements");
@@ -682,18 +702,66 @@ return {
     handleCastAnnouncement(newSlide);
   };
 
-  // Delete announcement (allows customized list management)
-  const handleDeleteAnnouncement = (id: string) => {
-    const updated = announcements.filter((ann) => ann.id !== id);
-    setAnnouncements(updated);
-    try {
-      localStorage.setItem("chaver_custom_announcements", JSON.stringify(updated));
-    } catch (err) {
-      console.error("Storage delete failed:", err);
-    }
-  };
+const handleDeleteAnnouncement = (id: string) => {
+     const updated = announcements.filter((ann) => ann.id !== id);
+     setAnnouncements(updated);
+     try {
+       localStorage.setItem("chaver_custom_announcements", JSON.stringify(updated));
+     } catch (err) {
+       console.error("Storage delete failed:", err);
+     }
+   };
 
-  const handleTabClick = (tab: "ai-feed" | "manual-bible" | "songs" | "announcements" | "media-library" | "plans") => {
+   // Custom hymn upload handlers
+   const [newHymnTitle, setNewHymnTitle] = useState("");
+   const [newHymnAuthor, setNewHymnAuthor] = useState("");
+   const [newHymnStanzas, setNewHymnStanzas] = useState([{ text: "" }]);
+
+   const handleAddStanzaField = () => {
+     setNewHymnStanzas([...newHymnStanzas, { text: "" }]);
+   };
+
+   const handleStanzaChange = (idx: number, text: string) => {
+     setNewHymnStanzas(newHymnStanzas.map((s, i) => i === idx ? { text } : s));
+   };
+
+   const handleRemoveStanza = (idx: number) => {
+     if (newHymnStanzas.length > 1) {
+       setNewHymnStanzas(newHymnStanzas.filter((_, i) => i !== idx));
+     }
+   };
+
+   const handleCreateHymn = (e: FormEvent) => {
+     e.preventDefault();
+     if (!newHymnTitle.trim()) return;
+
+     const validStanzas = newHymnStanzas.filter(s => s.text.trim());
+     if (validStanzas.length === 0) return;
+
+     const newHymn: Song = {
+       id: `custom-hymn-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+       title: newHymnTitle.trim(),
+       author: newHymnAuthor.trim() || undefined,
+       stanzas: validStanzas.map(s => s.text.trim()),
+     };
+
+     const updated = [...customSongs, newHymn];
+     setCustomSongs(updated);
+     setNewHymnTitle("");
+     setNewHymnAuthor("");
+     setNewHymnStanzas([{ text: "" }]);
+
+     // Auto-select the new hymn
+     setSelectedSongId(newHymn.id);
+     setSelectedStanzaIndex(0);
+   };
+
+   // Delete custom hymn
+   const handleDeleteHymn = (id: string) => {
+     setCustomSongs(customSongs.filter(s => s.id !== id));
+   };
+
+   const handleTabClick = (tab: "ai-feed" | "manual-bible" | "songs" | "announcements" | "media-library" | "plans") => {
     if (tab === "plans" || tab === "manual-bible") {
       setActiveTab(tab);
       return;
@@ -733,7 +801,7 @@ return {
     setActiveTab(tab);
   };
 
-  const activeSong = DEFAULT_SONGS.find((s) => s.id === selectedSongId) || DEFAULT_SONGS[0];
+  const activeSong = [...DEFAULT_SONGS, ...customSongs].find((s) => s.id === selectedSongId) || DEFAULT_SONGS[0];
 
   const activeProjTheme = THEME_PRESETS.find((t) => t.id === activeProjectedSlide.themeId) || THEME_PRESETS[0];
   const isProjThemeLight = activeProjTheme.id === "clean-light" || activeProjTheme.id === "pure-white";
@@ -1311,54 +1379,138 @@ return {
                 </div>
               )}
 
-              {/* TAB 3: SONGS / LYRIC WORKSPACE */}
-              {activeTab === "songs" && (
-                <div className="space-y-3">
-                  <div>
-                    <span className="text-[8px] font-mono uppercase tracking-widest text-white/40 block mb-1">
-                      Active Praise Song Draft
-                    </span>
-                    <select
-                      value={selectedSongId}
-                      onChange={(e) => {
-                        setSelectedSongId(e.target.value);
-                        setSelectedStanzaIndex(0);
-                      }}
-                      className="w-full bg-black/40 p-1.5 text-[11px] rounded border border-white/10 text-white focus:outline-none"
-                    >
-                      {DEFAULT_SONGS.map((song) => (
-                        <option key={song.id} value={song.id} className="bg-[#121417]">
-                          🎵 {song.title} {song.author ? `— ${song.author}` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+{/* TAB 3: SONGS / LYRIC WORKSPACE */}
+               {activeTab === "songs" && (
+                 <div className="space-y-3">
+                   {/* Custom Hymn Upload Form */}
+                   <form onSubmit={handleCreateHymn} className="border border-green-500/25 bg-green-950/10 p-3 rounded-lg flex flex-col gap-2 mb-3">
+                     <span className="text-[9px] font-mono text-green-400 uppercase tracking-widest block font-bold">
+                       ➕ Upload Custom Hymn
+                     </span>
+                     <input
+                       type="text"
+                       placeholder="Hymn Title"
+                       value={newHymnTitle}
+                       onChange={(e) => setNewHymnTitle(e.target.value)}
+                       className="w-full bg-black/50 px-2 py-1.5 rounded border border-white/10 text-xs text-white focus:border-green-500 focus:outline-none placeholder-white/20"
+                       required
+                     />
+                     <input
+                       type="text"
+                       placeholder="Author (optional)"
+                       value={newHymnAuthor}
+                       onChange={(e) => setNewHymnAuthor(e.target.value)}
+                       className="w-full bg-black/50 px-2 py-1.5 rounded border border-white/10 text-xs text-white focus:border-green-500 focus:outline-none placeholder-white/20"
+                     />
+                     <div className="flex flex-col gap-1.5">
+                       {newHymnStanzas.map((stanza, idx) => (
+                         <div key={idx} className="flex gap-1">
+                           <textarea
+                             placeholder={`Stanza ${idx + 1}`}
+                             value={stanza.text}
+                             onChange={(e) => handleStanzaChange(idx, e.target.value)}
+                             rows={2}
+                             className="flex-1 bg-black/50 p-2 rounded border border-white/10 text-xs text-white focus:border-green-500 focus:outline-none placeholder-white/20 resize-none font-sans"
+                           />
+                           {newHymnStanzas.length > 1 && (
+                             <button
+                               type="button"
+                               onClick={() => handleRemoveStanza(idx)}
+                               className="px-1.5 text-red-400 hover:text-red-300 text-xs"
+                             >
+                               ✕
+                             </button>
+                           )}
+                         </div>
+                       ))}
+                       <button
+                         type="button"
+                         onClick={handleAddStanzaField}
+                         className="text-[10px] text-green-400 hover:text-green-300 font-medium"
+                       >
+                         + Add Stanza
+                       </button>
+                     </div>
+                     <button
+                       type="submit"
+                       className="bg-green-600 hover:bg-green-500 text-white font-sans font-bold text-xs py-1.5 rounded cursor-pointer transition-all flex items-center justify-center gap-1.5 select-none"
+                     >
+                       <PlusCircle className="w-3.5 h-3.5" /> Save & Add Hymn
+                     </button>
+                   </form>
 
-                  {/* Stanza Selector Grid */}
-                  <div>
-                    <span className="text-[8px] font-mono uppercase tracking-widest text-white/40 block mb-1.5">
-                      Stanza Slides (Select to Cast)
-                    </span>
-                    <div className="grid grid-cols-1 gap-1.5">
-                      {activeSong.stanzas.map((stanza, index) => (
-                        <button
-                          key={index}
-                          onClick={() => handleCastLyric(activeSong, stanza, index)}
-                          className={`text-left p-2 rounded border text-[11px] leading-relaxed transition-all cursor-pointer ${
-                            selectedSongId === activeProjectedSlide.title &&
-                            stanza === activeProjectedSlide.body &&
-                            activeProjectedSlide.type === "lyrics"
-                              ? "bg-blue-600/15 border-blue-500 text-blue-300"
-                              : "bg-[#121417]/50 border-white/5 hover:border-white/15 text-white/60"
-                          }`}
-                        >
-                          <span className="text-[8px] uppercase font-mono font-bold block text-white/30 mb-0.5">
-                            STANZA {index + 1}
-                          </span>
-                          <span className="whitespace-pre-line">{stanza}</span>
-                        </button>
-                      ))}
-                    </div>
+                   <div>
+                     <span className="text-[8px] font-mono uppercase tracking-widest text-white/40 block mb-1">
+                       Active Praise Song Draft
+                     </span>
+                     <select
+                       value={selectedSongId}
+                       onChange={(e) => {
+                         setSelectedSongId(e.target.value);
+                         setSelectedStanzaIndex(0);
+                       }}
+                       className="w-full bg-black/40 p-1.5 text-[11px] rounded border border-white/10 text-white focus:outline-none"
+                     >
+                       {DEFAULT_SONGS.map((song) => (
+                         <option key={song.id} value={song.id} className="bg-[#121417]">
+                           🎵 {song.title} {song.author ? `— ${song.author}` : ""}
+                         </option>
+                       ))}
+                       {customSongs.map((song) => (
+                         <option key={song.id} value={song.id} className="bg-[#121417]">
+                           📝 {song.title} {song.author ? `— ${song.author}` : ""}
+                         </option>
+                       ))}
+                     </select>
+                   </div>
+
+                   {/* Custom Hymns Management */}
+                   {customSongs.length > 0 && (
+                     <div className="border border-white/5 rounded p-2 bg-white/5">
+                       <span className="text-[8px] font-mono uppercase text-white/40 block mb-1">
+                         Your Custom Hymns
+                       </span>
+                       <div className="grid grid-cols-1 gap-1 max-h-[120px] overflow-y-auto">
+                         {customSongs.map((song) => (
+                           <div key={song.id} className="flex justify-between items-center bg-[#121417]/50 p-1.5 rounded text-[10px]">
+                             <span className="text-white/80 truncate">{song.title}</span>
+                             <button
+                               onClick={() => handleDeleteHymn(song.id)}
+                               className="text-red-400 hover:text-red-300 text-xs ml-1"
+                             >
+                               Delete
+                             </button>
+                           </div>
+                         ))}
+                       </div>
+                     </div>
+                   )}
+
+                   {/* Stanza Selector Grid */}
+                   <div>
+                     <span className="text-[8px] font-mono uppercase tracking-widest text-white/40 block mb-1.5">
+                       Stanza Slides (Select to Cast)
+                     </span>
+                     <div className="grid grid-cols-1 gap-1.5">
+                       {activeSong.stanzas.map((stanza, index) => (
+                         <button
+                           key={index}
+                           onClick={() => handleCastLyric(activeSong, stanza, index)}
+                           className={`text-left p-2 rounded border text-[11px] leading-relaxed transition-all cursor-pointer ${
+                             selectedSongId === activeProjectedSlide.title &&
+                             stanza === activeProjectedSlide.body &&
+                             activeProjectedSlide.type === "lyrics"
+                               ? "bg-blue-600/15 border-blue-500 text-blue-300"
+                               : "bg-[#121417]/50 border-white/5 hover:border-white/15 text-white/60"
+                           }`}
+                         >
+                           <span className="text-[8px] uppercase font-mono font-bold block text-white/30 mb-0.5">
+                             STANZA {index + 1}
+                           </span>
+                           <span className="whitespace-pre-line">{stanza}</span>
+                         </button>
+                       ))}
+                     </div>
                   </div>
                 </div>
               )}
