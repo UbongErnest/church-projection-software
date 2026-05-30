@@ -80,6 +80,12 @@ Be helpful, concise, and conversational. No markdown headers (#) or complex form
       return res.json({ messages: updatedMessages });
     } catch (error: any) {
       console.error("AI Chat error:", error.message || error);
+      const msg = error.message || "";
+      if (msg.includes("429") || msg.includes("quota")) {
+        return res.status(429).json({ 
+          error: "AI service rate limit exceeded. Please try again later."
+        });
+      }
       return res.status(500).json({ 
         error: "AI service temporarily unavailable."
       });
