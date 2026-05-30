@@ -2,6 +2,8 @@ import React, { useState, FormEvent, useEffect } from "react";
 import { supabase } from "../supabase";
 import { BookOpen, Mail, ChevronLeft, CheckCircle } from "lucide-react";
 
+const APP_URL = import.meta.env.VITE_APP_URL || window.location.origin;
+
 interface ResetPasswordPageProps {
   onNavigate: (view: "landing" | "login" | "register" | "reset-password" | "set-new-password") => void;
 }
@@ -36,7 +38,7 @@ export default function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps
 
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(emailVal, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${APP_URL}/reset-password`,
       });
 
       if (error) {
