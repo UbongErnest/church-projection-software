@@ -200,7 +200,7 @@ const handleRegister = async (e: FormEvent) => {
       if (msg.includes("User already registered") || msg.includes("user_already_exists")) {
         setErrorText("This email is already registered. Please sign in instead.");
       } else if (msg.includes("rate limit") || msg.toLowerCase().includes("too many") || msg.includes("429")) {
-        setErrorText("Too many signup emails have been sent recently. Please try again later.");
+        setErrorText("Too many requests. Please wait a moment and try again.");
       } else {
         setErrorText(msg || "An unexpected error occurred during registration. Please try again.");
       }

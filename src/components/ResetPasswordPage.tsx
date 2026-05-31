@@ -60,7 +60,7 @@ export default function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps
       if (msg.includes("User not found") || msg.includes("not found")) {
         setErrorText("No account found with this email address.");
       } else if (msg.includes("too many requests") || msg.includes("Too many") || msg.includes("rate limit") || msg.includes("429")) {
-        setErrorText("Too many signup emails have been sent recently. Please try again later.");
+        setErrorText("Too many requests. Please wait a moment and try again.");
       } else {
         setErrorText("Failed to send reset email. Please try again.");
       }

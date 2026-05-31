@@ -55,7 +55,7 @@ export default function LoginPage({ onNavigate }: LoginPageProps) {
       } else if (msg.includes("Invalid email")) {
         friendlyMessage = "The email address entered is invalid.";
       } else if (msg.includes("too many requests") || msg.includes("Too many") || msg.includes("rate limit") || msg.includes("429")) {
-        friendlyMessage = "Too many signup emails have been sent recently. Please try again later.";
+        friendlyMessage = "Too many requests. Please wait a moment and try again.";
       }
       
       setErrorText(friendlyMessage);
