@@ -298,96 +298,93 @@ const checkRecoveryMode = () => {
   });
 
 // Lifted presentation customizer states
-   const [bibleVersion, setBibleVersion] = useState<"KJV">("KJV");
-   const [layoutMode, setLayoutMode] = useState<"fullscreen" | "lower-third" | "split-screen">("fullscreen");
-   const [activeThemeId, setActiveThemeId] = useState<string>("nebula-dark");
-   const [fontSize, setFontSize] = useState<number>(44);
-   const [showLogo, setShowLogo] = useState<boolean>(true);
-   const [isParallelEnabled, setIsParallelEnabled] = useState<boolean>(false);
-   const [parallelVersion, setParallelVersion] = useState<"KJV">("KJV");
-   const [customBrandingText, setCustomBrandingText] = useState<string>("");
+    const [bibleVersion, setBibleVersion] = useState<"KJV">("KJV");
+    const [layoutMode, setLayoutMode] = useState<"fullscreen" | "lower-third" | "split-screen">("fullscreen");
+    const [activeThemeId, setActiveThemeId] = useState<string>("nebula-dark");
+    const [fontSize, setFontSize] = useState<number>(44);
+    const [showLogo, setShowLogo] = useState<boolean>(true);
+    const [isParallelEnabled, setIsParallelEnabled] = useState<boolean>(false);
+    const [parallelVersion, setParallelVersion] = useState<"KJV">("KJV");
+    const [customBrandingText, setCustomBrandingText] = useState<string>("");
 
-  const bibleVersionRef = useRef(bibleVersion);
-  const layoutModeRef = useRef(layoutMode);
-  const activeThemeIdRef = useRef(activeThemeId);
-  const fontSizeRef = useRef(fontSize);
-  const showLogoRef = useRef(showLogo);
-  const isParallelEnabledRef = useRef(isParallelEnabled);
-  const parallelVersionRef = useRef(parallelVersion);
-  const customBrandingTextRef = useRef(customBrandingText);
+   // Transcription & AI outputs state
+    const [isListening, setIsListening] = useState<boolean>(false);
+    const [isAutoProjectEnabled, setIsAutoProjectEnabled] = useState<boolean>(true);
+    const [transcript, setTranscript] = useState<string>("");
+    const [detectedVerses, setDetectedVerses] = useState<DetectedVerse[]>([]);
+    const [sermonTopic, setSermonTopic] = useState<string>("Holy Worship Study");
+    const [sermonNotes, setSermonNotes] = useState<string[]>([
+      "Sermon commenced. Automatic topic detector engaged.",
+      "Speak through mic or trigger preacher simulator on the right to test verse extraction!"
+    ]);
 
-  useEffect(() => { bibleVersionRef.current = bibleVersion; }, [bibleVersion]);
-  useEffect(() => { layoutModeRef.current = layoutMode; }, [layoutMode]);
-  useEffect(() => { activeThemeIdRef.current = activeThemeId; }, [activeThemeId]);
-  useEffect(() => { fontSizeRef.current = fontSize; }, [fontSize]);
-  useEffect(() => { showLogoRef.current = showLogo; }, [showLogo]);
-  useEffect(() => { isParallelEnabledRef.current = isParallelEnabled; }, [isParallelEnabled]);
-  useEffect(() => { parallelVersionRef.current = parallelVersion; }, [parallelVersion]);
-  useEffect(() => { customBrandingTextRef.current = customBrandingText; }, [customBrandingText]);
+    // Audio simulation control panel toggles
+    const [showSimulators, setShowSimulators] = useState<boolean>(true);
+    const [rightPanelTab, setRightPanelTab] = useState<"notes" | "simulator">("notes");
 
-  // Synchronize customizer states with the active projected slide
-  useEffect(() => {
-    if (activeSlide) {
-      if (activeSlide.themeId) {
-        setActiveThemeId(activeSlide.themeId);
-      }
-      if (activeSlide.layout) {
-        setLayoutMode(activeSlide.layout);
-      }
-      if (activeSlide.fontSize) {
-        setFontSize(activeSlide.fontSize);
-      }
-      if (activeSlide.showLogo !== undefined) {
-        setShowLogo(activeSlide.showLogo);
-      }
-      if (activeSlide.parallelBody) {
-        setIsParallelEnabled(true);
-        if (activeSlide.parallelTranslation) {
-          setParallelVersion(activeSlide.parallelTranslation as any);
-        }
-      } else {
-        setIsParallelEnabled(false);
-      }
-      if (activeSlide.customBrandingText !== undefined) {
-        setCustomBrandingText(activeSlide.customBrandingText);
-      }
-    }
-  }, [activeSlide]);
+   // HTML5 BroadcastChannel and React references
+   const channelRef = useRef<BroadcastChannel | null>(null);
+   const recognitionRef = useRef<any>(null);
+   const transcriptionBufferRef = useRef<string>("");
 
-  // Transcription & AI outputs state
-  const [isListening, setIsListening] = useState<boolean>(false);
-  const [transcript, setTranscript] = useState<string>("");
-  const [detectedVerses, setDetectedVerses] = useState<DetectedVerse[]>([]);
-  const [sermonTopic, setSermonTopic] = useState<string>("Holy Worship Study");
-  const [sermonNotes, setSermonNotes] = useState<string[]>([
-    "Sermon commenced. Automatic topic detector engaged.",
-    "Speak through mic or trigger preacher simulator on the right to test verse extraction!"
-  ]);
+   const activeSlideRef = useRef<ActiveSlide>(activeSlide);
+   const detectedVersesRef = useRef<DetectedVerse[]>(detectedVerses);
+   const registeredProjectorsRef = useRef<Array<(slide: ActiveSlide) => void>>([]);
 
-  // Audio simulation control panel toggles
-  const [showSimulators, setShowSimulators] = useState<boolean>(true);
-  const [rightPanelTab, setRightPanelTab] = useState<"notes" | "simulator">("notes");
+   // Refs to access current state in async callbacks
+   const bibleVersionRef = useRef(bibleVersion);
+   const layoutModeRef = useRef(layoutMode);
+   const activeThemeIdRef = useRef(activeThemeId);
+   const fontSizeRef = useRef(fontSize);
+   const showLogoRef = useRef(showLogo);
+   const isParallelEnabledRef = useRef(isParallelEnabled);
+   const parallelVersionRef = useRef(parallelVersion);
+   const customBrandingTextRef = useRef(customBrandingText);
+   const isAutoProjectEnabledRef = useRef(isAutoProjectEnabled);
 
-  // HTML5 BroadcastChannel and React references
-  const channelRef = useRef<BroadcastChannel | null>(null);
-  const recognitionRef = useRef<any>(null);
-  const transcriptionBufferRef = useRef<string>("");
+   useEffect(() => { activeSlideRef.current = activeSlide; }, [activeSlide]);
+   useEffect(() => { detectedVersesRef.current = detectedVerses; }, [detectedVerses]);
 
-  const activeSlideRef = useRef<ActiveSlide>(activeSlide);
-  const detectedVersesRef = useRef<DetectedVerse[]>(detectedVerses);
+   useEffect(() => { bibleVersionRef.current = bibleVersion; }, [bibleVersion]);
+   useEffect(() => { layoutModeRef.current = layoutMode; }, [layoutMode]);
+   useEffect(() => { activeThemeIdRef.current = activeThemeId; }, [activeThemeId]);
+   useEffect(() => { fontSizeRef.current = fontSize; }, [fontSize]);
+   useEffect(() => { showLogoRef.current = showLogo; }, [showLogo]);
+   useEffect(() => { isParallelEnabledRef.current = isParallelEnabled; }, [isParallelEnabled]);
+   useEffect(() => { parallelVersionRef.current = parallelVersion; }, [parallelVersion]);
+   useEffect(() => { customBrandingTextRef.current = customBrandingText; }, [customBrandingText]);
+useEffect(() => { isAutoProjectEnabledRef.current = isAutoProjectEnabled; }, [isAutoProjectEnabled]);
 
-  // Keep track of registered projector screen callbacks
-  const registeredProjectorsRef = useRef<Array<(slide: ActiveSlide) => void>>([]);
+   // Synchronize customizer states with the active projected slide
+   useEffect(() => {
+     if (activeSlide) {
+       if (activeSlide.themeId) {
+         setActiveThemeId(activeSlide.themeId);
+       }
+       if (activeSlide.layout) {
+         setLayoutMode(activeSlide.layout);
+       }
+       if (activeSlide.fontSize) {
+         setFontSize(activeSlide.fontSize);
+       }
+       if (activeSlide.showLogo !== undefined) {
+         setShowLogo(activeSlide.showLogo);
+       }
+       if (activeSlide.parallelBody) {
+         setIsParallelEnabled(true);
+         if (activeSlide.parallelTranslation) {
+           setParallelVersion(activeSlide.parallelTranslation as any);
+         }
+       } else {
+         setIsParallelEnabled(false);
+       }
+       if (activeSlide.customBrandingText !== undefined) {
+         setCustomBrandingText(activeSlide.customBrandingText);
+       }
+     }
+   }, [activeSlide]);
 
-  useEffect(() => {
-    activeSlideRef.current = activeSlide;
-  }, [activeSlide]);
-
-  useEffect(() => {
-    detectedVersesRef.current = detectedVerses;
-  }, [detectedVerses]);
-
-  // Segment route selection based on URL hash
+   // Segment route selection based on URL hash
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash;
@@ -606,214 +603,158 @@ const checkRecoveryMode = () => {
     recognitionRef.current = rec;
   }, [isListening]);
 
-// Launch AI speech detection endpoint with dual hybrid execution pipelines (micro-latency local regex + fallback deep Gemini NLP)
+// Trigger background AI detection but only auto-project if enabled
    const triggerAiDetection = async (transcriptText: string) => {
-     const userPlan = userProfile?.subscriptionPlan || "free";
-     const subscriptionStatus = userProfile?.subscriptionStatus;
-     if (userPlan === "free" || subscriptionStatus === "expired") return;
+      const userPlan = userProfile?.subscriptionPlan || "free";
+      const subscriptionStatus = userProfile?.subscriptionStatus;
+      if (userPlan === "free" || subscriptionStatus === "expired") return;
 
-     if (!transcriptText || transcriptText.trim().length < 8) return;
+      if (!transcriptText || transcriptText.trim().length < 8) return;
 
-// 1. DUAL PIPELINE: HIGH-SPEED MICRO-LATENCY CLIENT REGEX INTERCEPTOR
-    const localMatch = scanForVerseLocally(transcriptText);
-    if (localMatch) {
-      // Clear the buffer unconditionally because a verse was matched!
-      transcriptionBufferRef.current = "";
-      setTranscript("");
+     // Helper to fetch and project a verse
+     const fetchAndProjectVerse = async (book: string, chapter: number, verse: number, displayName: string) => {
+       try {
+         const lookup = await fetch(`/api/bible/lookup?book=${book}&chapter=${chapter}&verse=${verse}`);
+         const details = await lookup.json();
+         if (details && details.text) {
+           const hasParallel = isParallelEnabledRef.current && userPlan === "yearly";
+           castSlide({
+             type: "verse",
+             title: displayName,
+             body: details.text[bibleVersionRef.current],
+             parallelBody: hasParallel ? details.text[parallelVersionRef.current] : undefined,
+             parallelTranslation: hasParallel ? parallelVersionRef.current : undefined,
+             customBrandingText: userPlan === "yearly" && customBrandingTextRef.current ? customBrandingTextRef.current : undefined,
+             book,
+             chapter,
+             verse,
+             translation: bibleVersionRef.current,
+             layout: layoutModeRef.current,
+             themeId: activeThemeIdRef.current as any,
+             fontSize: fontSizeRef.current,
+             showLogo: showLogoRef.current,
+           });
+         } else {
+           const fallbackText = getFallbackVerseText(book, chapter, verse);
+           const hasParallel = isParallelEnabledRef.current && userPlan === "yearly";
+           castSlide({
+             type: "verse",
+             title: displayName,
+             body: fallbackText[bibleVersionRef.current],
+             parallelBody: hasParallel ? fallbackText[parallelVersionRef.current] : undefined,
+             parallelTranslation: hasParallel ? parallelVersionRef.current : undefined,
+             customBrandingText: userPlan === "yearly" && customBrandingTextRef.current ? customBrandingTextRef.current : undefined,
+             book,
+             chapter,
+             verse,
+             translation: bibleVersionRef.current,
+             layout: layoutModeRef.current,
+             themeId: activeThemeIdRef.current as any,
+             fontSize: fontSizeRef.current,
+             showLogo: showLogoRef.current,
+           });
+         }
+       } catch (e) {
+         console.warn("Local lookup failed, using fallback:", e);
+         const fallbackText = getFallbackVerseText(book, chapter, verse);
+         const hasParallel = isParallelEnabledRef.current && userPlan === "yearly";
+         castSlide({
+           type: "verse",
+           title: displayName,
+           body: fallbackText[bibleVersionRef.current],
+           parallelBody: hasParallel ? fallbackText[parallelVersionRef.current] : undefined,
+           parallelTranslation: hasParallel ? parallelVersionRef.current : undefined,
+           customBrandingText: userPlan === "yearly" && customBrandingTextRef.current ? customBrandingTextRef.current : undefined,
+           book,
+           chapter,
+           verse,
+           translation: bibleVersionRef.current,
+           layout: layoutModeRef.current,
+           themeId: activeThemeIdRef.current as any,
+           fontSize: fontSizeRef.current,
+           showLogo: showLogoRef.current,
+         });
+       }
+     };
 
-      const verseId = `${localMatch.book}-${localMatch.chapter}-${localMatch.verse}-local-${Date.now()}`;
-      const verseDisplayName = localMatch.displayName;
+     // 1. DUAL PIPELINE: HIGH-SPEED MICRO-LATENCY CLIENT REGEX INTERCEPTOR
+     const localMatch = scanForVerseLocally(transcriptText);
+     if (localMatch) {
+       transcriptionBufferRef.current = "";
+       setTranscript("");
 
-      // Add to detected verses (always add, with timestamp to make unique)
-      const newDetected: DetectedVerse = {
-        id: verseId,
-        book: localMatch.book,
-        chapter: localMatch.chapter,
-        verse: localMatch.verse,
-        displayName: verseDisplayName,
-        confidence: 100, // Client-side hard regex match is 100% confidence
-        transcriptSegment: transcriptText.slice(-180),
-        status: "pending",
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-      };
-      setDetectedVerses((prev) => [newDetected, ...prev]);
+       const verseId = `${localMatch.book}-${localMatch.chapter}-${localMatch.verse}-local-${Date.now()}`;
+       const verseDisplayName = localMatch.displayName;
 
-      // Auto-Project instantly in real-time!
-      try {
-        const lookup = await fetch(`/api/bible/lookup?book=${localMatch.book}&chapter=${localMatch.chapter}&verse=${localMatch.verse}`);
-        const details = await lookup.json();
-        if (details && details.text) {
-          const hasParallel = isParallelEnabledRef.current && userPlan === "yearly";
-          castSlide({
-            type: "verse",
-            title: verseDisplayName,
-            body: details.text[bibleVersionRef.current],
-            parallelBody: hasParallel ? details.text[parallelVersionRef.current] : undefined,
-            parallelTranslation: hasParallel ? parallelVersionRef.current : undefined,
-            customBrandingText: userPlan === "yearly" && customBrandingTextRef.current ? customBrandingTextRef.current : undefined,
-            book: localMatch.book,
-            chapter: localMatch.chapter,
-            verse: localMatch.verse,
-            translation: bibleVersionRef.current,
-            layout: layoutModeRef.current,
-            themeId: activeThemeIdRef.current as any,
-            fontSize: fontSizeRef.current,
-            showLogo: showLogoRef.current,
-          });
-        } else {
-          const fallbackText = getFallbackVerseText(localMatch.book, localMatch.chapter, localMatch.verse);
-          const hasParallel = isParallelEnabledRef.current && userPlan === "yearly";
-          castSlide({
-            type: "verse",
-            title: verseDisplayName,
-            body: fallbackText[bibleVersionRef.current],
-            parallelBody: hasParallel ? fallbackText[parallelVersionRef.current] : undefined,
-            parallelTranslation: hasParallel ? parallelVersionRef.current : undefined,
-            customBrandingText: userPlan === "yearly" && customBrandingTextRef.current ? customBrandingTextRef.current : undefined,
-            book: localMatch.book,
-            chapter: localMatch.chapter,
-            verse: localMatch.verse,
-            translation: bibleVersionRef.current,
-            layout: layoutModeRef.current,
-            themeId: activeThemeIdRef.current as any,
-            fontSize: fontSizeRef.current,
-            showLogo: showLogoRef.current,
-          });
-        }
-      } catch (e) {
-        console.warn("Local lookup failed, using fallback:", e);
-        const fallbackText = getFallbackVerseText(localMatch.book, localMatch.chapter, localMatch.verse);
-        const hasParallel = isParallelEnabledRef.current && userPlan === "yearly";
-        castSlide({
-          type: "verse",
-          title: verseDisplayName,
-          body: fallbackText[bibleVersionRef.current],
-          parallelBody: hasParallel ? fallbackText[parallelVersionRef.current] : undefined,
-          parallelTranslation: hasParallel ? parallelVersionRef.current : undefined,
-          customBrandingText: userPlan === "yearly" && customBrandingTextRef.current ? customBrandingTextRef.current : undefined,
-          book: localMatch.book,
-          chapter: localMatch.chapter,
-          verse: localMatch.verse,
-          translation: bibleVersionRef.current,
-          layout: layoutModeRef.current,
-          themeId: activeThemeIdRef.current as any,
-          fontSize: fontSizeRef.current,
-          showLogo: showLogoRef.current,
-        });
-      }
-      return; // Halt further pipeline actions on successful local capture
-    }
+       const newDetected: DetectedVerse = {
+         id: verseId,
+         book: localMatch.book,
+         chapter: localMatch.chapter,
+         verse: localMatch.verse,
+         displayName: verseDisplayName,
+         confidence: 100,
+         transcriptSegment: transcriptText.slice(-180),
+         status: "pending",
+         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+       };
+       setDetectedVerses((prev) => [newDetected, ...prev]);
 
-    // 2. BACKGROUND CONTEXT ANALYZER (Gemini NLP Topics, Bulletpoints, and complex scripture extraction)
-    try {
-      const res = await fetch("/api/ai/detect", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript: transcriptText }),
-      });
-      const data = await res.json();
+       // Auto-Project instantly in real-time (only if toggle is enabled)
+       if (isAutoProjectEnabledRef.current) {
+         await fetchAndProjectVerse(localMatch.book, localMatch.chapter, localMatch.verse, verseDisplayName);
+       }
+       return;
+     }
 
-      if (data) {
-        // Assess sermon topics and autogenerated point summaries
-        if (data.sermonTopic && data.sermonTopic !== "Acoustics Session") {
-          setSermonTopic(data.sermonTopic);
-        }
-        if (data.summaryNotes && data.summaryNotes.length > 0) {
-          setSermonNotes(data.summaryNotes);
-        }
+     // 2. BACKGROUND CONTEXT ANALYZER (Gemini NLP Topics, Bulletpoints, and complex scripture extraction)
+     try {
+       const res = await fetch("/api/ai/detect", {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify({ transcript: transcriptText }),
+       });
+       const data = await res.json();
 
-// Assess bible verse reference matching
-        if (data.detected && data.reference && data.reference.book) {
-          // Clear the buffer unconditionally because a verse was matched!
-          transcriptionBufferRef.current = "";
-          setTranscript("");
+       if (data) {
+         if (data.sermonTopic && data.sermonTopic !== "Acoustics Session") {
+           setSermonTopic(data.sermonTopic);
+         }
+         if (data.summaryNotes && data.summaryNotes.length > 0) {
+           setSermonNotes(data.summaryNotes);
+         }
 
-          const matched = data.reference;
-          const verseId = `${matched.book}-${matched.chapter}-${matched.verse}-${Date.now()}`;
+         if (data.detected && data.reference && data.reference.book) {
+           transcriptionBufferRef.current = "";
+           setTranscript("");
 
-          const newDetected: DetectedVerse = {
-            id: verseId,
-            book: matched.book,
-            chapter: matched.chapter,
-            verse: matched.verse,
-            displayName: matched.displayName || `${matched.book} ${matched.chapter}:${matched.verse}`,
-            confidence: matched.confidence || 85,
-            transcriptSegment: transcriptText.slice(-180),
-            status: "pending",
-            timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-          };
+           const matched = data.reference;
+           const verseId = `${matched.book}-${matched.chapter}-${matched.verse}-${Date.now()}`;
+           const verseDisplayName = matched.displayName || `${matched.book} ${matched.chapter}:${matched.verse}`;
 
-          setDetectedVerses((prev) => [newDetected, ...prev]);
+           const newDetected: DetectedVerse = {
+             id: verseId,
+             book: matched.book,
+             chapter: matched.chapter,
+             verse: matched.verse,
+             displayName: verseDisplayName,
+             confidence: matched.confidence || 85,
+             transcriptSegment: transcriptText.slice(-180),
+             status: "pending",
+             timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+           };
 
-          // Project verse (always project for continuous projection during live transcription)
-          try {
-            const lookup = await fetch(`/api/bible/lookup?book=${matched.book}&chapter=${matched.chapter}&verse=${matched.verse}`);
-            const details = await lookup.json();
-            if (details && details.text) {
-              const hasParallel = isParallelEnabledRef.current && userPlan === "yearly";
-              castSlide({
-                type: "verse",
-                title: matched.displayName || `${matched.book} ${matched.chapter}:${matched.verse}`,
-                body: details.text[bibleVersionRef.current],
-                parallelBody: hasParallel ? details.text[parallelVersionRef.current] : undefined,
-                parallelTranslation: hasParallel ? parallelVersionRef.current : undefined,
-                customBrandingText: userPlan === "yearly" && customBrandingTextRef.current ? customBrandingTextRef.current : undefined,
-                book: matched.book,
-                chapter: matched.chapter,
-                verse: matched.verse,
-                translation: bibleVersionRef.current,
-                layout: layoutModeRef.current,
-                themeId: activeThemeIdRef.current as any,
-                fontSize: fontSizeRef.current,
-                showLogo: showLogoRef.current,
-              });
-            } else {
-              const fallbackText = getFallbackVerseText(matched.book, matched.chapter, matched.verse);
-              const hasParallel = isParallelEnabledRef.current && userPlan === "yearly";
-              castSlide({
-                type: "verse",
-                title: matched.displayName || `${matched.book} ${matched.chapter}:${matched.verse}`,
-                body: fallbackText[bibleVersionRef.current],
-                parallelBody: hasParallel ? fallbackText[parallelVersionRef.current] : undefined,
-                parallelTranslation: hasParallel ? parallelVersionRef.current : undefined,
-                customBrandingText: userPlan === "yearly" && customBrandingTextRef.current ? customBrandingTextRef.current : undefined,
-                book: matched.book,
-                chapter: matched.chapter,
-                verse: matched.verse,
-                translation: bibleVersionRef.current,
-                layout: layoutModeRef.current,
-                themeId: activeThemeIdRef.current as any,
-                fontSize: fontSizeRef.current,
-                showLogo: showLogoRef.current,
-              });
-            }
-          } catch (lookupErr) {
-            console.warn("API lookup failed, using fallback:", lookupErr);
-            const fallbackText = getFallbackVerseText(matched.book, matched.chapter, matched.verse);
-            const hasParallel = isParallelEnabledRef.current && userPlan === "yearly";
-            castSlide({
-              type: "verse",
-              title: matched.displayName || `${matched.book} ${matched.chapter}:${matched.verse}`,
-              body: fallbackText[bibleVersionRef.current],
-              parallelBody: hasParallel ? fallbackText[parallelVersionRef.current] : undefined,
-              parallelTranslation: hasParallel ? parallelVersionRef.current : undefined,
-              customBrandingText: userPlan === "yearly" && customBrandingTextRef.current ? customBrandingTextRef.current : undefined,
-              book: matched.book,
-              chapter: matched.chapter,
-              verse: matched.verse,
-              translation: bibleVersionRef.current,
-              layout: layoutModeRef.current,
-              themeId: activeThemeIdRef.current as any,
-              fontSize: fontSizeRef.current,
-              showLogo: showLogoRef.current,
-            });
-          }
-        }
-      }
-    } catch (err) {
-      console.error("AI Detection route error:", err);
-    }
-  };
+           setDetectedVerses((prev) => [newDetected, ...prev]);
+
+           // Auto-Project only if toggle is enabled
+           if (isAutoProjectEnabledRef.current) {
+             await fetchAndProjectVerse(matched.book, matched.chapter, matched.verse, verseDisplayName);
+           }
+         }
+       }
+     } catch (err) {
+       console.error("AI Detection route error:", err);
+     }
+   };
 
   const toggleListening = () => {
     const userPlan = userProfile?.subscriptionPlan || "free";
@@ -1087,9 +1028,11 @@ bibleVersion={bibleVersion}
           onChangeIsParallelEnabled={setIsParallelEnabled}
           parallelVersion={parallelVersion}
           onChangeParallelVersion={setParallelVersion}
-          customBrandingText={customBrandingText}
-          onChangeCustomBrandingText={setCustomBrandingText}
-        />
+customBrandingText={customBrandingText}
+           onChangeCustomBrandingText={setCustomBrandingText}
+           isAutoProjectEnabled={isAutoProjectEnabled}
+           onToggleAutoProject={() => setIsAutoProjectEnabled(prev => !prev)}
+         />
       </div>
 
       {/* DETACHED SIMULATOR & NOTE JOURNAL AUXILIARY BAR */}

@@ -55,6 +55,8 @@ interface ControlPanelProps {
    userProfile?: UserProfile | null;
    currentUser?: SupabaseUser | null;
    onUpdateSubscription?: (newPlan: "free" | "monthly" | "yearly") => Promise<void>;
+   isAutoProjectEnabled?: boolean;
+   onToggleAutoProject?: () => void;
 
    bibleVersion: "KJV";
    onChangeBibleVersion: (version: "KJV") => void;
@@ -100,12 +102,14 @@ sermonNotes,
   onChangeShowLogo,
   isParallelEnabled,
   onChangeIsParallelEnabled,
-  parallelVersion,
-  onChangeParallelVersion,
-customBrandingText,
-   onChangeCustomBrandingText,
-   currentUser,
- }: ControlPanelProps) {
+parallelVersion,
+   onChangeParallelVersion,
+   customBrandingText,
+    onChangeCustomBrandingText,
+    currentUser,
+    isAutoProjectEnabled,
+    onToggleAutoProject,
+  }: ControlPanelProps) {
   // User level plan and restrictions state mapping
   const userPlan = userProfile?.subscriptionPlan || "free";
 
@@ -953,26 +957,41 @@ const handleSaveHymn = (e: FormEvent) => {
             </span>
           </div>
 
-          <button
-            onClick={onToggleListening}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold cursor-pointer select-none transition-all ${
-              isListening
-                ? "bg-red-900/45 border border-red-500/50 text-red-200 hover:bg-red-800"
-                : "bg-white/5 hover:bg-white/10 text-white/80 border border-white/10"
-            }`}
-          >
-            {isListening ? (
-              <>
-                <MicOff className="w-3 h-3 text-red-400" /> Stop Listening
-              </>
-            ) : (
-              <>
-                <Mic className="w-3 h-3 text-blue-400 animate-pulse" /> Live Listen
-              </>
-            )}
-          </button>
+<button
+             onClick={onToggleListening}
+             className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold cursor-pointer select-none transition-all ${
+               isListening
+                 ? "bg-red-900/45 border border-red-500/50 text-red-200 hover:bg-red-800"
+                 : "bg-white/5 hover:bg-white/10 text-white/80 border border-white/10"
+             }`}
+           >
+             {isListening ? (
+               <>
+                 <MicOff className="w-3 h-3 text-red-400" /> Stop Listening
+               </>
+             ) : (
+               <>
+                 <Mic className="w-3 h-3 text-blue-400 animate-pulse" /> Live Listen
+               </>
+             )}
+           </button>
 
-          {/* Independent Presentation screen pop-out */}
+           {/* Auto-Projection Toggle */}
+           {isAutoProjectEnabled !== undefined && onToggleAutoProject && (
+             <button
+               onClick={onToggleAutoProject}
+               className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold cursor-pointer select-none transition-all ${
+                 isAutoProjectEnabled
+                   ? "bg-amber-600/15 border border-amber-500/30 text-amber-300 hover:bg-amber-600/25"
+                   : "bg-white/5 hover:bg-white/10 text-white/60 border border-white/10"
+               }`}
+               title={isAutoProjectEnabled ? "Auto-projection ON: Verses will project immediately when detected" : "Auto-projection OFF: Verses will be detected but not projected automatically"}
+             >
+               <Zap className="w-3 h-3" /> Auto-Proj
+             </button>
+           )}
+
+           {/* Independent Presentation screen pop-out */}
           <a
             href={`${window.location.origin}${window.location.pathname}${window.location.search}#projector`}
             target="_blank"
