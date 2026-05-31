@@ -103,10 +103,11 @@ export default function App() {
   const [viewMode, setViewMode] = useState<"operator" | "projector" | "loading">("loading");
 
 // Supabase Authenticated Session State Tracking
-    const [currentUser, setCurrentUser] = useState<SupabaseUser | null>(null);
-    const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [authChecked, setAuthChecked] = useState<boolean>(false);
-  const [authView, setAuthView] = useState<"landing" | "login" | "register" | "reset-password" | "otp-verification" | "set-new-password">("landing");
+     const [currentUser, setCurrentUser] = useState<SupabaseUser | null>(null);
+     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+     const [authChecked, setAuthChecked] = useState<boolean>(false);
+     const [authView, setAuthView] = useState<"landing" | "login" | "register" | "reset-password" | "otp-verification" | "set-new-password">("landing");
+     const [isRecoveryMode, setIsRecoveryMode] = useState<boolean>(false);
 const [pendingEmail, setPendingEmail] = useState<string>("");
   const [pendingUserData, setPendingUserData] = useState<{
     displayName: string;
@@ -120,58 +121,82 @@ const [pendingEmail, setPendingEmail] = useState<string>("");
   } | null>(null);
 
 // Auth monitoring listener and real-time Supabase profile sync
-    useEffect(() => {
-      let mounted = true;
-      let initialSessionHandled = false;
+     useEffect(() => {
+       let mounted = true;
+       let initialSessionHandled = false;
 
-      // Set up auth state listener - fires immediately with current session
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-        console.log("Auth state changed:", event, session?.user?.id || "no user");
-        if (!mounted) return;
+       const checkRecoveryMode = () => {
+         const hashParams = new URLSearchParams(window.location.hash.substring(1));
+         const queryParams = new URLSearchParams(window.location.search);
+         const isRecovery = hashParams.get("type") === "recovery" || queryParams.get("type") === "recovery";
+         if (mounted) {
+           setIsRecoveryMode(isRecovery);
+         }
+       };
 
-        setCurrentUser(session?.user || null);
-        if (session?.user) {
-          // Fetch user profile in background (non-blocking)
-          (async () => {
-            try {
-              const profile = await fetchServerProfile(session.access_token);
+       // Set up auth state listener - fires immediately with current session
+       const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+         console.log("Auth state changed:", event, session?.user?.id || "no user");
+         if (!mounted) return;
 
-              if (!profile) {
-                console.warn("User profile fetch: no profile");
-                if (mounted) setUserProfile(null);
-              } else {
-                if (mounted) setUserProfile(mapProfileFromDB(profile));
-              }
-            } catch (err: any) {
-              console.warn("Profile fetch failed:", err.message);
-              if (mounted) setUserProfile(null);
-            }
-          })();
-        } else {
-          setUserProfile(null);
-        }
-        
-        // Mark auth as checked on first auth state event
-        if (!initialSessionHandled && mounted) {
-          initialSessionHandled = true;
-          setAuthChecked(true);
-        }
-      });
+         checkRecoveryMode();
+         
+         setCurrentUser(session?.user || null);
+         if (session?.user) {
+           // Fetch user profile in background (non-blocking)
+           (async () => {
+             try {
+               const profile = await fetchServerProfile(session.access_token);
 
-      // Fallback timeout in case auth state never fires
-      const timeoutId = setTimeout(() => {
-        if (!initialSessionHandled && mounted) {
-          initialSessionHandled = true;
-          setAuthChecked(true);
-        }
-      }, 3000);
+               if (!profile) {
+                 console.warn("User profile fetch: no profile");
+                 if (mounted) setUserProfile(null);
+               } else {
+                 if (mounted) setUserProfile(mapProfileFromDB(profile));
+               }
+             } catch (err: any) {
+               console.warn("Profile fetch failed:", err.message);
+               if (mounted) setUserProfile(null);
+             }
+           })();
+         } else {
+           setUserProfile(null);
+         }
+         
+         // Mark auth as checked on first auth state event
+         if (!initialSessionHandled && mounted) {
+           initialSessionHandled = true;
+           setAuthChecked(true);
+         }
+       });
 
-      return () => {
-        mounted = false;
-        subscription.unsubscribe();
-        clearTimeout(timeoutId);
-      };
-    }, []);
+       // Also check on initial load
+       checkRecoveryMode();
+
+       // Fallback timeout in case auth state never fires
+       const timeoutId = setTimeout(() => {
+         if (!initialSessionHandled && mounted) {
+           initialSessionHandled = true;
+           setAuthChecked(true);
+         }
+       }, 3000);
+
+       return () => {
+         mounted = false;
+         subscription.unsubscribe();
+         clearTimeout(timeoutId);
+       };
+     }, []);
+
+// Clear recovery mode when user session is cleared (after signOut)
+      useEffect(() => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+          if (event === "SIGNED_OUT") {
+            setIsRecoveryMode(false);
+          }
+        });
+        return () => subscription.unsubscribe();
+      }, []);
 
     useEffect(() => {
       if (!currentUser) {
@@ -940,22 +965,19 @@ const { data: sessionData } = await supabase.auth.getSession();
   };
 
 // Wait for auth to be checked before any routing logic
-    if (!authChecked) {
-      return (
-        <div className="w-full h-screen bg-[#070b13] text-sky-400 flex flex-col justify-center items-center font-mono">
-          <Sparkles className="w-10 h-10 text-blue-500 animate-spin mb-4" />
-          <span className="tracking-widest text-[11px] uppercase">VERIFYING SANCTUARY CREDENTIALS...</span>
-        </div>
-      );
-    }
+     if (!authChecked) {
+       return (
+         <div className="w-full h-screen bg-[#070b13] text-sky-400 flex flex-col justify-center items-center font-mono">
+           <Sparkles className="w-10 h-10 text-blue-500 animate-spin mb-4" />
+           <span className="tracking-widest text-[11px] uppercase">VERIFYING SANCTUARY CREDENTIALS...</span>
+         </div>
+       );
+     }
 
-    // Check for password recovery mode (for reset link users) - takes priority over all auth states
-    const hashParams = new URLSearchParams(window.location.hash.substring(1));
-    const queryParams = new URLSearchParams(window.location.search);
-    const isRecovery = hashParams.get("type") === "recovery" || queryParams.get("type") === "recovery";
-    if (isRecovery) {
-      return <SetNewPasswordPage onNavigate={setAuthView} />;
-    }
+     // Check for password recovery mode (for reset link users) - takes priority over all auth states
+     if (isRecoveryMode) {
+       return <SetNewPasswordPage onNavigate={setAuthView} />;
+     }
 
     // Unauthenticated visitors must register/login to access the pulpit studio
     if (!currentUser) {

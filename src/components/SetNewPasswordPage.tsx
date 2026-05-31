@@ -38,6 +38,19 @@ export default function SetNewPasswordPage({ onNavigate }: SetNewPasswordPagePro
     checkRecoverySession();
   }, []);
 
+  // Watch for session changes - if session is cleared after signOut, navigate to login
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT") {
+        // After signOut, Supabase clears the hash, so clear recovery mode
+        // and navigate to login page
+        window.history.replaceState({}, document.title, window.location.pathname);
+        onNavigate("login");
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [onNavigate]);
+
   const handleSetNewPassword = async (e: FormEvent) => {
     e.preventDefault();
     setErrorText("");
