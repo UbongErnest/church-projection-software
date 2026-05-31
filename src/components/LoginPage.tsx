@@ -44,8 +44,8 @@ export default function LoginPage({ onNavigate }: LoginPageProps) {
         friendlyMessage = "Incorrect email address or password. Please try again.";
       } else if (err.message?.includes("Invalid email")) {
         friendlyMessage = "The email address layout entered is invalid.";
-      } else if (err.message?.includes("too many requests") || err.message?.includes("Too many")) {
-        friendlyMessage = "Too many failed attempts. Security lock engaged. Please wait or reset password.";
+      } else if (err.message?.includes("too many requests") || err.message?.includes("Too many") || err.message?.includes("rate limit")) {
+        friendlyMessage = "Rate limit exceeded. Please wait 60 seconds before signing in again.";
       }
       
       setErrorText(friendlyMessage);

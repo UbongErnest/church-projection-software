@@ -50,8 +50,8 @@ export default function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps
       const msg = err.message || "";
       if (msg.includes("User not found") || msg.includes("not found")) {
         setErrorText("No account found with this email address.");
-      } else if (msg.includes("too many requests") || msg.includes("Too many")) {
-        setErrorText("Too many requests. Please wait before trying again.");
+      } else if (msg.includes("too many requests") || msg.includes("Too many") || msg.includes("rate limit")) {
+        setErrorText("Rate limit exceeded. Please wait 60 seconds before requesting another reset link.");
       } else {
         setErrorText("Failed to send reset email. Please try again.");
       }

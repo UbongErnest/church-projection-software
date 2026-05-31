@@ -78,7 +78,11 @@ export default function SetNewPasswordPage({ onNavigate }: SetNewPasswordPagePro
       }, 2000);
     } catch (err: any) {
       console.error("Password update failed", err);
-      setErrorText(err.message || "Failed to update password. Please try again.");
+      if (err.message?.includes("too many requests") || err.message?.includes("Too many") || err.message?.includes("rate limit")) {
+        setErrorText("Rate limit exceeded. Please wait 60 seconds before trying again.");
+      } else {
+        setErrorText(err.message || "Failed to update password. Please try again.");
+      }
     } finally {
       setLoading(false);
     }

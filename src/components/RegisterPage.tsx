@@ -177,6 +177,8 @@ const handleRegister = async (e: FormEvent) => {
     } catch (err: any) {
       if (err.message?.includes("User already registered")) {
         setErrorText("This email is already registered. Please sign in instead.");
+      } else if (err.message?.includes("rate limit") || err.message?.toLowerCase().includes("too many")) {
+        setErrorText("Email rate limit exceeded. Please wait 60 seconds before trying again.");
       } else {
         console.error("Auth register failed", err);
         setErrorText(err.message || "An unexpected error occurred during registration. Please try again.");

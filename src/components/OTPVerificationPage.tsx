@@ -1,6 +1,6 @@
 import React, { useState, FormEvent, useRef, useEffect } from "react";
 import { supabase } from "../supabase";
-import { BookOpen, Mail, Shield, ChevronLeft, RefreshCw } from "lucide-react";
+import { Shield, ChevronLeft, RefreshCw } from "lucide-react";
 
 interface OTPVerificationPageProps {
   email: string;
@@ -130,8 +130,8 @@ export default function OTPVerificationPage({ email, userData, onNavigate, onVer
 
       if (err.message?.includes("expired") || err.message?.includes("Invalid")) {
         friendlyMessage = "This OTP code has expired. Please request a new one.";
-      } else if (err.message?.includes("too many requests") || err.message?.includes("Too many")) {
-        friendlyMessage = "Too many attempts. Please wait a moment before trying again.";
+      } else if (err.message?.includes("too many requests") || err.message?.includes("Too many") || err.message?.includes("rate limit")) {
+        friendlyMessage = "Rate limit exceeded. Please wait 60 seconds before trying again.";
       }
 
       setErrorText(friendlyMessage);
@@ -150,7 +150,7 @@ export default function OTPVerificationPage({ email, userData, onNavigate, onVer
     try {
       const { error } = await supabase.auth.signUp({
         email: email,
-        password: Math.random().toString(36).slice(-8) + "Aa1!",
+        password: "tempPassword123!",
         options: {
           data: {
             display_name: userData.displayName,
@@ -165,14 +165,22 @@ export default function OTPVerificationPage({ email, userData, onNavigate, onVer
         },
       });
 
-      if (error && !error.message?.includes("User already registered")) {
+      if (error && !error.message?.includes("rate limit")) {
         throw error;
       }
 
-      setSuccessText("If the email exists and is unverified, a new OTP code has been sent.");
+      if (error && error.message?.includes("rate limit")) {
+        setErrorText("Email rate limit exceeded. Please wait 60 seconds before requesting another OTP code.");
+      } else {
+        setSuccessText("A new OTP code has been sent to your email.");
+      }
     } catch (err: any) {
       console.error("Resend OTP failed", err);
-      setErrorText(err.message || "Failed to resend OTP. Please try again.");
+      if (err.message?.includes("rate limit") || err.message?.toLowerCase().includes("too many")) {
+        setErrorText("Email rate limit exceeded. Please wait 60 seconds before requesting another OTP code.");
+      } else {
+        setErrorText(err.message || "Failed to resend OTP. Please try again.");
+      }
     } finally {
       setResendLoading(false);
     }
