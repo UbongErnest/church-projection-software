@@ -5,6 +5,7 @@ import ProjectorScreen from "./components/ProjectorScreen";
 import SermonNotepad from "./components/SermonNotepad";
 import LandingPage from "./components/LandingPage";
 import ResetPage from "./components/ResetPasswordPage";
+import ResetPasswordOTPPage from "./components/ResetPasswordOTPPage";
 import SetNewPasswordPage from "./components/SetNewPasswordPage";
 import RegisterPage from "./components/RegisterPage";
 import LoginPage from "./components/LoginPage";
@@ -106,7 +107,7 @@ export default function App() {
      const [currentUser, setCurrentUser] = useState<SupabaseUser | null>(null);
      const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
      const [authChecked, setAuthChecked] = useState<boolean>(false);
-     const [authView, setAuthView] = useState<"landing" | "login" | "register" | "reset-password" | "otp-verification" | "set-new-password">("landing");
+     const [authView, setAuthView] = useState<"landing" | "login" | "register" | "reset-password" | "otp-verification" | "set-new-password" | "otp-reset-password">("landing");
      const [isRecoveryMode, setIsRecoveryMode] = useState<boolean>(false);
 const [pendingEmail, setPendingEmail] = useState<string>("");
   const [pendingUserData, setPendingUserData] = useState<{
@@ -1005,8 +1006,17 @@ if (authView === "otp-verification") {
           setAuthView("login");
         }} />;
       }
+      if (authView === "otp-reset-password") {
+        return <ResetPasswordOTPPage email={pendingEmail} onNavigate={(view, email) => {
+          setPendingEmail(email || pendingEmail);
+          setAuthView(view as any);
+        }} />;
+      }
       if (authView === "reset-password") {
-        return <ResetPage onNavigate={setAuthView} />;
+        return <ResetPage onNavigate={(view, email) => {
+          setPendingEmail(email || "");
+          setAuthView(view as any);
+        }} />;
       }
       if (authView === "set-new-password") {
         return <SetNewPasswordPage onNavigate={setAuthView} />;

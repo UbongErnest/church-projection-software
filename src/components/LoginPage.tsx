@@ -3,7 +3,7 @@ import { supabase } from "../supabase";
 import { BookOpen, Mail, Lock, LogIn, ChevronLeft, Eye, EyeOff, UserPlus } from "lucide-react";
 
 interface LoginPageProps {
-  onNavigate: (view: "landing" | "login" | "register" | "reset-password" | "otp-verification") => void;
+  onNavigate: (view: "landing" | "login" | "register" | "reset-password" | "otp-verification" | "otp-reset-password") => void;
 }
 
 export default function LoginPage({ onNavigate }: LoginPageProps) {

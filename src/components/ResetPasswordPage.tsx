@@ -1,28 +1,16 @@
-import React, { useState, FormEvent, useEffect, useRef } from "react";
+import React, { useState, FormEvent, useRef } from "react";
 import { supabase } from "../supabase";
-import { BookOpen, Mail, ChevronLeft, CheckCircle } from "lucide-react";
-
-const APP_URL = import.meta.env.VITE_APP_URL || window.location.origin;
+import { BookOpen, Mail, ChevronLeft } from "lucide-react";
 
 interface ResetPasswordPageProps {
-  onNavigate: (view: "landing" | "login" | "register" | "reset-password" | "set-new-password") => void;
+  onNavigate: (view: "landing" | "login" | "register" | "reset-password" | "otp-reset-password" | "set-new-password", email?: string) => void;
 }
 
 export default function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps) {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState("");
-  const [resetSent, setResetSent] = useState(false);
   const isSubmittingRef = useRef(false);
-
-  // If user lands on reset-password with recovery hash, redirect to password set page
-  useEffect(() => {
-    const hashParams = new URLSearchParams(window.location.hash.substring(1));
-    const queryParams = new URLSearchParams(window.location.search);
-    if (hashParams.get("type") === "recovery" || queryParams.get("type") === "recovery") {
-      onNavigate("set-new-password");
-    }
-  }, [onNavigate]);
 
   const handleRequestReset = async (e: FormEvent) => {
     e.preventDefault();
@@ -34,7 +22,6 @@ export default function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps
       return;
     }
     isSubmittingRef.current = true;
-    setResetSent(false);
 
     const emailVal = email.trim();
     if (!emailVal) {
@@ -46,14 +33,18 @@ export default function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(emailVal, {
-        redirectTo: `${APP_URL}/reset-password`,
+      // Send OTP for password reset using Supabase's email OTP
+      const { error } = await supabase.auth.signInWithOtp({
+        email: emailVal,
+        options: {
+          shouldCreateUser: false,
+        }
       });
 
       if (error) {
         throw error;
       }
-      setResetSent(true);
+      onNavigate("otp-reset-password", emailVal);
     } catch (err: any) {
       console.error("Password reset failed", err);
       const msg = err.message || "";
@@ -92,7 +83,7 @@ export default function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps
             Reset Password
           </h2>
           <span className="text-[9px] font-mono text-blue-400 uppercase tracking-widest block font-bold mt-0.5">
-            Enter your email to receive a reset link
+            Enter your email to receive an OTP code
           </span>
         </div>
 
@@ -100,13 +91,6 @@ export default function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps
           <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-[11px] p-3 rounded-lg flex items-start gap-2 mb-4 animate-fade-in leading-normal font-sans">
             <span className="font-bold shrink-0">⚠️ Error:</span>
             <span>{errorText}</span>
-          </div>
-        )}
-
-        {resetSent && (
-          <div className="bg-green-500/10 border border-green-500/20 text-green-400 text-[11px] p-3 rounded-lg flex items-center gap-2 mb-4">
-            <CheckCircle className="w-4 h-4 shrink-0" />
-            <span>Reset email sent! Check your inbox for the link.</span>
           </div>
         )}
 

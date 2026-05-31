@@ -3,7 +3,7 @@ import { supabase } from "../supabase";
 import { BookOpen, Lock, KeyRound, ChevronLeft, Eye, EyeOff, CheckCircle } from "lucide-react";
 
 interface SetNewPasswordPageProps {
-  onNavigate: (view: "landing" | "login" | "register" | "reset-password" | "set-new-password" | "otp-verification") => void;
+  onNavigate: (view: "landing" | "login" | "register" | "reset-password" | "set-new-password" | "otp-verification" | "otp-reset-password", email?: string) => void;
 }
 
 export default function SetNewPasswordPage({ onNavigate }: SetNewPasswordPageProps) {
@@ -18,18 +18,8 @@ export default function SetNewPasswordPage({ onNavigate }: SetNewPasswordPagePro
 
   useEffect(() => {
     const checkRecoverySession = async () => {
-      // Supabase automatically processes hash fragment via onAuthStateChange
-      // Check if we have recovery params in hash or query
-      const hashParams = new URLSearchParams(window.location.hash.substring(1));
-      const queryParams = new URLSearchParams(window.location.search);
-      const type = hashParams.get("type") || queryParams.get("type");
-
-      if (type !== "recovery") {
-        setErrorText("Invalid or expired reset link. Please request a new password reset.");
-        return;
-      }
-
-      // Get session - Supabase client should have processed the hash
+      // Check if there's a valid session for password reset
+      // This can come from OTP verification or other recovery methods
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         setErrorText("Invalid or expired reset link. Please request a new password reset.");
