@@ -25,6 +25,7 @@ export default function OTPVerificationPage({ email, userData, onNavigate, onVer
   const [errorText, setErrorText] = useState("");
   const [successText, setSuccessText] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [otpExpiry, setOtpExpiry] = useState(300); // 5 minutes in seconds
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const isVerifyingRef = useRef(false);
   const isResendingRef = useRef(false);
@@ -33,6 +34,20 @@ export default function OTPVerificationPage({ email, userData, onNavigate, onVer
     if (inputRefs.current[0]) {
       inputRefs.current[0].focus();
     }
+
+    // Start OTP expiry countdown (match Supabase setting - 300 seconds)
+    setOtpExpiry(300);
+    const expiryInterval = setInterval(() => {
+      setOtpExpiry((prev) => {
+        if (prev <= 1) {
+          clearInterval(expiryInterval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(expiryInterval);
   }, []);
 
   const handleInputChange = (index: number, value: string) => {
@@ -114,6 +129,14 @@ const handleVerifyOTP = async (e: FormEvent) => {
     setLoading(true);
 
     try {
+      // Log clock sync info for debugging
+      const clientTime = new Date().toISOString();
+      console.log("[VERIFY OTP] Clock sync check:", {
+        clientTime,
+        otpCodeLength: otpCode.length,
+        email
+      });
+
       // Log what we're about to send
       console.log("[VERIFY OTP] Attempting verification:", {
         email,
@@ -131,6 +154,7 @@ const handleVerifyOTP = async (e: FormEvent) => {
       console.log("[VERIFY OTP] Response:", {
         hasError: !!error,
         errorMessage: error?.message,
+        errorCode: error?.code,
         hasSession: !!data?.session,
         hasUser: !!data?.user
       });
@@ -141,8 +165,28 @@ const handleVerifyOTP = async (e: FormEvent) => {
           message: error.message,
           name: error.name,
           status: error.status,
+          code: error.code,
           fullError: JSON.stringify(error)
         });
+
+        // Send diagnostic to server for SMTP/email analysis
+        try {
+          await fetch("/api/email/diagnostic", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              type: "verify-otp-error",
+              email,
+              error: error.message,
+              status: error.status,
+              code: error.code,
+              timestamp: clientTime
+            })
+          });
+        } catch (diagErr) {
+          console.warn("Failed to send diagnostic:", diagErr);
+        }
+
         throw error;
       }
 
@@ -153,9 +197,12 @@ const handleVerifyOTP = async (e: FormEvent) => {
           onVerificationSuccess();
         }, 1500);
       } else {
-        // No session could mean email not confirmed yet or user not found
+        // No session after verification - could be:
+        // 1. The OTP was already used/expired
+        // 2. Email template misconfiguration (magic link vs OTP)
+        // Check error message for clues
         console.warn("[VERIFY OTP] No session returned:", data);
-        setErrorText("Verification failed. The OTP may have already been used or expired. Please click 'Resend OTP Code' to get a new code.");
+        setErrorText("This OTP code has expired or is invalid. Click 'Resend OTP Code' to get a new one.");
       }
     } catch (err: any) {
       console.error("OTP verification failed", err);
@@ -214,6 +261,7 @@ const handleVerifyOTP = async (e: FormEvent) => {
 
       console.log("[RESEND OTP] Response:", {
         error: error?.message,
+        errorCode: error?.code,
       });
 
       if (error) {
@@ -231,6 +279,7 @@ const handleVerifyOTP = async (e: FormEvent) => {
 
       // Success - OTP resent
       setSuccessText("A new OTP code has been sent to your email.");
+      setOtpExpiry(300); // Reset expiry timer
       setResendCooldown(60);
       const interval = setInterval(() => {
         setResendCooldown((prev) => prev <= 1 ? (clearInterval(interval), 0) : prev - 1);
@@ -241,9 +290,24 @@ const handleVerifyOTP = async (e: FormEvent) => {
       if (msg.includes("rate limit") || msg.toLowerCase().includes("too many") || msg.includes("429")) {
         setErrorText("Too many signup emails have been sent recently. Please try again later.");
       } else if (msg.includes("not found") || msg.includes("No user found")) {
-        setErrorText("User account not found. Please register again.");
+        setErrorText("User account not found. Please go back and register again.");
       } else {
-        setErrorText(msg || "Failed to resend OTP. Please try again.");
+        // Fallback: Try signUp again for edge cases (handles "user already exists" case)
+        try {
+          console.log("[RESEND OTP] Trying fallback signUp for unconfirmed user");
+          const { error: fallbackError } = await supabase.auth.signUp({
+            email: email,
+            password: Math.random().toString(36).slice(-12) + "Aa1!",
+          });
+          if (!fallbackError) {
+            setSuccessText("A new OTP code has been sent to your email.");
+            setOtpExpiry(300);
+          } else {
+            setErrorText(fallbackError.message || "Failed to resend OTP. Please try again.");
+          }
+        } catch (fallbackErr: any) {
+          setErrorText(msg || "Failed to resend OTP. Please try again.");
+        }
       }
     } finally {
       setResendLoading(false);
@@ -284,6 +348,12 @@ const handleVerifyOTP = async (e: FormEvent) => {
           </p>
           <p className="text-[11px] text-white font-bold text-center mt-1 truncate">
             {email}
+          </p>
+        </div>
+
+        <div className="mb-4 p-3 bg-amber-600/10 border border-amber-500/20 rounded-lg">
+          <p className="text-[10px] text-amber-300 text-center font-mono">
+            Code expires in: <span className="text-white font-bold">{Math.floor(otpExpiry / 60)}:{String(otpExpiry % 60).padStart(2, '0')}</span>
           </p>
         </div>
 

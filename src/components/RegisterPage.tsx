@@ -137,15 +137,15 @@ const handleRegister = async (e: FormEvent) => {
           nameHint: signUpError.message?.includes("rate limit") ? "rate_limit_exceeded" : 
                     signUpError.message?.toLowerCase().includes("smtp") ? "smtp_error" : "unknown"
         });
-        throw signUpError;
+throw signUpError;
       }
 
       // Check if user needs email verification (OTP)
       // When email verification is required, Supabase returns no session
       const hasSession = !!data.session;
-      
+
       console.log("Signup response:", { hasSession, hasUser: !!data.user, data });
-      
+
       // If no session (whether user object exists or not), email verification is required
       if (!hasSession) {
         console.log("Email verification required - navigating to OTP screen");
@@ -194,7 +194,7 @@ const handleRegister = async (e: FormEvent) => {
       
       onNavigate("login");
       return;
-    } catch (err: any) {
+} catch (err: any) {
       console.error("Auth register failed", err);
       const msg = err.message || "";
       if (msg.includes("User already registered") || msg.includes("user_already_exists")) {
@@ -210,9 +210,9 @@ const handleRegister = async (e: FormEvent) => {
     }
   };
 
-  return (
+return (
     <div className="min-h-screen bg-[#0A0C10] text-[#E0E0E0] select-none font-sans relative overflow-y-auto flex flex-col justify-center items-center py-10 px-4">
-      
+
       {/* Background glow atmosphere */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[450px] h-[450px] bg-blue-600/10 rounded-full blur-[100px] -z-10" />
 
