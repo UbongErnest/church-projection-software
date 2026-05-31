@@ -169,20 +169,9 @@ const handleVerifyOTP = async (e: FormEvent) => {
           fullError: JSON.stringify(error)
         });
 
-        // Send diagnostic to server for SMTP/email analysis
+        // Log diagnostic to server for SMTP/email analysis (use GET to avoid CORS issues)
         try {
-          await fetch("/api/email/diagnostic", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              type: "verify-otp-error",
-              email,
-              error: error.message,
-              status: error.status,
-              code: error.code,
-              timestamp: clientTime
-            })
-          });
+          await fetch(`/api/email/diagnostic?type=verify-otp-error&email=${encodeURIComponent(email)}&error=${encodeURIComponent(error.message || '')}&statusCode=${error.status || 0}&code=${encodeURIComponent(error.code || '')}`);
         } catch (diagErr) {
           console.warn("Failed to send diagnostic:", diagErr);
         }
