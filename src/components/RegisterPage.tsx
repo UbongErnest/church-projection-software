@@ -124,9 +124,14 @@ const handleRegister = async (e: FormEvent) => {
       }
 
       // Check if user needs email verification (OTP)
-      const userId = data.user?.id;
-      if (!userId && !data.session) {
-        // User created but needs email verification - navigate to OTP screen
+      // When email verification is required, Supabase returns no session
+      const hasSession = !!data.session;
+      
+      console.log("Signup response:", { hasSession, data });
+      
+      // If no session (whether user object exists or not), email verification is required
+      if (!hasSession) {
+        console.log("Email verification required - navigating to OTP screen");
         onNavigate("otp-verification", emailVal, {
           displayName: nameVal,
           churchName: churchVal,
@@ -140,40 +145,36 @@ const handleRegister = async (e: FormEvent) => {
         return;
       }
 
-      // User was created and auto-signed in (email confirmation disabled)
-      if (data.session) {
-        // Try to insert user profile
-        const now = new Date().toISOString();
-        const userPayload = {
-          user_id: data.session.user.id,
-          email: emailVal,
-          display_name: nameVal,
-          created_at: now,
-          church_name: churchVal,
-          country: countryVal,
-          state: stateVal,
-          city: cityVal,
-          location: locationVal,
-          denomination: denomVal,
-          phone: phoneVal,
-          subscription_plan: "free" as const,
-          subscription_status: "active",
-          subscription_end: null
-        };
+      // User was created and auto-signed in (email confirmation disabled) or already logged in
+      const uid = data.session!.user.id;
+      // Try to insert user profile
+      const now = new Date().toISOString();
+      const userPayload = {
+        user_id: uid,
+        email: emailVal,
+        display_name: nameVal,
+        created_at: now,
+        church_name: churchVal,
+        country: countryVal,
+        state: stateVal,
+        city: cityVal,
+        location: locationVal,
+        denomination: denomVal,
+        phone: phoneVal,
+        subscription_plan: "free" as const,
+        subscription_status: "active",
+        subscription_end: null
+      };
 
-        const { error: profileError } = await supabase
-          .from('users')
-          .insert(userPayload);
+      const { error: profileError } = await supabase
+        .from('users')
+        .insert(userPayload);
 
-        if (profileError) {
-          console.error("Profile creation error:", profileError);
-        }
-        
-        onNavigate("login");
-        return;
+      if (profileError) {
+        console.error("Profile creation error:", profileError);
       }
-
-      throw new Error("User creation failed - no user returned");
+      
+      onNavigate("login");
     } catch (err: any) {
       if (err.message?.includes("User already registered")) {
         setErrorText("This email is already registered. Please sign in instead.");

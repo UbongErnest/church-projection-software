@@ -148,6 +148,7 @@ export default function OTPVerificationPage({ email, userData, onNavigate, onVer
     setResendLoading(true);
 
     try {
+      // For OTP resend, we try to sign up again - if user exists with unverified email, Supabase will send a new OTP
       const { error } = await supabase.auth.signUp({
         email: email,
         password: "tempPassword123!",
@@ -165,15 +166,11 @@ export default function OTPVerificationPage({ email, userData, onNavigate, onVer
         },
       });
 
-      if (error && !error.message?.includes("rate limit")) {
+      if (error && !error.message?.includes("User already registered")) {
         throw error;
       }
 
-      if (error && error.message?.includes("rate limit")) {
-        setErrorText("Email rate limit exceeded. Please wait 60 seconds before requesting another OTP code.");
-      } else {
-        setSuccessText("A new OTP code has been sent to your email.");
-      }
+      setSuccessText("A new OTP code has been sent to your email.");
     } catch (err: any) {
       console.error("Resend OTP failed", err);
       if (err.message?.includes("rate limit") || err.message?.toLowerCase().includes("too many")) {
