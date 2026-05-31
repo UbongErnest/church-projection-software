@@ -109,6 +109,7 @@ export default function App() {
      const [authChecked, setAuthChecked] = useState<boolean>(false);
      const [authView, setAuthView] = useState<"landing" | "login" | "register" | "reset-password" | "otp-verification" | "set-new-password" | "otp-reset-password">("landing");
      const [isRecoveryMode, setIsRecoveryMode] = useState<boolean>(false);
+     const [passwordResetFlow, setPasswordResetFlow] = useState<boolean>(false);
 const [pendingEmail, setPendingEmail] = useState<string>("");
   const [pendingUserData, setPendingUserData] = useState<{
     displayName: string;
@@ -126,14 +127,17 @@ const [pendingEmail, setPendingEmail] = useState<string>("");
        let mounted = true;
        let initialSessionHandled = false;
 
-       const checkRecoveryMode = () => {
-         const hashParams = new URLSearchParams(window.location.hash.substring(1));
-         const queryParams = new URLSearchParams(window.location.search);
-         const isRecovery = hashParams.get("type") === "recovery" || queryParams.get("type") === "recovery";
-         if (mounted) {
-           setIsRecoveryMode(isRecovery);
-         }
-       };
+const checkRecoveryMode = () => {
+          const hashParams = new URLSearchParams(window.location.hash.substring(1));
+          const queryParams = new URLSearchParams(window.location.search);
+          // Only set recovery mode from URL if we're not already in a password reset flow
+          if (!passwordResetFlow) {
+            const isRecovery = hashParams.get("type") === "recovery" || queryParams.get("type") === "recovery";
+            if (mounted) {
+              setIsRecoveryMode(isRecovery);
+            }
+          }
+        };
 
        // Set up auth state listener - fires immediately with current session
        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -189,15 +193,19 @@ const [pendingEmail, setPendingEmail] = useState<string>("");
        };
      }, []);
 
-// Clear recovery mode when user session is cleared (after signOut)
+// Handle auth state changes for recovery flow
       useEffect(() => {
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
           if (event === "SIGNED_OUT") {
+            // After password reset and signOut, we're done - clear recovery flow state
+            if (passwordResetFlow) {
+              setPasswordResetFlow(false);
+            }
             setIsRecoveryMode(false);
           }
         });
         return () => subscription.unsubscribe();
-      }, []);
+      }, [passwordResetFlow]);
 
     useEffect(() => {
       if (!currentUser) {
@@ -975,10 +983,15 @@ const { data: sessionData } = await supabase.auth.getSession();
        );
      }
 
-     // Check for password recovery mode (for reset link users) - takes priority over all auth states
-     if (isRecoveryMode) {
-       return <SetNewPasswordPage onNavigate={setAuthView} />;
-     }
+// Check for password recovery mode (for reset link users) - takes priority over all auth states
+      if (isRecoveryMode || passwordResetFlow) {
+        return <SetNewPasswordPage onNavigate={(view, email) => {
+          setAuthView(view as any);
+          if (view === "login") {
+            setPasswordResetFlow(false); // Clear reset flow state when navigating to login
+          }
+        }} />;
+      }
 
     // Unauthenticated visitors must register/login to access the pulpit studio
     if (!currentUser) {
@@ -1009,6 +1022,9 @@ if (authView === "otp-verification") {
       if (authView === "otp-reset-password") {
         return <ResetPasswordOTPPage email={pendingEmail} onNavigate={(view, email) => {
           setPendingEmail(email || pendingEmail);
+          if (view === "set-new-password") {
+            setPasswordResetFlow(true); // Enable reset flow to allow SetNewPasswordPage access even with session
+          }
           setAuthView(view as any);
         }} />;
       }

@@ -15,6 +15,12 @@ export default function SetNewPasswordPage({ onNavigate }: SetNewPasswordPagePro
   const [errorText, setErrorText] = useState("");
   const [success, setSuccess] = useState(false);
   const isSubmittingRef = useRef(false);
+  const successRef = useRef(false);
+
+  // Keep successRef in sync with success state
+  useEffect(() => {
+    successRef.current = success;
+  }, [success]);
 
   useEffect(() => {
     const checkRecoverySession = async () => {
@@ -27,19 +33,6 @@ export default function SetNewPasswordPage({ onNavigate }: SetNewPasswordPagePro
     };
     checkRecoverySession();
   }, []);
-
-  // Watch for session changes - if session is cleared after signOut, navigate to login
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_OUT") {
-        // After signOut, Supabase clears the hash, so clear recovery mode
-        // and navigate to login page
-        window.history.replaceState({}, document.title, window.location.pathname);
-        onNavigate("login");
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, [onNavigate]);
 
   const handleSetNewPassword = async (e: FormEvent) => {
     e.preventDefault();
@@ -84,12 +77,7 @@ export default function SetNewPasswordPage({ onNavigate }: SetNewPasswordPagePro
       }
       // Sign out after successful password update so user can login with new password
       await supabase.auth.signOut();
-      // Clear hash to prevent re-processing
-      window.history.replaceState({}, document.title, "/login");
       setSuccess(true);
-      setTimeout(() => {
-        onNavigate("login");
-      }, 2000);
     } catch (err: any) {
       console.error("Password update failed", err);
       const msg = err.message || "";
@@ -103,6 +91,26 @@ export default function SetNewPasswordPage({ onNavigate }: SetNewPasswordPagePro
       isSubmittingRef.current = false;
     }
   };
+
+  // Handle SIGNED_OUT event - navigate to login after signOut
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT" && successRef.current) {
+        onNavigate("login");
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [onNavigate]);
+
+  // Show success message and fade out
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => {
+        onNavigate("login");
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [success, onNavigate]);
 
   return (
     <div className="min-h-screen bg-[#0A0C10] text-[#E0E0E0] select-none font-sans relative overflow-hidden flex flex-col justify-center items-center px-4">

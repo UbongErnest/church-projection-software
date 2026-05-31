@@ -91,23 +91,18 @@ export default function ResetPasswordOTPPage({ email, onNavigate }: ResetPasswor
       const { data, error } = await supabase.auth.verifyOtp({
         email: email,
         token: otpCode,
-        type: "email",
+        type: "recovery",
       });
 
       if (error) {
         throw error;
       }
 
-      if (data.session) {
-        setSuccessText("OTP verified successfully! You can now set your new password.");
-        setTimeout(() => {
-          onNavigate("set-new-password", email);
-        }, 1500);
-      } else {
-        setErrorText("Invalid or expired OTP code. Please try again.");
-        setOtp(["", "", "", "", "", ""]);
-        inputRefs.current[0]?.focus();
-      }
+      // Navigate to set-new-password - the session is valid for updateUser
+      setSuccessText("OTP verified successfully! You can now set your new password.");
+      setTimeout(() => {
+        onNavigate("set-new-password", email);
+      }, 1500);
     } catch (err: any) {
       console.error("OTP verification failed", err);
       let msg = (err.message || "").toLowerCase();
