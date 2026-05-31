@@ -133,12 +133,12 @@ parallelVersion,
    const [lookupError, setLookupError] = useState<string | null>(null);
 
 // Theme lock helper
-    const isThemeLocked = (themeId: string) => {
-      if (["nebula-dark", "emerald-sanctuary", "crimson-grace", "royal-gold", "sanctuary-aurora"].includes(themeId)) {
-        return userPlan !== "yearly"; // Premium (yearly) only
-      }
-      return false;
-    };
+const isThemeLocked = (themeId: string) => {
+       if (["sanctuary-aurora"].includes(themeId)) {
+         return userPlan !== "yearly"; // Premium (yearly) only - special premium theme
+       }
+       return false;
+     };
 
 // Flutterwave checkout handler - server initializes checkout, Flutterwave redirects back after payment
     const readApiResponse = async (response: Response) => {
@@ -675,17 +675,11 @@ return {
   };
 
   // Add custom announcement with instant broadcast
-  const handleCreateAnnouncement = (e: FormEvent) => {
-    e.preventDefault();
-    if (!newAnnTitle.trim() || !newAnnBody.trim()) return;
+const handleCreateAnnouncement = (e: FormEvent) => {
+     e.preventDefault();
+     if (!newAnnTitle.trim() || !newAnnBody.trim()) return;
 
-    if (userPlan === "free" && announcements.length >= 3) {
-      setUpgradeTriggerSource("Unlimited Announcements");
-      setShowUpgradePromptModal(true);
-      return;
-    }
-
-    const newSlide: AnnouncementSlide = {
+     const newSlide: AnnouncementSlide = {
       id: `ann-${Date.now()}`,
       title: newAnnTitle.trim(),
       body: newAnnBody.trim()
@@ -805,45 +799,26 @@ const handleSaveHymn = (e: FormEvent) => {
       setNewHymnStanzas([{ text: "" }]);
     };
 
-   const handleTabClick = (tab: "ai-feed" | "manual-bible" | "songs" | "announcements" | "media-library" | "plans") => {
-    if (tab === "plans" || tab === "manual-bible") {
-      setActiveTab(tab);
-      return;
-    }
+const handleTabClick = (tab: "ai-feed" | "manual-bible" | "songs" | "announcements" | "media-library" | "plans") => {
+     if (tab === "plans" || tab === "manual-bible") {
+       setActiveTab(tab);
+       return;
+     }
 
-    // Free plan: only bible explorer
-    if (userPlan === "free") {
-      setUpgradeTriggerSource(
-        tab === "ai-feed" 
-          ? "AI Live Session Listener" 
-          : tab === "songs" 
-            ? "Hymnals Library" 
-            : tab === "announcements"
-              ? "Church Announcements"
-              : "Media Projection"
-      );
-      setShowUpgradePromptModal(true);
-      return;
-    }
+     // Free plan: Bible Explorer, Hymns, Announcements, Media Projector
+     if (userPlan === "free") {
+       if (tab === "ai-feed") {
+         setUpgradeTriggerSource("AI Scripture Detection & Projection");
+         setShowUpgradePromptModal(true);
+         return;
+       }
+       setActiveTab(tab);
+       return;
+     }
 
-    // Monthly/Pro plan: bible explorer + AI listener + media projection
-    if (userPlan === "monthly") {
-      if (tab === "songs" || tab === "announcements") {
-        setUpgradeTriggerSource(
-          tab === "songs" 
-            ? "Hymnals Library" 
-            : "Church Announcements"
-        );
-        setShowUpgradePromptModal(true);
-        return;
-      }
-      setActiveTab(tab);
-      return;
-    }
-
-    // Yearly/Premium plan: all features
-    setActiveTab(tab);
-  };
+     // Monthly/Pro plan: all features
+     setActiveTab(tab);
+   };
 
   const activeSong = [...DEFAULT_SONGS, ...customSongs].find((s) => s.id === selectedSongId) || DEFAULT_SONGS[0];
 
@@ -1709,7 +1684,7 @@ const handleSaveHymn = (e: FormEvent) => {
               )}
 
               {/* TAB 4.5: MEDIA LIBRARY */}
-              {activeTab === "media-library" && userPlan !== "free" && (
+              {activeTab === "media-library" && (
                 <div className="space-y-3">
                   <div>
                     <span className="text-[8px] font-mono uppercase tracking-widest text-white/40 block mb-1.5">
@@ -1828,7 +1803,7 @@ onChange={(e) => {
                     <div className="text-[10.5px] leading-relaxed text-[#b1c3de]">
                       <span className="font-bold text-white block">Active Subscription Management</span>
                       Your current active plan is: <span className="text-amber-400 font-extrabold uppercase font-mono">
-                        {userPlan === "free" ? "FREE PLAN" : userPlan === "monthly" ? "PRO MONTHLY PLAN" : "PREMIUM PLAN"}
+                        {userPlan === "free" ? "FREE PLAN" : userPlan === "monthly" ? "PRO PLAN" : "PREMIUM PLAN"}
                       </span>.
                       Upgrade or switch plans below. Updates are immediately saved and synced across screens in real-time.
                     </div>
@@ -1847,12 +1822,12 @@ onChange={(e) => {
                       <div>
                         <h4 className="font-sans font-bold text-xs text-white uppercase tracking-wider">Free Plan</h4>
                         <div className="text-lg font-bold text-white font-mono mt-1">₦0<span className="text-xs text-white/55">/mo</span></div>
-                        <p className="text-[10px] text-white/50 mt-1 leading-normal">Manual Bible Explorer &amp; Casting only. (AI sermon listener, Hymnals, and Announcements locked).</p>
+                        <p className="text-[10px] text-white/50 mt-1 leading-normal">Core features included: Bible Explorer, Hymns, Announcements, and Media Projector. (AI Scripture Detection & Projection locked).</p>
                       </div>
                       {userPlan !== "free" && (
                         <button
                           onClick={async () => {
-                            if (confirm("Are you sure you want to downgrade to the Free Plan? AI-powered auto-projection, Hymnals, Announcements, and Note Journaling will be locked.")) {
+                            if (confirm("Are you sure you want to downgrade to the Free Plan? AI Scripture Detection & Projection will be locked.")) {
                               if (onUpdateSubscription) await onUpdateSubscription("free");
                             }
                           }}
@@ -1873,19 +1848,19 @@ onChange={(e) => {
                         </span>
                       )}
                       <div>
-                        <h4 className="font-sans font-bold text-xs text-white uppercase tracking-wider">Pro Monthly</h4>
+                        <h4 className="font-sans font-bold text-xs text-white uppercase tracking-wider">Pro Plan</h4>
                         <div className="text-lg font-bold text-white font-mono mt-1">₦10,500<span className="text-xs text-white/55">/mo</span></div>
-                        <p className="text-[10px] text-white/50 mt-1 leading-normal">Unlocks AI-powered sermon live listening, automatic scripture projection, <strong>plus Media Projection</strong> for images and videos.</p>
+                        <p className="text-[10px] text-white/50 mt-1 leading-normal">All core features plus AI-powered sermon live listening and automatic scripture projection.</p>
                       </div>
 {userPlan !== "monthly" && (
-                         <button
-                           onClick={() => handleFlutterwaveCheckout("monthly")}
-                           disabled={checkoutLoading}
-                           className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs py-1.5 rounded-lg mt-3 transition cursor-pointer"
-                         >
-                           {userPlan === "yearly" ? "Switch to Pro Monthly" : "Upgrade to Pro Monthly (₦10,500)"}
-                         </button>
-                       )}
+                          <button
+                            onClick={() => handleFlutterwaveCheckout("monthly")}
+                            disabled={checkoutLoading}
+                            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs py-1.5 rounded-lg mt-3 transition cursor-pointer"
+                          >
+                            {userPlan === "yearly" ? "Switch to Pro" : "Upgrade to Pro (₦10,500)"}
+                          </button>
+                        )}
                      </div>
 
                      {/* Premium Card */}
@@ -1900,7 +1875,7 @@ onChange={(e) => {
                       <div>
                         <h4 className="font-sans font-bold text-xs text-amber-250 uppercase tracking-wider">Premium Plan</h4>
                         <div className="text-lg font-bold text-white font-mono mt-1">₦25,500<span className="text-xs text-white/55">/mo</span></div>
-                        <p className="text-[10px] text-white/50 mt-1 leading-normal">Unlocks the ENTIRE application: Hymnals, Announcements, Note cloud journal with Markdown exports, AI outline helper, custom church branding name, parallel dual translations, and advanced themes.</p>
+                        <p className="text-[10px] text-white/50 mt-1 leading-normal">Everything in Pro Plan, plus: Parallel scripture projections, custom church branding, advanced themes, and AI Copilot & Chat features.</p>
                       </div>
 {userPlan !== "yearly" && (
                          <button
@@ -2104,23 +2079,18 @@ onChange={(e) => {
               </div>
 
               <div className="flex items-center justify-between pt-1">
-                <span className="text-[9px] font-mono text-white/40 uppercase tracking-widest flex items-center gap-1.5">
-                  SHOW CHRISTIAN SACRED EMBLEM {userPlan === "free" && <Lock className="w-2.5 h-2.5 text-amber-500 shrink-0" />}
-                </span>
-                <button
-                  onClick={() => {
-                    if (userPlan === "free") {
-                      setUpgradeTriggerSource("Branding Watermark Removal");
-                      setShowUpgradePromptModal(true);
-                      return;
-                    }
-                    onChangeShowLogo(!showLogo);
-                    onCastSlide({ ...activeProjectedSlide, showLogo: !showLogo });
-                  }}
-                  className={`w-9 h-4.5 rounded-full p-0.5 transition-colors cursor-pointer ${
-                    showLogo ? "bg-blue-600" : "bg-white/10"
-                  } ${userPlan === "free" ? "opacity-55" : ""}`}
-                >
+<span className="text-[9px] font-mono text-white/40 uppercase tracking-widest flex items-center gap-1.5">
+                   SHOW CHRISTIAN SACRED EMBLEM
+                 </span>
+                 <button
+                   onClick={() => {
+                     onChangeShowLogo(!showLogo);
+                     onCastSlide({ ...activeProjectedSlide, showLogo: !showLogo });
+                   }}
+                   className={`w-9 h-4.5 rounded-full p-0.5 transition-colors cursor-pointer ${
+                     showLogo ? "bg-blue-600" : "bg-white/10"
+                   }`}
+                 >
                   <div
                     className={`bg-white w-3.5 h-3.5 rounded-full shadow-md transform transition-transform ${
                       showLogo ? "translate-x-4.5" : "translate-x-0"
@@ -2273,27 +2243,28 @@ onChange={(e) => {
               <div className="bg-white/5 border border-white/5 rounded-xl p-4 flex flex-col justify-between hover:border-blue-500/35 transition-all">
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-sans font-bold text-xs text-white uppercase tracking-wider">Pro Monthly</span>
+                    <span className="font-sans font-bold text-xs text-white uppercase tracking-wider">Pro Plan</span>
                     <Zap className="w-3.5 h-3.5 text-blue-400" />
                   </div>
                   <div className="text-xl font-bold text-white font-mono mt-1">₦10,500<span className="text-xs text-white/50">/mo</span></div>
-                  <ul className="text-[10px] text-white/55 space-y-1 mt-3">
-                    <li>✓ AI Sermon Live Listening</li>
-                    <li>✓ Automatic verse detection</li>
-                    <li>✓ Instant projector casting</li>
-                    <li>✓ Unlock KJV translation</li>
-                  </ul>
+<ul className="text-[10px] text-white/55 space-y-1 mt-3">
+                      <li>✓ Bible Explorer</li>
+                      <li>✓ Hymns</li>
+                      <li>✓ Announcements</li>
+                      <li>✓ Media Projector</li>
+                      <li className="text-blue-300 font-semibold">★ AI Scripture Detection & Projection</li>
+                    </ul>
                 </div>
 <button
-                   onClick={() => {
-                     handleFlutterwaveCheckout("monthly");
-                     setShowUpgradePromptModal(false);
-                   }}
-                   disabled={checkoutLoading}
-                   className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs py-2 rounded-lg mt-5 transition cursor-pointer"
-                 >
-                   Select Pro Monthly
-                 </button>
+                    onClick={() => {
+                      handleFlutterwaveCheckout("monthly");
+                      setShowUpgradePromptModal(false);
+                    }}
+                    disabled={checkoutLoading}
+                    className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs py-2 rounded-lg mt-5 transition cursor-pointer"
+                  >
+                    Select Pro Plan
+                  </button>
               </div>
 
               {/* Yearly card */}
@@ -2307,14 +2278,14 @@ onChange={(e) => {
                     <Crown className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
                   </div>
                   <div className="text-xl font-bold text-white font-mono mt-1">₦25,500<span className="text-xs text-white/50">/mo</span></div>
-                  <ul className="text-[10px] text-white/55 space-y-1 mt-3">
-                    <li className="text-amber-200/90 font-semibold">★ Sanctuary Notes Cloud Journal</li>
-                    <li className="text-amber-200/90 font-semibold">★ Praise Hymnals &amp; Media</li>
-                    <li className="text-amber-200/90 font-semibold">★ Parallel scripture projections</li>
-                    <li className="text-amber-200/90 font-semibold">★ Custom logo branding text</li>
-                    <li>✓ Premium Aurora theme overlay</li>
-                    <li>✓ All Pro Monthly features</li>
-                  </ul>
+<ul className="text-[10px] text-white/55 space-y-1 mt-3">
+                     <li className="text-amber-200/90 font-semibold">★ AI Scripture Detection & Projection</li>
+                     <li className="text-amber-200/90 font-semibold">★ All Free Plan features</li>
+                     <li className="text-amber-200/90 font-semibold">★ Parallel scripture projections</li>
+                     <li className="text-amber-200/90 font-semibold">★ Custom logo branding text</li>
+                     <li>✓ Premium Aurora theme overlay</li>
+                     <li>✓ AI Copilot & Chat features</li>
+                   </ul>
                 </div>
 <button
                    onClick={() => {
