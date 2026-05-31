@@ -8,6 +8,7 @@ import ResetPage from "./components/ResetPasswordPage";
 import SetNewPasswordPage from "./components/SetNewPasswordPage";
 import RegisterPage from "./components/RegisterPage";
 import LoginPage from "./components/LoginPage";
+import OTPVerificationPage from "./components/OTPVerificationPage";
 import { supabase, mapProfileFromDB, UserProfile } from "./supabase";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { Sparkles, CornerDownRight, Volume2, Notebook } from "lucide-react";
@@ -105,7 +106,18 @@ export default function App() {
     const [currentUser, setCurrentUser] = useState<SupabaseUser | null>(null);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [authChecked, setAuthChecked] = useState<boolean>(false);
-  const [authView, setAuthView] = useState<"landing" | "login" | "register" | "reset-password" | "set-new-password">("landing");
+  const [authView, setAuthView] = useState<"landing" | "login" | "register" | "reset-password" | "otp-verification" | "set-new-password">("landing");
+const [pendingEmail, setPendingEmail] = useState<string>("");
+  const [pendingUserData, setPendingUserData] = useState<{
+    displayName: string;
+    churchName: string;
+    country: string;
+    state: string;
+    city: string;
+    location: string;
+    denomination: string;
+    phone?: string;
+  } | null>(null);
 
 // Auth monitoring listener and real-time Supabase profile sync
     useEffect(() => {
@@ -950,8 +962,26 @@ const { data: sessionData } = await supabase.auth.getSession();
       if (authView === "login") {
         return <LoginPage onNavigate={setAuthView} />;
       }
-      if (authView === "register") {
-        return <RegisterPage onNavigate={setAuthView} />;
+if (authView === "register") {
+        return <RegisterPage onNavigate={(view, email, userData) => {
+          setPendingEmail(email || "");
+          setPendingUserData(userData || null);
+          setAuthView(view as any);
+        }} />;
+      }
+if (authView === "otp-verification") {
+        return <OTPVerificationPage email={pendingEmail} userData={pendingUserData || {
+          displayName: "",
+          churchName: "",
+          country: "",
+          state: "",
+          city: "",
+          location: "",
+          denomination: "",
+          phone: "",
+        }} onNavigate={setAuthView} onVerificationSuccess={() => {
+          setAuthView("login");
+        }} />;
       }
       if (authView === "reset-password") {
         return <ResetPage onNavigate={setAuthView} />;

@@ -3,7 +3,7 @@ import { supabase } from "../supabase";
 import { BookOpen, Lock, KeyRound, ChevronLeft, Eye, EyeOff, CheckCircle } from "lucide-react";
 
 interface SetNewPasswordPageProps {
-  onNavigate: (view: "landing" | "login" | "register" | "reset-password" | "set-new-password") => void;
+  onNavigate: (view: "landing" | "login" | "register" | "reset-password" | "set-new-password" | "otp-verification") => void;
 }
 
 export default function SetNewPasswordPage({ onNavigate }: SetNewPasswordPageProps) {

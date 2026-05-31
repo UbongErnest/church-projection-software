@@ -19,7 +19,16 @@ import {
 } from "lucide-react";
 
 interface RegisterPageProps {
-  onNavigate: (view: "landing" | "login" | "register" | "reset-password" | "set-new-password") => void;
+  onNavigate: (view: "landing" | "login" | "register" | "reset-password" | "otp-verification", email?: string, userData?: {
+    displayName: string;
+    churchName: string;
+    country: string;
+    state: string;
+    city: string;
+    location: string;
+    denomination: string;
+    phone?: string;
+  }) => void;
 }
 
 export default function RegisterPage({ onNavigate }: RegisterPageProps) {
@@ -114,46 +123,64 @@ const handleRegister = async (e: FormEvent) => {
         throw signUpError;
       }
 
-      // Check if user was created (even if email confirmation required)
-      const userId = data.user?.id || data.session?.user?.id;
-      if (!userId) {
-        throw new Error("User creation failed - no user returned");
+      // Check if user needs email verification (OTP)
+      const userId = data.user?.id;
+      if (!userId && !data.session) {
+        // User created but needs email verification - navigate to OTP screen
+        onNavigate("otp-verification", emailVal, {
+          displayName: nameVal,
+          churchName: churchVal,
+          country: countryVal,
+          state: stateVal,
+          city: cityVal,
+          location: locationVal,
+          denomination: denomVal,
+          phone: phoneVal || undefined,
+        });
+        return;
       }
 
-      // Try to insert user profile - may fail if email confirmation required
-      const now = new Date().toISOString();
-      const userPayload = {
-        user_id: userId,
-        email: emailVal,
-        display_name: nameVal,
-        created_at: now,
-        church_name: churchVal,
-        country: countryVal,
-        state: stateVal,
-        city: cityVal,
-        location: locationVal,
-        denomination: denomVal,
-        phone: phoneVal,
-        subscription_plan: "free" as const,
-        subscription_status: "active",
-        subscription_end: null
-      };
+      // User was created and auto-signed in (email confirmation disabled)
+      if (data.session) {
+        // Try to insert user profile
+        const now = new Date().toISOString();
+        const userPayload = {
+          user_id: data.session.user.id,
+          email: emailVal,
+          display_name: nameVal,
+          created_at: now,
+          church_name: churchVal,
+          country: countryVal,
+          state: stateVal,
+          city: cityVal,
+          location: locationVal,
+          denomination: denomVal,
+          phone: phoneVal,
+          subscription_plan: "free" as const,
+          subscription_status: "active",
+          subscription_end: null
+        };
 
-      const { error: profileError } = await supabase
-        .from('users')
-        .insert(userPayload);
+        const { error: profileError } = await supabase
+          .from('users')
+          .insert(userPayload);
 
-      if (profileError) {
-        // Log but don't necessarily fail - user can complete profile later
-        console.error("Profile creation error:", profileError);
+        if (profileError) {
+          console.error("Profile creation error:", profileError);
+        }
+        
+        onNavigate("login");
+        return;
       }
 
-      // Sign out to ensure user logs in with their new credentials
-      await supabase.auth.signOut();
-      onNavigate("login");
+      throw new Error("User creation failed - no user returned");
     } catch (err: any) {
-      console.error("Auth register failed", err);
-      setErrorText(err.message || "An unexpected error occurred during registration. Please try again.");
+      if (err.message?.includes("User already registered")) {
+        setErrorText("This email is already registered. Please sign in instead.");
+      } else {
+        console.error("Auth register failed", err);
+        setErrorText(err.message || "An unexpected error occurred during registration. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
