@@ -217,6 +217,9 @@ const handleVerifyOTP = async (e: FormEvent) => {
       // Check for various OTP error patterns
       if (msg.includes("expired") || msg.includes("invalid") || msg.includes("otp_expired") || msg.includes("token expired")) {
         friendlyMessage = "This OTP code has expired. Click 'Resend OTP Code' to get a new one.";
+      } else if (msg.includes("no otp") || msg.includes("no token") || msg.includes("otp not found") || msg.includes("no confirmation token")) {
+        // This error suggests Email OTP provider may be disabled
+        friendlyMessage = "Email verification may not be configured. Try signing in - your email might already be confirmed.";
       } else if (msg.includes("rate limit") || msg.includes("too many") || msg.includes("429")) {
         friendlyMessage = "Too many requests. Please wait a moment and try again.";
       } else if (msg.includes("already confirmed") || msg.includes("already verified")) {
@@ -423,17 +426,17 @@ const handleVerifyOTP = async (e: FormEvent) => {
           </button>
         </div>
 
-        <div className="mt-6 pt-5 border-t border-white/5 text-center">
-          <p className="text-[11px] text-[#8b9bb4]">
-            Already verified?{" "}
-            <button
-              onClick={() => onNavigate("login")}
-              className="text-blue-400 hover:underline font-bold transition select-none cursor-pointer"
-              disabled={loading}
-            >
-              Sign In Here
-            </button>
+        <div className="mt-2 text-center border-t border-white/5 pt-3">
+          <p className="text-[9px] text-white/40 mb-2">
+            Already confirmed your email?
           </p>
+          <button
+            onClick={() => onNavigate("login")}
+            disabled={loading}
+            className="text-[10px] text-amber-400/80 hover:text-amber-300 transition cursor-pointer font-medium flex items-center gap-1 justify-center mx-auto"
+          >
+            Tap here to Sign In
+          </button>
         </div>
 
       </div>

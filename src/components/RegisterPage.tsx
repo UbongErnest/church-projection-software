@@ -58,6 +58,7 @@ export default function RegisterPage({ onNavigate }: RegisterPageProps) {
   const isSubmittingRef = useRef(false);
 
 const handleRegister = async (e: FormEvent) => {
+    console.log("[REGISTER] Form submitted, agreeLegal:", agreeLegal, "loading:", loading);
     e.preventDefault();
     setErrorText("");
 
@@ -66,6 +67,7 @@ const handleRegister = async (e: FormEvent) => {
       console.log("Signup already in progress, ignoring duplicate request");
       return;
     }
+    console.log("[REGISTER] Setting isSubmittingRef to true, calling signUp");
     isSubmittingRef.current = true;
 
     const nameVal = fullName.trim();
@@ -91,25 +93,29 @@ const handleRegister = async (e: FormEvent) => {
       !passVal
     ) {
       setErrorText("Please fill out all required fields.");
+      isSubmittingRef.current = false;
       return;
     }
 
     if (!agreeLegal) {
       setErrorText("You must accept the Privacy Policy and Terms & Conditions before creating an account.");
+      isSubmittingRef.current = false;
       return;
     }
 
     if (passVal.length < 6) {
       setErrorText("Password must be at least 6 characters long.");
+      isSubmittingRef.current = false;
       return;
     }
 
     if (passVal !== confirmPassword) {
       setErrorText("Passwords do not match.");
+      isSubmittingRef.current = false;
       return;
     }
 
-    setLoading(true);
+setLoading(true);
 
     try {
       const { data, error: signUpError } = await supabase.auth.signUp({
@@ -135,9 +141,9 @@ const handleRegister = async (e: FormEvent) => {
           error: signUpError.message,
           email: emailVal,
           nameHint: signUpError.message?.includes("rate limit") ? "rate_limit_exceeded" : 
-                    signUpError.message?.toLowerCase().includes("smtp") ? "smtp_error" : "unknown"
+                   signUpError.message?.toLowerCase().includes("smtp") ? "smtp_error" : "unknown"
         });
-throw signUpError;
+        throw signUpError;
       }
 
       // Check if user needs email verification (OTP)
@@ -194,7 +200,7 @@ throw signUpError;
       
       onNavigate("login");
       return;
-} catch (err: any) {
+    } catch (err: any) {
       console.error("Auth register failed", err);
       const msg = err.message || "";
       if (msg.includes("User already registered") || msg.includes("user_already_exists")) {
