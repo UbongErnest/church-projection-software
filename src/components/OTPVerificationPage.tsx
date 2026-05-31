@@ -193,7 +193,7 @@ const handleVerifyOTP = async (e: FormEvent) => {
         console.warn("[VERIFY OTP] No session returned:", data);
         setErrorText("This OTP code has expired or is invalid. Click 'Resend OTP Code' to get a new one.");
       }
-    } catch (err: any) {
+} catch (err: any) {
       console.error("OTP verification failed", err);
       console.log("[VERIFY OTP] Full error object:", JSON.stringify(err, Object.getOwnPropertyNames(err)));
 
@@ -205,10 +205,10 @@ const handleVerifyOTP = async (e: FormEvent) => {
 
       // Check for various OTP error patterns
       if (msg.includes("expired") || msg.includes("invalid") || msg.includes("otp_expired") || msg.includes("token expired")) {
-        friendlyMessage = "This OTP code has expired. Click 'Resend OTP Code' to get a new one.";
+        friendlyMessage = "This OTP code has expired. Click 'Resend OTP Code' to get a fresh one.";
       } else if (msg.includes("no otp") || msg.includes("no token") || msg.includes("otp not found") || msg.includes("no confirmation token")) {
-        // This error suggests Email OTP provider may be disabled
-        friendlyMessage = "Email verification may not be configured. Try signing in - your email might already be confirmed.";
+        // Email OTP provider may be disabled in Supabase
+        friendlyMessage = "Email OTP verification may not be configured. Please contact support or try signing in - your email might already be confirmed.";
       } else if (msg.includes("rate limit") || msg.includes("too many") || msg.includes("429")) {
         friendlyMessage = "Too many requests. Please wait a moment and try again.";
       } else if (msg.includes("already confirmed") || msg.includes("already verified")) {
