@@ -42,20 +42,20 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    try {
-      const conversationHistory = (messages || []).map((m: any) => ({
-        role: m.role === "user" ? "user" : "model",
-        parts: [{ text: m.content }]
-      }));
+try {
+       const conversationHistory = (messages || []).map((m: any) => ({
+         role: m.role === "user" ? "user" : "model",
+         parts: [{ text: m.content }]
+       }));
 
-      const requestBody = {
-        model: "gemini-2.0-flash",
-        contents: [
-          ...conversationHistory,
-          { role: "user", parts: [{ text: newMessage }] }
-        ],
-        config: {
-          systemInstruction: `You are Chaver AI, a helpful assistant integrated into the Church Projection Software application.
+       const requestBody = {
+         model: "gemini-3.5-flash",
+         contents: [
+           ...conversationHistory,
+           { role: "user", parts: [{ text: newMessage }] }
+         ],
+         config: {
+           systemInstruction: `You are Chaver AI, a helpful assistant integrated into the Church Projection Software application.
 
 APP NAVIGATION & FEATURES:
 - Operator View (main): Control panel left, projector output right
@@ -70,10 +70,27 @@ APP NAVIGATION & FEATURES:
 - Plans: Monthly for live listening, Yearly for AI features
 
 Be helpful, concise, and conversational. No markdown headers (#) or complex formatting.`
-        }
-      };
+         }
+       };
 
-      const response = await ai.models.generateContent(requestBody);
+       let response;
+       let lastError: any;
+       for (let attempt = 0; attempt < 3; attempt++) {
+         try {
+           response = await ai.models.generateContent(requestBody);
+           break;
+         } catch (err: any) {
+           lastError = err;
+           const msg = err.message || "";
+           if (msg.includes("429") || msg.includes("quota")) {
+             const delay = Math.pow(2, attempt) * 1000;
+             await new Promise(resolve => setTimeout(resolve, delay));
+             continue;
+           }
+           throw err;
+         }
+       }
+       if (!response) throw lastError;
 
       const botReply = response.text || "I couldn't process your message.";
       const updatedMessages = [...(messages || []), { role: "user", content: newMessage }, { role: "assistant", content: botReply }];
@@ -186,7 +203,7 @@ QUESTIONS FOR PERSONAL STUDY
 Format with clear sections, bold headings, and well-structured paragraphs.`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash",
+        model: "gemini-3.5-flash",
         contents: `Sermon Topic: ${topic || "Sunday Service"}
 Sermon Notes (raw):
 "${notesContent}"
@@ -289,7 +306,7 @@ IV. Conclusion & Key Takeaway
   try {
     const systemPrompt = "You are an expert theologian and sermon outline editor. Create a beautifully structured sermon outline with clear headings, scriptural suggestions, and real-life application points from the rough pastor notes.";
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-3.5-flash",
       contents: `Sermon Topic: ${topic || "Untold Sunday Study"}\nRough Notes:\n"${notesContent}"`,
       config: {
         systemInstruction: systemPrompt,
