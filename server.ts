@@ -791,3 +791,26 @@ app.get("/api/debug/env", (_req, res) => {
      appUrl: process.env.APP_URL || "not-set",
    });
  });
+
+// Email diagnostics endpoint - for logging and debugging SMTP/email issues
+app.post("/api/email/diagnostic", async (req, res) => {
+  console.log("[EMAIL DIAGNOSTIC] Received diagnostic report:", {
+    type: req.query.type,
+    email: req.body?.email,
+    timestamp: new Date().toISOString(),
+    userAgent: req.get("User-Agent")
+  });
+  
+  // Log to help diagnose SMTP issues
+  const body = req.body;
+  if (body?.error) {
+    console.error("[EMAIL DIAGNOSTIC] Error details:", {
+      error: body.error,
+      message: body.message,
+      statusCode: body.statusCode,
+      hint: body.hint
+    });
+  }
+  
+  return res.status(200).json({ received: true });
+});

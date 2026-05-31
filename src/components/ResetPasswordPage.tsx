@@ -1,4 +1,4 @@
-import React, { useState, FormEvent, useEffect } from "react";
+import React, { useState, FormEvent, useEffect, useRef } from "react";
 import { supabase } from "../supabase";
 import { BookOpen, Mail, ChevronLeft, CheckCircle } from "lucide-react";
 
@@ -13,6 +13,7 @@ export default function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState("");
   const [resetSent, setResetSent] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   // If user lands on reset-password with recovery hash, redirect to password set page
   useEffect(() => {
@@ -26,11 +27,19 @@ export default function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps
   const handleRequestReset = async (e: FormEvent) => {
     e.preventDefault();
     setErrorText("");
+
+    // Prevent double submission
+    if (isSubmittingRef.current) {
+      console.log("Password reset already in progress");
+      return;
+    }
+    isSubmittingRef.current = true;
     setResetSent(false);
 
     const emailVal = email.trim();
     if (!emailVal) {
       setErrorText("Please enter your email address.");
+      isSubmittingRef.current = false;
       return;
     }
 
@@ -50,13 +59,14 @@ export default function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps
       const msg = err.message || "";
       if (msg.includes("User not found") || msg.includes("not found")) {
         setErrorText("No account found with this email address.");
-      } else if (msg.includes("too many requests") || msg.includes("Too many") || msg.includes("rate limit")) {
-        setErrorText("Rate limit exceeded. Please wait 60 seconds before requesting another reset link.");
+      } else if (msg.includes("too many requests") || msg.includes("Too many") || msg.includes("rate limit") || msg.includes("429")) {
+        setErrorText("Too many signup emails have been sent recently. Please try again later.");
       } else {
         setErrorText("Failed to send reset email. Please try again.");
       }
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 

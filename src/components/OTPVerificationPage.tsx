@@ -24,7 +24,10 @@ export default function OTPVerificationPage({ email, userData, onNavigate, onVer
   const [resendLoading, setResendLoading] = useState(false);
   const [errorText, setErrorText] = useState("");
   const [successText, setSuccessText] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const isVerifyingRef = useRef(false);
+  const isResendingRef = useRef(false);
 
   useEffect(() => {
     if (inputRefs.current[0]) {
@@ -102,6 +105,12 @@ export default function OTPVerificationPage({ email, userData, onNavigate, onVer
       return;
     }
 
+    // Prevent double submission
+    if (isVerifyingRef.current) {
+      console.log("OTP verification already in progress");
+      return;
+    }
+    isVerifyingRef.current = true;
     setLoading(true);
 
     try {
@@ -126,12 +135,13 @@ export default function OTPVerificationPage({ email, userData, onNavigate, onVer
       }
     } catch (err: any) {
       console.error("OTP verification failed", err);
+      const msg = err.message || "";
       let friendlyMessage = "Invalid or expired OTP code. Please try again.";
 
-      if (err.message?.includes("expired") || err.message?.includes("Invalid")) {
+      if (msg.includes("expired") || msg.includes("Invalid") || msg.includes("invalid")) {
         friendlyMessage = "This OTP code has expired. Please request a new one.";
-      } else if (err.message?.includes("too many requests") || err.message?.includes("Too many") || err.message?.includes("rate limit")) {
-        friendlyMessage = "Rate limit exceeded. Please wait 60 seconds before trying again.";
+      } else if (msg.includes("rate limit") || msg.toLowerCase().includes("too many") || msg.includes("429")) {
+        friendlyMessage = "Too many signup emails have been sent recently. Please try again later.";
       }
 
       setErrorText(friendlyMessage);
@@ -139,13 +149,27 @@ export default function OTPVerificationPage({ email, userData, onNavigate, onVer
       inputRefs.current[0]?.focus();
     } finally {
       setLoading(false);
+      isVerifyingRef.current = false;
     }
   };
 
   const handleResendOTP = async () => {
+    // Prevent double submission
+    if (isResendingRef.current) {
+      console.log("Resend already in progress");
+      return;
+    }
+    
+    // Check cooldown
+    if (resendCooldown > 0) {
+      setErrorText(`Please wait ${resendCooldown} seconds before requesting another OTP code.`);
+      return;
+    }
+    
     setErrorText("");
     setSuccessText("");
     setResendLoading(true);
+    isResendingRef.current = true;
 
     try {
       // For OTP resend, we try to sign up again - if user exists with unverified email, Supabase will send a new OTP
@@ -166,20 +190,49 @@ export default function OTPVerificationPage({ email, userData, onNavigate, onVer
         },
       });
 
-      if (error && !error.message?.includes("User already registered")) {
+      if (error && !error.message?.includes("User already registered") && !error.message?.includes("429") && !error.message?.toLowerCase().includes("rate limit")) {
         throw error;
       }
 
-      setSuccessText("A new OTP code has been sent to your email.");
+      if (error && (error.message?.includes("429") || error.message?.toLowerCase().includes("rate limit"))) {
+        setErrorText("Too many signup emails have been sent recently. Please try again later.");
+        setResendCooldown(60);
+        // Start cooldown countdown
+        const interval = setInterval(() => {
+          setResendCooldown((prev) => {
+            if (prev <= 1) {
+              clearInterval(interval);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      } else {
+        setSuccessText("A new OTP code has been sent to your email.");
+        setResendCooldown(60);
+        // Start cooldown countdown
+        const interval = setInterval(() => {
+          setResendCooldown((prev) => {
+            if (prev <= 1) {
+              clearInterval(interval);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      }
     } catch (err: any) {
       console.error("Resend OTP failed", err);
-      if (err.message?.includes("rate limit") || err.message?.toLowerCase().includes("too many")) {
-        setErrorText("Email rate limit exceeded. Please wait 60 seconds before requesting another OTP code.");
+      const msg = err.message || "";
+      if (msg.includes("rate limit") || msg.toLowerCase().includes("too many") || msg.includes("429")) {
+        setErrorText("Too many signup emails have been sent recently. Please try again later.");
+        setResendCooldown(60);
       } else {
-        setErrorText(err.message || "Failed to resend OTP. Please try again.");
+        setErrorText(msg || "Failed to resend OTP. Please try again.");
       }
     } finally {
       setResendLoading(false);
+      isResendingRef.current = false;
     }
   };
 
@@ -277,11 +330,11 @@ export default function OTPVerificationPage({ email, userData, onNavigate, onVer
         <div className="mt-4 text-center">
           <button
             onClick={handleResendOTP}
-            disabled={resendLoading}
+            disabled={resendLoading || resendCooldown > 0}
             className="text-[10px] text-blue-400/80 hover:text-blue-300 transition cursor-pointer font-medium flex items-center gap-1 justify-center mx-auto disabled:opacity-50"
           >
             <RefreshCw className={`w-3 h-3 ${resendLoading ? 'animate-spin' : ''}`} />
-            {resendLoading ? "Sending..." : "Resend OTP Code"}
+            {resendCooldown > 0 ? `Wait ${resendCooldown}s` : resendLoading ? "Sending..." : "Resend OTP Code"}
           </button>
         </div>
 

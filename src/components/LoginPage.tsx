@@ -1,4 +1,4 @@
-import React, { useState, FormEvent } from "react";
+import React, { useState, FormEvent, useRef } from "react";
 import { supabase } from "../supabase";
 import { BookOpen, Mail, Lock, LogIn, ChevronLeft, Eye, EyeOff, UserPlus } from "lucide-react";
 
@@ -12,16 +12,25 @@ export default function LoginPage({ onNavigate }: LoginPageProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState("");
+  const isSubmittingRef = useRef(false);
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setErrorText("");
+
+    // Prevent double submission
+    if (isSubmittingRef.current) {
+      console.log("Login already in progress, ignoring duplicate request");
+      return;
+    }
+    isSubmittingRef.current = true;
 
     const emailVal = email.trim();
     const passVal = password;
 
     if (!emailVal || !passVal) {
       setErrorText("Please fill out both email and password fields.");
+      isSubmittingRef.current = false;
       return;
     }
 
@@ -38,19 +47,21 @@ export default function LoginPage({ onNavigate }: LoginPageProps) {
       }
     } catch (err: any) {
       console.error("Auth login failed", err);
+      const msg = err.message || "";
       let friendlyMessage = "Error signing in. Please verify your credentials and try again.";
       
-      if (err.message?.includes("Invalid login credentials") || err.message?.includes("invalid-credential") || err.message?.includes("wrong-password") || err.message?.includes("user-not-found")) {
+      if (msg.includes("Invalid login credentials") || msg.includes("invalid-credential") || msg.includes("wrong-password") || msg.includes("user-not-found")) {
         friendlyMessage = "Incorrect email address or password. Please try again.";
-      } else if (err.message?.includes("Invalid email")) {
-        friendlyMessage = "The email address layout entered is invalid.";
-      } else if (err.message?.includes("too many requests") || err.message?.includes("Too many") || err.message?.includes("rate limit")) {
-        friendlyMessage = "Rate limit exceeded. Please wait 60 seconds before signing in again.";
+      } else if (msg.includes("Invalid email")) {
+        friendlyMessage = "The email address entered is invalid.";
+      } else if (msg.includes("too many requests") || msg.includes("Too many") || msg.includes("rate limit") || msg.includes("429")) {
+        friendlyMessage = "Too many signup emails have been sent recently. Please try again later.";
       }
       
       setErrorText(friendlyMessage);
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 

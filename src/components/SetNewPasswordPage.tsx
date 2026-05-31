@@ -1,4 +1,4 @@
-import React, { useState, FormEvent, useEffect } from "react";
+import React, { useState, FormEvent, useEffect, useRef } from "react";
 import { supabase } from "../supabase";
 import { BookOpen, Lock, KeyRound, ChevronLeft, Eye, EyeOff, CheckCircle } from "lucide-react";
 
@@ -14,6 +14,7 @@ export default function SetNewPasswordPage({ onNavigate }: SetNewPasswordPagePro
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState("");
   const [success, setSuccess] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   useEffect(() => {
     const checkRecoverySession = async () => {
@@ -41,13 +42,22 @@ export default function SetNewPasswordPage({ onNavigate }: SetNewPasswordPagePro
     e.preventDefault();
     setErrorText("");
 
+    // Prevent double submission
+    if (isSubmittingRef.current) {
+      console.log("Password update already in progress");
+      return;
+    }
+    isSubmittingRef.current = true;
+
     if (!password || password.length < 6) {
       setErrorText("Password must be at least 6 characters.");
+      isSubmittingRef.current = false;
       return;
     }
 
     if (password !== confirmPassword) {
       setErrorText("Passwords do not match.");
+      isSubmittingRef.current = false;
       return;
     }
 
@@ -58,6 +68,7 @@ export default function SetNewPasswordPage({ onNavigate }: SetNewPasswordPagePro
       if (!session) {
         setErrorText("Invalid or expired reset link. Please request a new password reset.");
         setLoading(false);
+        isSubmittingRef.current = false;
         return;
       }
 
@@ -78,13 +89,15 @@ export default function SetNewPasswordPage({ onNavigate }: SetNewPasswordPagePro
       }, 2000);
     } catch (err: any) {
       console.error("Password update failed", err);
-      if (err.message?.includes("too many requests") || err.message?.includes("Too many") || err.message?.includes("rate limit")) {
-        setErrorText("Rate limit exceeded. Please wait 60 seconds before trying again.");
+      const msg = err.message || "";
+      if (msg.includes("too many requests") || msg.includes("Too many") || msg.includes("rate limit") || msg.includes("429")) {
+        setErrorText("Too many signup emails have been sent recently. Please try again later.");
       } else {
-        setErrorText(err.message || "Failed to update password. Please try again.");
+        setErrorText(msg || "Failed to update password. Please try again.");
       }
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 

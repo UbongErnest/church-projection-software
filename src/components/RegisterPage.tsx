@@ -1,4 +1,4 @@
-import React, { useState, FormEvent } from "react";
+import React, { useState, FormEvent, useRef } from "react";
 import { supabase } from "../supabase";
 import { 
   BookOpen, 
@@ -46,17 +46,27 @@ export default function RegisterPage({ onNavigate }: RegisterPageProps) {
   const [agreeLegal, setAgreeLegal] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  
+   
   // Modals for legal popups inside register view for convenience
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState("");
+  
+  // Ref to prevent double submission
+  const isSubmittingRef = useRef(false);
 
 const handleRegister = async (e: FormEvent) => {
     e.preventDefault();
     setErrorText("");
+
+    // Prevent double submission
+    if (isSubmittingRef.current) {
+      console.log("Signup already in progress, ignoring duplicate request");
+      return;
+    }
+    isSubmittingRef.current = true;
 
     const nameVal = fullName.trim();
     const emailVal = email.trim();
@@ -120,6 +130,13 @@ const handleRegister = async (e: FormEvent) => {
       });
 
       if (signUpError) {
+        // Log email diagnostics for SMTP issues
+        console.error("[SIGNUP] Email/SMTP error detected:", {
+          error: signUpError.message,
+          email: emailVal,
+          nameHint: signUpError.message?.includes("rate limit") ? "rate_limit_exceeded" : 
+                    signUpError.message?.toLowerCase().includes("smtp") ? "smtp_error" : "unknown"
+        });
         throw signUpError;
       }
 
@@ -127,7 +144,7 @@ const handleRegister = async (e: FormEvent) => {
       // When email verification is required, Supabase returns no session
       const hasSession = !!data.session;
       
-      console.log("Signup response:", { hasSession, data });
+      console.log("Signup response:", { hasSession, hasUser: !!data.user, data });
       
       // If no session (whether user object exists or not), email verification is required
       if (!hasSession) {
@@ -142,6 +159,7 @@ const handleRegister = async (e: FormEvent) => {
           denomination: denomVal,
           phone: phoneVal || undefined,
         });
+        isSubmittingRef.current = false;
         return;
       }
 
@@ -175,17 +193,20 @@ const handleRegister = async (e: FormEvent) => {
       }
       
       onNavigate("login");
+      return;
     } catch (err: any) {
-      if (err.message?.includes("User already registered")) {
+      console.error("Auth register failed", err);
+      const msg = err.message || "";
+      if (msg.includes("User already registered") || msg.includes("user_already_exists")) {
         setErrorText("This email is already registered. Please sign in instead.");
-      } else if (err.message?.includes("rate limit") || err.message?.toLowerCase().includes("too many")) {
-        setErrorText("Email rate limit exceeded. Please wait 60 seconds before trying again.");
+      } else if (msg.includes("rate limit") || msg.toLowerCase().includes("too many") || msg.includes("429")) {
+        setErrorText("Too many signup emails have been sent recently. Please try again later.");
       } else {
-        console.error("Auth register failed", err);
-        setErrorText(err.message || "An unexpected error occurred during registration. Please try again.");
+        setErrorText(msg || "An unexpected error occurred during registration. Please try again.");
       }
     } finally {
       setLoading(false);
+      isSubmittingRef.current = false;
     }
   };
 
