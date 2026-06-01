@@ -1,6 +1,8 @@
 ﻿import express from "express";
+import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
+import Busboy from "busboy";
 import { createServer as createViteServer } from "vite";
 dotenv.config();
 
@@ -116,16 +118,83 @@ app.get("/api/bible/lookup", (req, res) => {
     });
   }
 
-// Invalid reference - no verse found
-   return res.json({
-     book: normalizedBook,
-     chapter: chNum,
-     verse: vNum,
-     text: {
-       KJV: ".",
-     },
-     source: "invalid_reference",
-   });
+  // Invalid reference - no verse found
+  return res.json({
+    book: normalizedBook,
+    chapter: chNum,
+    verse: vNum,
+    text: {
+      KJV: ".",
+    },
+    source: "invalid_reference",
+  });
+});
+
+app.post("/api/upload-audio", async (req, res) => {
+  const uploadDir = path.resolve(process.cwd(), "uploads");
+
+  try {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  } catch (err: any) {
+    console.error("Unable to create audio upload folder", err);
+    return res.status(500).json({ error: "Unable to prepare upload directory." });
+  }
+
+  const busboyParser = Busboy({ headers: req.headers });
+  let savedFilename = "";
+  let mimeType = "application/octet-stream";
+  const fileChunks: Buffer[] = [];
+
+  busboyParser.on("file", (_fieldname, file, filename, encoding, mimeTypeValue) => {
+    savedFilename = `${Date.now()}-${filename || "recorded-audio.webm"}`;
+    mimeType = mimeTypeValue || mimeType;
+
+    file.on("data", (data) => {
+      fileChunks.push(data);
+    });
+
+    file.on("limit", () => {
+      console.warn("Upload file limit reached.");
+    });
+
+    file.on("end", () => {
+      // no-op: data already buffered
+    });
+  });
+
+  busboyParser.on("finish", () => {
+    if (fileChunks.length === 0) {
+      return res.status(400).json({ error: "No audio file uploaded." });
+    }
+
+    const buffer = Buffer.concat(fileChunks);
+    const targetPath = path.join(uploadDir, savedFilename);
+
+    try {
+      fs.writeFileSync(targetPath, buffer);
+    } catch (writeError: any) {
+      console.error("Failed to save audio upload", writeError);
+      return res.status(500).json({ error: "Failed to save audio file." });
+    }
+
+    return res.json({
+      success: true,
+      filename: savedFilename,
+      mimeType,
+      size: buffer.length,
+      path: targetPath,
+    });
+  });
+
+  busboyParser.on("error", (error) => {
+    console.error("Audio upload parse error", error);
+    return res.status(500).json({
+      error: "Audio upload parsing failed.",
+      details: (error as Error)?.message || String(error),
+    });
+  });
+
+  req.pipe(busboyParser);
 });
 
 // 2. AI Real-Time Verse Detection & Sermon Context Annotation Endpoint (Pro/Premium)
