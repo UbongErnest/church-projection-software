@@ -578,7 +578,7 @@ useEffect(() => { isAutoProjectEnabledRef.current = isAutoProjectEnabled; }, [is
                     const set = inst._listeners?.get(ev);
                     if (set) {
                       for (const cb of Array.from(set)) {
-                        try { cb({ type: ev, detail: payload }); } catch (e) {}
+                        try { ({ type: ev, detail: payload }); } catch (e) {}
                       }
                     }
 
