@@ -113,17 +113,12 @@ parallelVersion,
   // User level plan and restrictions state mapping
   const userPlan = userProfile?.subscriptionPlan || "free";
 
-  // Microphone and recording UI states
-  const [audioStatusMessage, setAudioStatusMessage] = useState("Microphone controls available.");
+  // Real-time speech recognition state
+  const [audioStatusMessage, setAudioStatusMessage] = useState("Ready to start live transcription.");
   const [audioError, setAudioError] = useState<string | null>(null);
-  const [isStreamingAudio, setIsStreamingAudio] = useState(false);
-  const [isRecordingAudio, setIsRecordingAudio] = useState(false);
-  const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
-  const [uploadResultMessage, setUploadResultMessage] = useState<string | null>(null);
-  const audioStreamRef = useRef<MediaStream | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const recordedChunksRef = useRef<Blob[]>([]);
+  const [isListeningToMic, setIsListeningToMic] = useState(false);
+  const recognitionRef = useRef<any>(null);
+  const interimTranscriptRef = useRef<string>("");
 
   // Navigation sub-tabs (adding plans tab)
   const [activeTab, setActiveTab] = useState<"ai-feed" | "manual-bible" | "songs" | "announcements" | "media-library" | "plans">("plans");
@@ -166,6 +161,103 @@ const isThemeLocked = (themeId: string) => {
       }
     };
 
+    const initializeSpeechRecognition = () => {
+      if (typeof window === "undefined") return null;
+
+      const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+      if (!SpeechRecognition) {
+        setAudioError("Web Speech API is not supported in your browser.");
+        setAudioStatusMessage("Speech recognition unavailable.");
+        return null;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = "en-US";
+
+      recognition.onstart = () => {
+        setIsListeningToMic(true);
+        setAudioStatusMessage("Listening... Transcription streaming to AI.");
+        setAudioError(null);
+      };
+
+      recognition.onresult = (event: any) => {
+        let interimTranscript = "";
+        let finalTranscript = "";
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript + " ";
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+
+        interimTranscriptRef.current = interimTranscript;
+
+        if (finalTranscript) {
+          const fullText = finalTranscript.trim();
+          onTriggerDetect(fullText);
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        let errorMsg = "Unknown error occurred.";
+        switch (event.error) {
+          case "network":
+            errorMsg = "Network error. Check your connection.";
+            break;
+          case "audio":
+            errorMsg = "Audio capture error. Check microphone.";
+            break;
+          case "not-allowed":
+            errorMsg = "Microphone permission denied.";
+            break;
+          case "no-speech":
+            errorMsg = "No speech detected. Please speak.";
+            break;
+          default:
+            errorMsg = `Speech recognition error: ${event.error}`;
+        }
+        setAudioError(errorMsg);
+        setAudioStatusMessage("Speech recognition error.");
+      };
+
+      recognition.onend = () => {
+        setIsListeningToMic(false);
+        setAudioStatusMessage("Listening stopped.");
+      };
+
+      return recognition;
+    };
+
+    const handleStartLiveTranscription = () => {
+      if (!recognitionRef.current) {
+        recognitionRef.current = initializeSpeechRecognition();
+      }
+
+      if (!recognitionRef.current) {
+        setAudioError("Unable to initialize speech recognition.");
+        return;
+      }
+
+      try {
+        recognitionRef.current.start();
+      } catch (err: any) {
+        setAudioError(err.message || "Failed to start speech recognition.");
+      }
+    };
+
+    const handleStopLiveTranscription = () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        setIsListeningToMic(false);
+        setAudioStatusMessage("Live transcription stopped.");
+      }
+    };
+
 const getAudioEnvironmentHint = () => {
       if (typeof window === "undefined") return "Browser environment required.";
       if (!window.isSecureContext) {
@@ -202,167 +294,6 @@ const getAudioEnvironmentHint = () => {
         return `${defaultMsg} (${(error as any).name})`;
       }
       return defaultMsg;
-    };
-
-    const stopAudioStream = () => {
-      if (audioStreamRef.current) {
-        audioStreamRef.current.getTracks().forEach((track) => track.stop());
-        audioStreamRef.current = null;
-      }
-      setIsStreamingAudio(false);
-      setIsRecordingAudio(false);
-      setAudioStatusMessage("Microphone stream stopped.");
-    };
-
-    const uploadRecordedAudio = async (blob: Blob) => {
-      setUploadProgress(0);
-      setUploadResultMessage(null);
-      setAudioError(null);
-      setAudioStatusMessage("Uploading recorded audio...");
-
-      try {
-        const formData = new FormData();
-        formData.append("file", blob, "recorded-audio.webm");
-
-        await new Promise<void>((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.open("POST", "/api/upload-audio");
-
-          xhr.upload.onprogress = (event) => {
-            if (event.lengthComputable) {
-              setUploadProgress(Math.round((event.loaded / event.total) * 100));
-            }
-          };
-
-          xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              setUploadResultMessage("Audio upload completed successfully.");
-              setAudioStatusMessage("Upload complete.");
-              resolve();
-            } else {
-              reject(new Error(`Upload failed with status ${xhr.status}`));
-            }
-          };
-
-          xhr.onerror = () => {
-            reject(new Error("Upload failed due to a network error."));
-          };
-
-          xhr.send(formData);
-        });
-      } catch (uploadError: any) {
-        setAudioError(uploadError?.message || "Audio upload failed.");
-        setAudioStatusMessage("Upload failed.");
-      } finally {
-        setUploadProgress(null);
-      }
-    };
-
-    const handleStartRecording = () => {
-      if (!audioStreamRef.current) {
-        setAudioError("Start the microphone stream before recording.");
-        setAudioStatusMessage("Microphone stream is not active.");
-        return;
-      }
-
-      if (typeof MediaRecorder === "undefined") {
-        setAudioError("MediaRecorder is not supported by your browser.");
-        setAudioStatusMessage("Unable to record audio.");
-        return;
-      }
-
-      let recorder: MediaRecorder;
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus"
-        : MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")
-        ? "audio/ogg;codecs=opus"
-        : "audio/webm";
-
-      try {
-        recorder = new MediaRecorder(audioStreamRef.current, { mimeType });
-      } catch (err: any) {
-        setAudioError("Unable to initialize recording. " + mapMediaErrorToMessage(err));
-        setAudioStatusMessage("Recording initialization failed.");
-        return;
-      }
-
-      recordedChunksRef.current = [];
-      recorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) {
-          recordedChunksRef.current.push(event.data);
-        }
-      };
-
-      recorder.onerror = (event) => {
-        setAudioError(`Recording error: ${event.error?.message || "unknown error"}`);
-        setAudioStatusMessage("Recording error occurred.");
-        setIsRecordingAudio(false);
-      };
-
-      recorder.onstop = async () => {
-        const blob = new Blob(recordedChunksRef.current, { type: recorder.mimeType || "audio/webm" });
-        const url = URL.createObjectURL(blob);
-        setRecordedAudioUrl(url);
-        setIsRecordingAudio(false);
-        setAudioStatusMessage("Recording finished. Preview available below.");
-        await uploadRecordedAudio(blob);
-      };
-
-      mediaRecorderRef.current = recorder;
-      recorder.start();
-      setIsRecordingAudio(true);
-      setAudioStatusMessage("Recording audio… Press Stop when finished.");
-    };
-
-    const handleStopRecording = () => {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-        mediaRecorderRef.current.stop();
-      }
-    };
-
-    const handleStartStream = async (video = false) => {
-      if (typeof window === "undefined") return;
-
-      setAudioError(null);
-      setUploadResultMessage(null);
-      setUploadProgress(null);
-
-      if (!window.isSecureContext) {
-        setAudioError("Microphone access requires a secure context (HTTPS or localhost).");
-        setAudioStatusMessage("Secure context required.");
-        return;
-      }
-
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setAudioError("navigator.mediaDevices.getUserMedia is not available in this browser.");
-        setAudioStatusMessage("Browser does not support microphone capture.");
-        return;
-      }
-
-      if (typeof MediaRecorder === "undefined") {
-        setAudioError("MediaRecorder is not available in this browser.");
-        setAudioStatusMessage("Unable to record audio.");
-        return;
-      }
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: video
-            ? {
-                width: { ideal: 640 },
-                height: { ideal: 480 },
-              }
-            : false,
-        });
-        audioStreamRef.current = stream;
-        setIsStreamingAudio(true);
-        setAudioStatusMessage(`Microphone stream active (${video ? "audio + video" : "audio only"}).`);
-      } catch (err: unknown) {
-        const message = mapMediaErrorToMessage(err);
-        setAudioError(message);
-        setAudioStatusMessage("Microphone permission request failed.");
-      }
     };
 
 const handleFlutterwaveCheckout = async (plan: "monthly" | "yearly") => {
@@ -484,17 +415,11 @@ const handleFlutterwaveCheckout = async (plan: "monthly" | "yearly") => {
 
     useEffect(() => {
       return () => {
-        if (audioStreamRef.current) {
-          audioStreamRef.current.getTracks().forEach((track) => track.stop());
-        }
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-          mediaRecorderRef.current.stop();
-        }
-        if (recordedAudioUrl) {
-          URL.revokeObjectURL(recordedAudioUrl);
+        if (recognitionRef.current) {
+          recognitionRef.current.stop();
         }
       };
-    }, [recordedAudioUrl]);
+    }, []);
 
    // Handle media file upload and projection
    const handleCastMedia = (media: { type: "image" | "video"; name: string; url: string }) => {
@@ -1261,44 +1186,28 @@ const handleTabClick = (tab: "ai-feed" | "manual-bible" | "songs" | "announcemen
           <div className="glass-panel rounded-lg p-3.5 flex flex-col min-h-[280px] bg-[#111318] border border-white/10">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-[10px] font-bold text-white/40 uppercase tracking-wider flex items-center gap-1.5">
-                <Music className="w-3 h-3 text-emerald-300" /> Audio Recorder
+                <Music className="w-3 h-3 text-emerald-300" /> Live Transcription
               </h3>
               <span className="text-[9px] uppercase tracking-wide text-white/30">
-                {isStreamingAudio ? "Stream live" : "Ready"}
+                {isListeningToMic ? "Streaming live" : "Ready"}
               </span>
             </div>
 
             <div className="grid gap-2 text-xs text-white/80">
               <div className="grid grid-cols-2 gap-2">
                 <button
-                  onClick={() => handleStartStream(false)}
-                  className="px-2.5 py-2 rounded bg-slate-800 border border-white/10 hover:bg-slate-700 transition-all"
-                >
-                  Start Mic
-                </button>
-                <button
-                  onClick={stopAudioStream}
-                  disabled={!isStreamingAudio}
-                  className="px-2.5 py-2 rounded bg-rose-600/10 border border-rose-500/20 text-rose-200 hover:bg-rose-600/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                >
-                  Stop Mic
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={handleStartRecording}
-                  disabled={!isStreamingAudio || isRecordingAudio}
+                  onClick={handleStartLiveTranscription}
+                  disabled={isListeningToMic}
                   className="px-2.5 py-2 rounded bg-emerald-600/15 border border-emerald-500/20 text-emerald-200 hover:bg-emerald-600/25 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
-                  Record
+                  Start Listening
                 </button>
                 <button
-                  onClick={handleStopRecording}
-                  disabled={!isRecordingAudio}
-                  className="px-2.5 py-2 rounded bg-yellow-500/10 border border-yellow-400/20 text-yellow-200 hover:bg-yellow-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  onClick={handleStopLiveTranscription}
+                  disabled={!isListeningToMic}
+                  className="px-2.5 py-2 rounded bg-rose-600/10 border border-rose-500/20 text-rose-200 hover:bg-rose-600/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
-                  Stop Recording
+                  Stop Listening
                 </button>
               </div>
 
@@ -1308,34 +1217,8 @@ const handleTabClick = (tab: "ai-feed" | "manual-bible" | "songs" | "announcemen
                 {audioError && <p className="mt-1 text-rose-300">{audioError}</p>}
               </div>
 
-              {recordedAudioUrl && (
-                <div className="rounded-md bg-black/40 border border-white/10 p-3">
-                  <p className="text-[10px] uppercase text-white/40 tracking-widest mb-2">
-                    Recorded audio preview
-                  </p>
-                  <audio
-                    controls
-                    src={recordedAudioUrl}
-                    className="w-full rounded bg-slate-900"
-                  />
-                </div>
-              )}
-
-              {uploadProgress !== null && (
-                <div className="rounded-md bg-black/40 border border-white/10 p-3 text-[11px] text-white/80">
-                  <span className="font-semibold">Upload progress:</span> {uploadProgress}%
-                </div>
-              )}
-
-              {uploadResultMessage && (
-                <div className="rounded-md bg-emerald-600/10 border border-emerald-500/20 p-3 text-[11px] text-emerald-200">
-                  {uploadResultMessage}
-                </div>
-              )}
-
               <div className="text-[10px] text-white/30 leading-snug">
-                <p>Browser must run in a secure context (HTTPS or localhost).</p>
-                <p>In Electron, the wrapper may allow permissions at runtime, but macOS still requires app signing and <code className="text-white/70">NSMicrophoneUsageDescription</code>.</p>
+                <p>Browser automatically transcribes your microphone using Web Speech API. As you speak, the live transcript streams to AI detection and auto-projects verses in real-time.</p>
               </div>
             </div>
           </div>
