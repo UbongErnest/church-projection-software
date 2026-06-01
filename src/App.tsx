@@ -551,17 +551,37 @@ useEffect(() => { isAutoProjectEnabledRef.current = isAutoProjectEnabled; }, [is
 
   // Web Speech Audio Transcription Engine
   function createRecognitionSafe(...args: any[]) {
-    const electronAPI = (window as any).electronAPI;
-    if (electronAPI && typeof electronAPI.createSpeechRecognition === 'function') {
-      return electronAPI.createSpeechRecognition(...args);
+    try {
+      const electronAPI = (window as any).electronAPI;
+      if (electronAPI && typeof electronAPI.createSpeechRecognition === 'function') {
+        const inst = electronAPI.createSpeechRecognition(...args);
+        if (inst && typeof inst.start === 'function') return inst;
+      }
+    } catch (e) {
+      console.error('factory error', e);
     }
 
-    const Native =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition ||
-      (window as any).mozSpeechRecognition;
+    try {
+      const Native =
+        (window as any).SpeechRecognition ||
+        (window as any).webkitSpeechRecognition ||
+        (window as any).mozSpeechRecognition;
+      if (Native) {
+        const n = new Native(...args);
+        if (n && typeof n.start === 'function') return n;
+      }
+    } catch (e) {
+      console.error('native inst error', e);
+    }
 
-    return Native ? new Native(...args) : null;
+    // Fallback: minimal mock so code won't crash (start will be a noop)
+    const mock = new EventTarget() as any;
+    mock.start = () => {
+      console.warn('SpeechRecognition not available — start noop');
+    };
+    mock.stop = () => {};
+    mock.addEventListener = mock.addEventListener.bind(mock);
+    return mock;
   }
 
   useEffect(() => {
@@ -570,12 +590,21 @@ useEffect(() => { isAutoProjectEnabledRef.current = isAutoProjectEnabled; }, [is
       throw new Error('SpeechRecognition is not available');
     }
 
-    const rec = recognition;
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.lang = "en-US";
+    if (typeof recognition.start !== 'function') {
+      console.error('recognition missing start():', recognition);
+    } else {
+      try {
+        recognition.lang = 'en-US';
+      } catch (e) {}
+      try {
+        recognition.continuous = true;
+      } catch (e) {}
+      try {
+        recognition.interimResults = false;
+      } catch (e) {}
+    }
 
-    rec.onresult = (event: any) => {
+    recognition.onresult = (event: any) => {
       let interim = "";
       let finalStr = "";
 
@@ -600,18 +629,18 @@ useEffect(() => { isAutoProjectEnabledRef.current = isAutoProjectEnabled; }, [is
       }
     };
 
-    rec.onend = () => {
+    recognition.onend = () => {
       if (isListening) {
         // Auto restart if context is still active
         try {
-          rec.start();
+          recognition.start();
         } catch (e) {
           console.error("Speech re-launch exception:", e);
         }
       }
     };
 
-    recognitionRef.current = rec;
+    recognitionRef.current = recognition;
   }, [isListening]);
 
 // Trigger background AI detection but only auto-project if enabled
