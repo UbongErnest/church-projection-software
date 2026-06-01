@@ -550,17 +550,97 @@ useEffect(() => { isAutoProjectEnabledRef.current = isAutoProjectEnabled; }, [is
   };
 
   // Web Speech Audio Transcription Engine
+  // Bridge for Electron preload-based speech recognizer. Returns an object
+  // that mimics the Web Speech `SpeechRecognition` instance (start/stop,
+  // event listeners, onresult/onend handlers) while delegating to the
+  // electronAPI which manages native recognizers by id.
+  const __electronRecognitionInstances: Map<string, any> = (globalThis as any)
+    .__electronRecognitionInstances ||= new Map();
+
   function createRecognitionSafe(...args: any[]) {
     try {
       const electronAPI = (window as any).electronAPI;
       if (electronAPI && typeof electronAPI.createSpeechRecognition === 'function') {
-        const inst = electronAPI.createSpeechRecognition(...args);
-        if (inst && typeof inst.start === 'function') return inst;
+        try {
+          const recId = electronAPI.createSpeechRecognition(...args);
+          if (recId && typeof recId === 'string') {
+            // ensure a single global router is installed once
+            if (!(globalThis as any).__electronRecognitionRouterInstalled) {
+              try {
+                electronAPI.onRecognitionEvent((evt: any) => {
+                  try {
+                    const inst = (globalThis as any).__electronRecognitionInstances.get(evt.id);
+                    if (!inst) return;
+                    const ev = evt.event;
+                    const payload = evt.payload;
+
+                    // call event listeners added via addEventListener
+                    const set = inst._listeners?.get(ev);
+                    if (set) {
+                      for (const cb of Array.from(set)) {
+                        try { cb({ type: ev, detail: payload }); } catch (e) {}
+                      }
+                    }
+
+                    // map some common events to web-speech style handlers
+                    if (ev === 'result' && typeof inst.onresult === 'function') {
+                      try {
+                        const eventObj = { resultIndex: 0, results: payload.results };
+                        inst.onresult(eventObj);
+                      } catch (e) {}
+                    }
+                    if (ev === 'start' && typeof inst.onstart === 'function') {
+                      try { inst.onstart(); } catch (e) {}
+                    }
+                    if (ev === 'end' && typeof inst.onend === 'function') {
+                      try { inst.onend(); } catch (e) {}
+                    }
+                    if (ev === 'error' && typeof inst.onerror === 'function') {
+                      try { inst.onerror(payload); } catch (e) {}
+                    }
+                  } catch (e) {
+                    console.error('recognition event dispatch error', e);
+                  }
+                });
+                (globalThis as any).__electronRecognitionRouterInstalled = true;
+              } catch (e) {
+                console.error('failed to install electron recognition router', e);
+              }
+            }
+
+            // create a light-weight WebSpeech-like instance
+            const instance: any = {
+              id: recId,
+              _listeners: new Map<string, Set<Function>>(),
+              start: () => { try { (window as any).electronAPI.startRecognition(recId); } catch (e) { console.error('startRecognition failed', e); } },
+              stop: () => { try { (window as any).electronAPI.stopRecognition(recId); } catch (e) { console.error('stopRecognition failed', e); } },
+              remove: () => { try { (window as any).electronAPI.removeRecognition(recId); } catch (e) { console.error('removeRecognition failed', e); } },
+              addEventListener: function (type: string, cb: Function) {
+                let s = this._listeners.get(type);
+                if (!s) { s = new Set(); this._listeners.set(type, s); }
+                s.add(cb);
+              },
+              removeEventListener: function (type: string, cb: Function) {
+                const s = this._listeners.get(type);
+                if (s) s.delete(cb);
+              },
+            };
+
+            // allow assignment of `lang`, `continuous`, `interimResults`, and
+            // handler props like `onresult` / `onend` — these are simply stored
+            // on the instance and used by the router above.
+            (globalThis as any).__electronRecognitionInstances.set(recId, instance);
+            return instance;
+          }
+        } catch (e) {
+          console.error('factory error', e);
+        }
       }
     } catch (e) {
-      console.error('factory error', e);
+      console.error('factory detection error', e);
     }
 
+    // Try native browser constructors next
     try {
       const Native =
         (window as any).SpeechRecognition ||
@@ -574,11 +654,9 @@ useEffect(() => { isAutoProjectEnabledRef.current = isAutoProjectEnabled; }, [is
       console.error('native inst error', e);
     }
 
-    // Fallback: minimal mock so code won't crash (start will be a noop)
+    // Fallback mock so code won't crash (start will be a noop)
     const mock = new EventTarget() as any;
-    mock.start = () => {
-      console.warn('SpeechRecognition not available — start noop');
-    };
+    mock.start = () => { console.warn('SpeechRecognition not available — start noop'); };
     mock.stop = () => {};
     mock.addEventListener = mock.addEventListener.bind(mock);
     return mock;
