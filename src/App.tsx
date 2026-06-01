@@ -550,19 +550,27 @@ useEffect(() => { isAutoProjectEnabledRef.current = isAutoProjectEnabled; }, [is
   };
 
   // Web Speech Audio Transcription Engine
-  useEffect(() => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition ||
-      (window as any).mozSpeechRecognition ||
-      (window as any).electronAPI?.SpeechRecognition;
-
-    if (!SpeechRecognition) {
-      console.warn("Speech recognition not supported in this browser.");
-      return;
+  function createRecognitionSafe(...args: any[]) {
+    const electronAPI = (window as any).electronAPI;
+    if (electronAPI && typeof electronAPI.createSpeechRecognition === 'function') {
+      return electronAPI.createSpeechRecognition(...args);
     }
 
-    const rec = new SpeechRecognition();
+    const Native =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition ||
+      (window as any).mozSpeechRecognition;
+
+    return Native ? new Native(...args) : null;
+  }
+
+  useEffect(() => {
+    const recognition = createRecognitionSafe();
+    if (!recognition) {
+      throw new Error('SpeechRecognition is not available');
+    }
+
+    const rec = recognition;
     rec.continuous = true;
     rec.interimResults = true;
     rec.lang = "en-US";
