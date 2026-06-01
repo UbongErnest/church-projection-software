@@ -552,7 +552,10 @@ useEffect(() => { isAutoProjectEnabledRef.current = isAutoProjectEnabled; }, [is
   // Web Speech Audio Transcription Engine
   useEffect(() => {
     const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition ||
+      (window as any).mozSpeechRecognition ||
+      (window as any).electronAPI?.SpeechRecognition;
 
     if (!SpeechRecognition) {
       console.warn("Speech recognition not supported in this browser.");
